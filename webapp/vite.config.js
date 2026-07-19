@@ -2,31 +2,56 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { spawn } from 'node:child_process'
 
-function runClaude(prompt, tools) {
+// tolerant JSON extraction: accept clean JSON, a ```json fenced block, or JSON embedded in prose
+function extractJson(text) {
+  let s = String(text || '').trim()
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fence) {
+    try { return JSON.parse(fence[1].trim()) } catch {}
+  }
+  try { return JSON.parse(s) } catch {}
+  // fall back to the outer {...} (first "{" to last "}") — kills leading/trailing prose
+  const i = s.indexOf('{'), j = s.lastIndexOf('}')
+  if (i >= 0 && j > i) {
+    try { return JSON.parse(s.slice(i, j + 1)) } catch {}
+  }
+  return undefined
+}
+
+function spawnClaude(prompt, tools, timeoutMs) {
   return new Promise((resolve, reject) => {
     const args = ['-p']
     if (tools) args.push('--allowedTools', tools)
     const child = spawn('claude', args, { stdio: ['pipe', 'pipe', 'pipe'] })
-    let out = '', err = ''
+    let out = '', err = '', settled = false
+    const finish = (fn, v) => { if (!settled) { settled = true; clearTimeout(timer); fn(v) } }
+    const timer = setTimeout(() => { try { child.kill('SIGKILL') } catch {}; finish(reject, { error: 'claude timed out', ms: timeoutMs, retryable: true }) }, timeoutMs)
     child.stdout.on('data', (d) => (out += d))
     child.stderr.on('data', (d) => (err += d))
-    child.on('error', (e) => reject({ error: 'could not run claude: ' + e.message }))
+    child.on('error', (e) => finish(reject, { error: 'could not run claude: ' + e.message }))
     child.on('close', () => {
-      const cleaned = out
-        .trim()
-        .replace(/^```json\s*/i, '')
-        .replace(/^```\s*/, '')
-        .replace(/```\s*$/, '')
-        .trim()
-      try {
-        resolve(JSON.parse(cleaned))
-      } catch (e) {
-        reject({ error: 'claude did not return valid JSON', detail: e.message, raw: out.slice(0, 400), stderr: err.slice(0, 300) })
-      }
+      const parsed = extractJson(out)
+      if (parsed !== undefined) finish(resolve, parsed)
+      else finish(reject, { error: 'claude did not return valid JSON', raw: out.slice(0, 400), stderr: err.slice(0, 300), retryable: true })
     })
     child.stdin.write(prompt)
     child.stdin.end()
   })
+}
+
+// retry on parse-fail / timeout (both retryable); spawn errors don't retry
+async function runClaude(prompt, tools) {
+  const timeoutMs = tools ? 240000 : 90000
+  let lastErr
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await spawnClaude(prompt, tools, timeoutMs)
+    } catch (e) {
+      lastErr = e
+      if (!e || !e.retryable) break
+    }
+  }
+  throw lastErr
 }
 
 function decomposePrompt(question, tokens) {
@@ -203,9 +228,9 @@ Return ONLY JSON, no prose, no fences:
 Rules: EXACTLY one agent per open axis; "dimension" must equal the given axis id verbatim. Make focus and crux concrete and personalised. Valid JSON only.`
 }
 
-// A deep-dive subagent: DECOMPOSE the paper into its distinct RESULTS (a paper is a container, not a datum)
-function deepDivePrompt(p) {
-  return `You are a result-level extraction subagent. Use web search to find the paper behind a claim and DECOMPOSE it into its distinct RESULTS — a paper is a container, not one unit of evidence. Reason at the result level; keep the paper as context. A subgroup result, a secondary endpoint, or an adjusted-vs-unadjusted estimate is a DIFFERENT result with its OWN scope. Separate MEASURED results from the AUTHOR'S CONCLUSION — the conclusion is itself a claim, often broader than the results support. Give every result an exact passage/table pointer so a human can spot-check it.
+// Deep-dive PHASE 1 — ENUMERATE: find the paper, list the decision-relevant result stubs (shallow, small output)
+function deepDiveEnumeratePrompt(p) {
+  return `You are a result-level extraction subagent — PHASE 1 of 2 (ENUMERATE). Use web search to find the paper behind a claim and ENUMERATE its distinct results — a paper is a container, not one datum (a subgroup, a secondary endpoint, an adjusted-vs-unadjusted estimate is a DIFFERENT result). Keep this SHALLOW: identify each result but do NOT expand full scope yet. Return only the 4-6 results MOST relevant to the claim under examination — not every result in the paper. Separate the AUTHOR'S CONCLUSION from the measured results.
 
 DECISION: ${JSON.stringify(p.question)}
 AXIS: ${JSON.stringify(p.axis || '')}
@@ -213,42 +238,57 @@ CLAIM UNDER EXAMINATION: ${JSON.stringify(p.claim)}
 SOURCE: ${JSON.stringify(p.source || '')}
 URL: ${JSON.stringify(p.url || '')}
 
-Use "unclear" for anything you cannot verify after searching (do NOT invent numbers or pointers). Return ONLY JSON, no prose, no fences:
+Use "unclear" for anything unverifiable (do NOT invent). Return ONLY JSON, no prose, no fences:
 {
-  "study": {
-    "design": "study design / methodology (e.g. double-blind RCT, prospective cohort, meta-analysis of N trials)",
-    "year": "publication year",
-    "journal": "journal or venue name",
-    "journal_tier": "reputation in a few words: top-tier / reputable / low-impact / predatory / preprint",
-    "peer_reviewed": true,
-    "investigators": "principal investigators / lead authors + institution",
-    "funding": "who funded it",
-    "coi": "declared conflicts of interest",
-    "open_data": "is data/code public? (yes + where / no / unclear)",
-    "dataset": "the underlying cohort/dataset identity (e.g. ARIC, NHANES, Framingham) — for detecting shared-data dependence across studies",
-    "critiques": "known critiques, letters, failed replications, retraction status — or 'none found'"
-  },
-  "results": [
-    {
-      "statement": "the specific MEASURED result, one line including the number",
-      "locus": "exact pointer — table/figure/page, or a short quoted passage",
-      "population": "population & subgroup for THIS result",
-      "exposure": "exposure / dose / comparator for THIS result",
-      "outcome": "outcome & time horizon for THIS result",
-      "estimate": "effect estimate with 95% CI if reported",
-      "model": "statistical model + adjustment set",
-      "status": "primary | secondary | subgroup | exploratory | post-hoc",
-      "n": "sample size for THIS analysis",
-      "relation": "supports | contradicts | qualifies | undercuts-method | bounds | mechanistically-explains | not-informative",
-      "relationNote": "one line: how THIS result bears on the claim under examination",
-      "verification": "how you obtained THIS result: 'source-checked' (you read the primary paper's full text / table / figure) | 'abstract-only' (only the abstract was available) | 'review-extracted' (from a secondary review or summary, not the primary paper) | 'unverified' (stated from prior knowledge, not confirmed this run). Be honest — do not claim source-checked unless you actually read the primary reporting."
-    }
-  ],
-  "authorConclusion": {
-    "text": "the paper's own stated conclusion",
-    "assessment": "how it relates to the measured results above — e.g. 'supported by the results', 'broader than the results support', 'underdetermined by results'"
-  }
+  "study": { "design":"", "year":"", "journal":"", "journal_tier":"top-tier|reputable|low-impact|predatory|preprint", "peer_reviewed":true, "investigators":"principal investigators + institution", "funding":"", "coi":"", "open_data":"", "dataset":"underlying cohort/dataset identity (for dependence grouping)", "critiques":"known critiques/letters/retraction, or 'none found'" },
+  "resultStubs": [ { "statement":"the measured result in one line with its number", "status":"primary|secondary|subgroup|exploratory|post-hoc", "estimate":"effect + CI if reported", "relation":"supports|contradicts|qualifies|undercuts-method|bounds|mechanistically-explains|not-informative", "locus":"table/figure/page pointer if known" } ],
+  "authorConclusion": { "text":"the paper's own conclusion", "assessment":"'supported by the results' | 'broader than the results support' | 'underdetermined by results'" }
 }`
+}
+
+// Deep-dive PHASE 2 — DETAIL: expand each known stub into a full scoped result (small, focused output)
+function deepDiveDetailPrompt(p, study, stubs) {
+  return `You are a result-level extraction subagent — PHASE 2 of 2 (DETAIL). For each result STUB below, expand its FULL scope. Fetch/read the paper to confirm and mark verification HONESTLY. Return one full result per stub, in the same order.
+
+DECISION: ${JSON.stringify(p.question)}
+CLAIM UNDER EXAMINATION: ${JSON.stringify(p.claim)}
+PAPER: ${JSON.stringify(p.source || '')} — ${JSON.stringify(p.url || '')}
+STUDY: ${JSON.stringify(study || {})}
+RESULT STUBS TO DETAIL: ${JSON.stringify(stubs || [])}
+
+Use "unclear" for unverifiable fields. Return ONLY JSON, no prose, no fences:
+{ "results": [ {
+  "statement":"the measured result, one line with its number",
+  "locus":"exact table/figure/page or short quoted passage",
+  "population":"population & subgroup for THIS result",
+  "exposure":"exposure / dose / comparator",
+  "outcome":"outcome & time horizon",
+  "estimate":"effect estimate with 95% CI",
+  "model":"statistical model + adjustment set",
+  "status":"primary|secondary|subgroup|exploratory|post-hoc",
+  "n":"sample size for THIS analysis",
+  "relation":"supports|contradicts|qualifies|undercuts-method|bounds|mechanistically-explains|not-informative",
+  "relationNote":"how THIS result bears on the claim",
+  "verification":"source-checked (you read the primary paper's full text/table) | abstract-only | review-extracted | unverified — be honest, don't claim source-checked unless you actually read the primary reporting"
+} ] }`
+}
+
+// orchestrate the two phases: enumerate (WebSearch) → detail (WebFetch), with graceful fallback to stubs
+async function deepDiveRun(p) {
+  const meta = await runClaude(deepDiveEnumeratePrompt(p), 'WebSearch,WebFetch')
+  const stubs = Array.isArray(meta.resultStubs) ? meta.resultStubs.slice(0, 6) : []
+  let results = []
+  if (stubs.length) {
+    try {
+      const detail = await runClaude(deepDiveDetailPrompt(p, meta.study, stubs), 'WebFetch')
+      if (Array.isArray(detail.results) && detail.results.length) results = detail.results
+    } catch {}
+    if (!results.length) {
+      // graceful degradation — keep the shallow stubs (flagged unverified) rather than failing outright
+      results = stubs.map((s) => ({ statement: s.statement, status: s.status, estimate: s.estimate, relation: s.relation, locus: s.locus, verification: 'unverified' }))
+    }
+  }
+  return { study: meta.study || {}, results, authorConclusion: meta.authorConclusion || {} }
 }
 
 function apiPlugin() {
@@ -280,6 +320,30 @@ function apiPlugin() {
           }
         })
       }
+      // for multi-call orchestrations (e.g. the two-phase deep-dive)
+      const handleCustom = (run) => (req, res) => {
+        const json = (code, obj) => {
+          res.statusCode = code
+          res.setHeader('content-type', 'application/json')
+          res.end(JSON.stringify(obj))
+        }
+        if (req.method !== 'POST') return json(405, { error: 'POST only' })
+        let body = ''
+        req.on('data', (c) => (body += c))
+        req.on('end', async () => {
+          let p
+          try {
+            p = JSON.parse(body || '{}')
+          } catch {
+            return json(400, { error: 'bad request json' })
+          }
+          try {
+            json(200, await run(p))
+          } catch (e) {
+            json(502, e)
+          }
+        })
+      }
       server.middlewares.use(
         '/api/decompose',
         handle((p) => (p.question ? decomposePrompt(String(p.question), Array.isArray(p.tokens) ? p.tokens : []) : null)),
@@ -295,7 +359,7 @@ function apiPlugin() {
       )
       server.middlewares.use(
         '/api/deepdive',
-        handle((p) => (p.claim ? deepDivePrompt(p) : null), 'WebSearch,WebFetch'),
+        handleCustom((p) => (p.claim ? deepDiveRun(p) : Promise.reject({ error: 'missing fields' }))),
       )
       server.middlewares.use('/api/plan', handle((p) => (p.question && p.axes ? orchestratorPrompt(p) : null)))
       server.middlewares.use('/api/matrix', handle((p) => (p.dimensionName && p.findings ? matrixPrompt(p) : null)))
