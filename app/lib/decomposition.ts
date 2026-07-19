@@ -43,6 +43,14 @@ export type DecompositionCluster = {
   ingestionRequirements: EvidenceIngestionRequirements;
 };
 
+export type ContextQuestion = {
+  id: string;
+  label: string;
+  question: string;
+  whyItMatters: string;
+  effect: "prune" | "branch" | "match";
+};
+
 export type DecompositionArtifact = {
   caseTitle: string;
   summary: string;
@@ -51,6 +59,7 @@ export type DecompositionArtifact = {
   axes: InterpretationAxis[];
   claimTemplate: string;
   knownUnknowns: string[];
+  contextQuestions: ContextQuestion[];
 };
 
 export type DecompositionResponse = {
@@ -59,6 +68,7 @@ export type DecompositionResponse = {
   model: string;
   warning: string | null;
   prompt: string;
+  decisionContext: string;
   decomposition: DecompositionArtifact;
 };
 

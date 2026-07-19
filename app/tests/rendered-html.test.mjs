@@ -19,18 +19,30 @@ test("question compiler stages AI reading before the editable map", async () => 
 
   assert.doesNotMatch(frame, /Let the AI show you what your question is hiding\./);
   assert.doesNotMatch(frame, /Question compiler · AI-assisted framing/);
+  assert.doesNotMatch(frame, /Starting question/);
+  assert.doesNotMatch(frame, /OpenRouter · bring your key/);
   assert.match(frame, /locateHighlights/);
-  assert.match(frame, /AI is reading/);
-  assert.match(frame, /Decomposition trace/);
-  assert.match(frame, /exact language/);
+  assert.match(frame, /Decomposition/);
+  assert.match(frame, /Exact language/);
   assert.match(frame, /Hidden variable/);
   assert.match(frame, /Evidence contract/);
   assert.match(frame, /semantic clusters/);
-  assert.match(frame, /question-cue/);
   assert.match(frame, /Inference chain/);
-  assert.match(frame, /Semantic cluster assembly/);
-  assert.match(frame, /animateClusterFlight/);
+  assert.match(frame, /animateStoryClusterFlight/);
   assert.match(frame, /flying-cue/);
+  assert.match(frame, /brand-intro/);
+  assert.match(frame, /brandCharacters/);
+  assert.match(frame, /3300/);
+  assert.match(frame, /placeholder="what is your question\?"/);
+  assert.match(frame, /settings-trigger/);
+  assert.match(frame, /data-tooltip="Settings"/);
+  assert.match(frame, /question-composer/);
+  assert.match(frame, /composer-submit/);
+  assert.match(frame, /decompose-icon/);
+  assert.match(frame, /phase === "eliciting"/);
+  assert.match(frame, /currentContextQuestion/);
+  assert.match(frame, /advanceElicitation/);
+  assert.match(frame, /revealedClusters/);
   assert.match(frame, /Scroll slowly to reveal the inference chain/);
   assert.match(frame, /story-step/);
   assert.match(frame, /IntersectionObserver/);
@@ -47,7 +59,12 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(map, /interpretation branches above do not share this probability mass/i);
   assert.match(api, /generateText/);
   assert.match(api, /Output\.object/);
-  assert.match(api, /gpt-5\.6-terra/);
+  assert.match(api, /https:\/\/openrouter\.ai\/api\/v1/);
+  assert.match(api, /OpenRouter ·/);
+  assert.match(api, /openRouterFailureFromThrown/);
+  assert.match(api, /Add an OpenRouter key in Settings/);
+  assert.match(api, /status: 401/);
+  assert.doesNotMatch(api, /mode: "local-fallback"/);
   assert.match(packageJson, /"ai"/);
   assert.match(packageJson, /"@ai-sdk\/openai"/);
 });
@@ -113,8 +130,9 @@ test("the investigation is split into focused navigable routes", async () => {
   assert.match(synthesis, /Provisional synthesis/);
 });
 
-test("arbitrary questions have a transparent domain-general fallback", async () => {
-  const [server, api, envExample] = await Promise.all([
+test("arbitrary questions use a key-gated elicitation and refinement path", async () => {
+  const [frame, server, api, envExample] = await Promise.all([
+    readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("lib/decomposition-server.ts", root), "utf8"),
     readFile(new URL("app/api/decompose/route.ts", root), "utf8"),
     readFile(new URL(".env.example", root), "utf8"),
@@ -128,7 +146,44 @@ test("arbitrary questions have a transparent domain-general fallback", async () 
   assert.match(server, /ingestionRequirements/);
   assert.match(server, /mismatchRisks/);
   assert.match(server, /concise audit trace, not private chain-of-thought/);
-  assert.match(api, /mode: "local-fallback"/);
-  assert.match(api, /OPENAI_API_KEY/);
-  assert.match(envExample, /EPISTACK_DECOMPOSITION_MODEL=gpt-5\.6-terra/);
+  assert.match(server, /contextQuestions/);
+  assert.match(server, /prune/);
+  assert.match(server, /feasible comparator/);
+  assert.match(server, /park branches the context rules out/);
+  assert.match(server, /Preserve legitimate expansion as well as pruning/);
+  assert.match(frame, /Context interview/);
+  assert.match(frame, /type your answer/);
+  assert.match(frame, /refineWithContext/);
+  assert.match(frame, /decisionContext: contextForRequest/);
+  assert.match(frame, /Add an OpenRouter key in Settings/);
+  assert.match(frame, /aria-label="Model settings"/);
+  assert.match(frame, /aria-label="Key privacy"/);
+  assert.match(frame, /openRouterApiKey: openRouterKey\.trim\(\)/);
+  assert.match(frame, /openRouterModel: openRouterModel\.trim\(\)/);
+  assert.doesNotMatch(frame, /sessionStorage\.setItem\([^\n]*openRouterKey/);
+  assert.match(api, /OPENROUTER_API_KEY/);
+  assert.match(api, /EPISTACK_OPENROUTER_MODEL/);
+  assert.match(envExample, /EPISTACK_OPENROUTER_MODEL=anthropic\/claude-sonnet-4\.6/);
+  assert.doesNotMatch(envExample, /OPENAI_API_KEY/);
+});
+
+test("settings validate the key, credits, and model with distinct failures", async () => {
+  const [frame, validation, failures] = await Promise.all([
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/api/openrouter/validate/route.ts", root), "utf8"),
+    readFile(new URL("lib/openrouter-errors.ts", root), "utf8"),
+  ]);
+
+  assert.match(frame, /validateConnection/);
+  assert.match(frame, /onSubmit/);
+  assert.match(frame, /Press Enter to validate/);
+  assert.match(frame, /Checking key, credits, and model/);
+  assert.match(frame, /connection-status/);
+  assert.match(validation, /openrouter\.ai\/api\/v1/);
+  assert.match(validation, /\/key/);
+  assert.match(validation, /\/model\//);
+  assert.match(failures, /That API key is invalid, disabled, or revoked/);
+  assert.match(failures, /insufficient credits/);
+  assert.match(failures, /model ID is not available/);
+  assert.match(failures, /rate-limiting/);
 });

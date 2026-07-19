@@ -15,39 +15,45 @@ npm run dev
 
 Open the local URL printed by the development server.
 
-For model-backed decomposition, copy `.env.example` to `.env.local` and set `OPENAI_API_KEY`. Without it, the app uses a clearly labeled domain-general local fallback so the interaction and artifact remain testable.
+For decomposition, open the settings icon and paste an OpenRouter API key. It is sent through Epistack for the request and is never written to browser storage, the case artifact, or the database. You can also copy `.env.example` to `.env.local` and set `OPENROUTER_API_KEY` for a server-configured connection. Without a key, decomposition stops with an explicit settings error.
 
 ## What to try
 
-1. Enter any vague research question or paragraph.
-2. Watch color arrive cue-by-cue, including non-adjacent words that belong to one semantic cluster.
-3. Follow the copied word tokens as they move from the source paragraph into visible cluster destinations.
-4. Scroll through each cluster's trace from quoted cues to a hidden variable, interpretation axis, and evidence-ingestion contract.
-5. Approve the scope and follow the paced transition to the separate Interpretation Map page.
-6. Select any interpretation branch to inspect the model's rationale.
-7. Keep a different branch, park one, or edit its meaning.
-8. Add an interpretation the model missed and watch the claim template recompile.
-9. Create an explicitly labeled probability placeholder.
-10. For the eggs fixture, continue to Evidence and inspect the existing claim-matched corpus.
-11. Use Assess for the 32-study inventory and the Discovery Queue for unassessed matches.
-12. Open Synthesize to inspect the provisional read, load-bearing evidence, and cruxes.
-13. Save a revision or export the complete framing artifact as JSON.
+1. Watch `epistack` type one character at a time, settle into the top-left corner, and reveal the question composer half a second later.
+2. Open the settings icon, add the key, and enter any vague question or paragraph.
+3. Answer the AI's one-question-at-a-time context interview. Hover the `?` to see whether an answer prunes scope, creates a branch, or changes evidence matching.
+4. The AI recompiles the question using those constraints, visibly parking ruled-out branches and introducing distinctions implied by the real case.
+5. Scroll into each cluster. Its related words activate together in the pinned question and fly into the current evidence-contract card while later clusters remain dim.
+6. Approve the scope and follow the paced transition to the separate Interpretation Map page.
+7. Select any interpretation branch to inspect the model's rationale.
+8. Keep a different branch, park one, or edit its meaning.
+9. Add an interpretation the model missed and watch the claim template recompile.
+10. Create an explicitly labeled probability placeholder.
+11. For the eggs fixture, continue to Evidence and inspect the existing claim-matched corpus.
+12. Use Assess for the 32-study inventory and the Discovery Queue for unassessed matches.
+13. Open Synthesize to inspect the provisional read, load-bearing evidence, and cruxes.
+14. Save a revision or export the complete framing artifact as JSON.
 
 ## Current boundary
 
-This is a UX and data-model slice with an AI SDK decomposition endpoint and a real eggs evidence corpus. The endpoint uses schema-validated structured output and falls back transparently when no model key is configured. The evidence pages use a 2023 systematic review as their study spine, add claim-matched deep extractions, and record a reproducible PubMed discovery search.
+This is a UX and data-model slice with a schema-validated decomposition endpoint and a real eggs evidence corpus. Decomposition requires an explicit model key; it never silently substitutes a precomputed result. The evidence pages use a 2023 systematic review as their study spine, add claim-matched deep extractions, and record a reproducible PubMed discovery search.
 
 It currently implements:
 
 - visible AI-proposed branches;
-- exact-phrase highlighting before map generation;
+- a timed center-to-corner brand intro before the question input;
+- a clean composer with settings and methodological help hidden behind icons and hover tooltips;
+- a paced decision-context interview kept distinct from evidence about the claim;
+- model-generated, high-information follow-up questions labeled by whether they prune, branch, or improve evidence matching;
+- exact-phrase highlighting controlled by the reader's scroll position;
 - semantic clustering of non-adjacent cues such as `eat` and `moderation`;
-- physical cue-to-cluster motion with a reduced-motion fallback;
+- physical cue-to-cluster motion from a pinned question with a reduced-motion fallback;
 - a scroll-led derivation that progressively reveals each inference step;
 - a reviewable cues → latent variable → axis → branch trace;
 - evidence-ingestion fields, search concepts, and mismatch risks derived from that trace;
-- arbitrary-question decomposition through the AI SDK;
-- a domain-general local fallback with an explicit warning;
+- arbitrary-question decomposition through OpenRouter;
+- request-scoped OpenRouter credentials that are excluded from saved and exported artifacts;
+- an explicit missing-key or provider error instead of a silent fallback;
 - human selection, editing, addition, and reversible parking;
 - authorship and rationale;
 - question compilation;
@@ -85,7 +91,7 @@ npm run evidence:discover
 - `app/page.tsx` — animated phrase-highlighting and transition flow
 - `app/map/page.tsx` — editable interpretation map and claim compilation
 - `app/api/decompose/route.ts` — AI SDK structured decomposition endpoint
-- `lib/decomposition-server.ts` — schema, method prompt, sanitization, and transparent fallback
+- `lib/decomposition-server.ts` — schema, elicitation method prompt, sanitization, and test fixture fallback
 - `app/components/case-navigation.tsx` — persistent stage and evidence-view navigation
 - `app/evidence/` — deep source review
 - `app/inventory/` — controlled-trial assessment

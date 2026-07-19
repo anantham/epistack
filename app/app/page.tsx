@@ -2,17 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
-  DecompositionCluster,
   DecompositionResponse,
   QuestionHighlight,
 } from "../lib/decomposition";
 import { decompositionSessionKey } from "../lib/decomposition";
-import { CaseHeader } from "./components/case-navigation";
 
-const exampleQuestion =
-  "Are eggs good to eat? Bad to eat? Great in moderation? How can we tell? Does it vary across people, and what predicts this? What else should we be paying attention to here?";
+const defaultOpenRouterModel = "anthropic/claude-sonnet-4.6";
+const brandCharacters = [..."epistack"];
 
-type AnalysisPhase = "idle" | "analyzing" | "highlighting" | "clustering" | "review" | "transitioning" | "error";
+type AnalysisPhase = "idle" | "analyzing" | "eliciting" | "review" | "transitioning" | "error";
+type ConnectionStatus = { state: "idle" | "checking" | "valid" | "invalid"; message: string };
 
 type TextSegment = {
   text: string;
@@ -51,49 +50,39 @@ function wait(milliseconds: number) {
 }
 
 export default function Home() {
-  const [prompt, setPrompt] = useState(exampleQuestion);
+  const [prompt, setPrompt] = useState("");
+  const [decisionContext, setDecisionContext] = useState("");
+  const [openRouterKey, setOpenRouterKey] = useState("");
+  const [openRouterModel, setOpenRouterModel] = useState(defaultOpenRouterModel);
+  const [introComplete, setIntroComplete] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({ state: "idle", message: "Press Enter to validate." });
   const [phase, setPhase] = useState<AnalysisPhase>("idle");
   const [result, setResult] = useState<DecompositionResponse | null>(null);
-  const [activeHighlight, setActiveHighlight] = useState(-1);
   const [activeCluster, setActiveCluster] = useState(-1);
   const [activeTraceStep, setActiveTraceStep] = useState(0);
-  const [assembledClusterCount, setAssembledClusterCount] = useState(0);
+  const [elicitationIndex, setElicitationIndex] = useState(0);
+  const [revealedClusters, setRevealedClusters] = useState<number[]>([]);
+  const [contextAnswers, setContextAnswers] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
-  const cueRefs = useRef(new Map<number, HTMLButtonElement>());
-  const landingRefs = useRef(new Map<number, HTMLSpanElement>());
+  const storyCueRefs = useRef(new Map<number, HTMLButtonElement>());
+  const storyLandingRefs = useRef(new Map<number, HTMLElement>());
+  const revealedClustersRef = useRef(new Set<number>());
 
   const segments = useMemo(
     () => locateHighlights(prompt, result?.decomposition.highlights ?? []),
     [prompt, result],
   );
-  const currentHighlight = result?.decomposition.highlights[activeHighlight] ?? null;
-  const currentCluster: DecompositionCluster | null = result?.decomposition.clusters[activeCluster] ?? null;
-  const busy = phase === "analyzing" || phase === "highlighting" || phase === "clustering" || phase === "transitioning";
+  const currentContextQuestion = result?.decomposition.contextQuestions[elicitationIndex] ?? null;
+  const busy = phase === "analyzing" || phase === "transitioning";
 
   useEffect(() => {
-    if (!result || phase !== "review") return;
-    const steps = Array.from(document.querySelectorAll<HTMLElement>(".story-step"));
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion || !("IntersectionObserver" in window)) {
-      steps.forEach((step) => step.classList.add("is-visible"));
-      return;
-    }
+    const timer = window.setTimeout(() => setIntroComplete(true), reducedMotion ? 0 : 3300);
+    return () => window.clearTimeout(timer);
+  }, []);
 
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        const step = entry.target as HTMLElement;
-        step.classList.add("is-visible");
-        setActiveCluster(Number(step.dataset.clusterIndex ?? 0));
-        setActiveTraceStep(Number(step.dataset.stepIndex ?? 0));
-      });
-    }, { rootMargin: "-24% 0px -54% 0px", threshold: 0.08 });
-
-    steps.forEach((step) => observer.observe(step));
-    return () => observer.disconnect();
-  }, [phase, result]);
-
-  async function animateClusterFlight(payload: DecompositionResponse, clusterIndex: number, reducedMotion: boolean) {
+  async function animateStoryClusterFlight(payload: DecompositionResponse, clusterIndex: number, reducedMotion: boolean) {
     const cluster = payload.decomposition.clusters[clusterIndex];
     const cues = payload.decomposition.highlights
       .map((highlight, highlightIndex) => ({ highlight, highlightIndex }))
@@ -105,8 +94,8 @@ export default function Home() {
     }
 
     await Promise.all(cues.map(async ({ highlight, highlightIndex }, cueIndex) => {
-      const source = cueRefs.current.get(highlightIndex);
-      const target = landingRefs.current.get(highlightIndex);
+      const source = storyCueRefs.current.get(highlightIndex);
+      const target = storyLandingRefs.current.get(highlightIndex);
       if (!source || !target) return;
 
       const sourceRect = source.getBoundingClientRect();
@@ -145,51 +134,166 @@ export default function Home() {
     }));
   }
 
-  async function analyze() {
+  useEffect(() => {
+    if (!result || phase !== "review") return;
+    const chapters = Array.from(document.querySelectorAll<HTMLElement>(".story-chapter"));
+    const steps = Array.from(document.querySelectorAll<HTMLElement>(".story-step"));
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!("IntersectionObserver" in window)) {
+      steps.forEach((step) => step.classList.add("is-visible"));
+      window.setTimeout(() => {
+        setRevealedClusters(result.decomposition.clusters.map((_, index) => index));
+      }, 0);
+      return;
+    }
+
+    const chapterObserver = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      const clusterIndex = Number((visible.target as HTMLElement).dataset.clusterIndex ?? 0);
+      setActiveCluster(clusterIndex);
+      if (revealedClustersRef.current.has(clusterIndex)) return;
+      revealedClustersRef.current.add(clusterIndex);
+      setRevealedClusters(Array.from(revealedClustersRef.current).sort((a, b) => a - b));
+      window.setTimeout(() => {
+        void animateStoryClusterFlight(result, clusterIndex, reducedMotion);
+      }, reducedMotion ? 0 : 180);
+    }, { rootMargin: "-18% 0px -52% 0px", threshold: [0.08, 0.2, 0.45] });
+
+    const stepObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const step = entry.target as HTMLElement;
+        step.classList.add("is-visible");
+        setActiveCluster(Number(step.dataset.clusterIndex ?? 0));
+        setActiveTraceStep(Number(step.dataset.stepIndex ?? 0));
+      });
+    }, { rootMargin: "-24% 0px -54% 0px", threshold: 0.08 });
+
+    chapters.forEach((chapter) => chapterObserver.observe(chapter));
+    steps.forEach((step) => stepObserver.observe(step));
+    return () => {
+      chapterObserver.disconnect();
+      stepObserver.disconnect();
+    };
+  }, [phase, result]);
+
+  async function analyze(contextOverride?: string, skipElicitation = false) {
     if (!prompt.trim() || busy) return;
+    if (!openRouterKey.trim()) {
+      setError("Add an OpenRouter key in Settings to decompose this question.");
+      setSettingsOpen(true);
+      setPhase("error");
+      return;
+    }
     setError("");
     setResult(null);
-    setActiveHighlight(-1);
     setActiveCluster(-1);
     setActiveTraceStep(0);
-    setAssembledClusterCount(0);
+    setElicitationIndex(0);
+    setRevealedClusters([]);
+    if (!skipElicitation) setContextAnswers({});
+    revealedClustersRef.current.clear();
     setPhase("analyzing");
+
+    const contextForRequest = typeof contextOverride === "string" ? contextOverride : decisionContext;
 
     try {
       const response = await fetch("/api/decompose", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({
+          prompt,
+          decisionContext: contextForRequest,
+          openRouterApiKey: openRouterKey.trim() || undefined,
+          openRouterModel: openRouterModel.trim() || undefined,
+        }),
       });
       const payload = await response.json() as DecompositionResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "The decomposition could not be generated.");
 
       setResult(payload);
-      setPhase("highlighting");
-      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const highlightDelay = reducedMotion ? 80 : 720;
-      for (let index = 0; index < payload.decomposition.highlights.length; index += 1) {
-        setActiveHighlight(index);
-        await wait(highlightDelay);
-      }
-
-      setPhase("clustering");
-      await wait(reducedMotion ? 10 : 220);
-      for (let index = 0; index < payload.decomposition.clusters.length; index += 1) {
-        setActiveCluster(index);
-        await animateClusterFlight(payload, index, reducedMotion);
-        setAssembledClusterCount(index + 1);
-        await wait(reducedMotion ? 35 : 220);
-      }
-
       window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
-      setActiveCluster(0);
+      setDecisionContext(contextForRequest);
+      setActiveCluster(-1);
       setActiveTraceStep(0);
-      setPhase("review");
+      setPhase(!skipElicitation && !contextForRequest && payload.decomposition.contextQuestions.length
+        ? "eliciting"
+        : "review");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The decomposition could not be generated.");
+      const message = caught instanceof Error ? caught.message : "The decomposition could not be generated.";
+      setError(message);
+      if (/key|OpenRouter|credits/i.test(message)) setSettingsOpen(true);
       setPhase("error");
     }
+  }
+
+  async function validateConnection() {
+    if (connectionStatus.state === "checking") return;
+    if (!openRouterKey.trim()) {
+      setConnectionStatus({ state: "invalid", message: "Enter an API key before validating." });
+      return;
+    }
+    if (!openRouterModel.trim()) {
+      setConnectionStatus({ state: "invalid", message: "Enter a model ID in provider/model form." });
+      return;
+    }
+
+    setConnectionStatus({ state: "checking", message: "Checking key, credits, and model…" });
+    try {
+      const response = await fetch("/api/openrouter/validate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          openRouterApiKey: openRouterKey.trim(),
+          openRouterModel: openRouterModel.trim(),
+        }),
+      });
+      const payload = await response.json() as { ok?: boolean; message?: string };
+      setConnectionStatus({
+        state: response.ok && payload.ok ? "valid" : "invalid",
+        message: payload.message || "OpenRouter did not return a validation result.",
+      });
+    } catch {
+      setConnectionStatus({ state: "invalid", message: "Could not reach OpenRouter. Check the connection and try again." });
+    }
+  }
+
+  async function refineWithContext() {
+    if (!result) return;
+    const additions = result.decomposition.contextQuestions
+      .map((question) => ({ question, answer: contextAnswers[question.id]?.trim() }))
+      .filter((item) => item.answer)
+      .map((item) => `${item.question.label}: ${item.answer}`);
+    if (!additions.length) {
+      setPhase("review");
+      return;
+    }
+    const nextContext = [decisionContext.trim(), ...additions].filter(Boolean).join("\n");
+    setDecisionContext(nextContext);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    await analyze(nextContext, true);
+  }
+
+  function advanceElicitation() {
+    if (!result) return;
+    if (elicitationIndex < result.decomposition.contextQuestions.length - 1) {
+      setElicitationIndex((index) => index + 1);
+      return;
+    }
+    void refineWithContext();
+  }
+
+  function returnToEditor() {
+    setResult(null);
+    setError("");
+    setPhase("idle");
+    setActiveCluster(-1);
+    setRevealedClusters([]);
+    revealedClustersRef.current.clear();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function inspectCluster(index: number, moveToTrace = false) {
@@ -213,184 +317,172 @@ export default function Home() {
   }
 
   return (
-    <main>
-      <CaseHeader active="frame" />
-      <section className={"analysis-shell " + (phase === "transitioning" ? "leaving" : "")}>
-        <div className={"analysis-workbench " + (busy ? "is-reading" : "")}>
-          <div className={`analysis-main ${result ? "has-result" : ""}`}>
-            <div className="analysis-label-row">
-              <span>Starting question</span>
-              <span className="analysis-mode">
-                {result?.mode === "ai" ? result.model : result?.mode === "local-fallback" ? "Local fallback" : "AI SDK · structured output"}
-              </span>
-            </div>
+    <main className="intro-root">
+      <div className="brand-intro" aria-label="Epistack">
+        {brandCharacters.map((character, index) => (
+          <span key={`${character}-${index}`} style={{ animationDelay: `${index * 110}ms` }} aria-hidden="true">{character}</span>
+        ))}
+        <i aria-hidden="true">.</i>
+      </div>
 
-            {phase === "idle" || phase === "error" ? (
-              <textarea
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                rows={8}
-                maxLength={5000}
-                aria-label="Starting research question"
-              />
-            ) : (
-              <div className="annotated-question" aria-label="AI analysis of the submitted question">
-                {segments.map((segment, index) => {
-                  const seen = segment.highlightIndex !== null && segment.highlightIndex <= activeHighlight;
-                  const active = segment.highlightIndex === activeHighlight;
-                  const highlight = segment.highlightIndex === null
-                    ? null
-                    : result?.decomposition.highlights[segment.highlightIndex] ?? null;
-                  const clusterIndex = highlight
-                    ? result?.decomposition.clusters.findIndex((cluster) => cluster.id === highlight.clusterId) ?? -1
-                    : -1;
-                  const linked = clusterIndex === activeCluster && (phase === "clustering" || phase === "review");
-                  const deemphasized = activeCluster >= 0 && clusterIndex !== activeCluster && phase === "review";
-                  return segment.highlightIndex === null ? (
-                    <span key={index}>{segment.text}</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`question-cue ${active ? "active" : seen ? "seen" : ""} ${linked ? "linked" : ""} ${deemphasized ? "deemphasized" : ""} cluster-tone-${Math.max(0, clusterIndex) % 5}`}
-                      key={index}
-                      disabled={!seen || clusterIndex < 0}
-                      aria-label={highlight ? `Inspect ${highlight.label}: ${segment.text}` : undefined}
-                      aria-pressed={linked}
-                      onClick={() => inspectCluster(clusterIndex, true)}
-                      ref={(node) => {
-                        if (node) cueRefs.current.set(segment.highlightIndex as number, node);
-                        else cueRefs.current.delete(segment.highlightIndex as number);
-                      }}
-                    >
-                      {segment.text}
-                    </button>
-                  );
-                })}
-                {phase === "analyzing" && <span className="reading-caret" aria-hidden="true" />}
+      <div className={`intro-surface ${introComplete ? "is-ready" : ""}`} aria-hidden={!introComplete}>
+        <header className="minimal-topbar">
+          <button
+            type="button"
+            className="icon-button settings-trigger"
+            aria-label="Settings"
+            aria-expanded={settingsOpen}
+            data-tooltip="Settings"
+            onClick={() => setSettingsOpen((open) => !open)}
+          >
+            <span aria-hidden="true">⚙︎</span>
+          </button>
+
+          {settingsOpen && (
+            <form className="settings-panel" role="dialog" aria-label="Model settings" onSubmit={(event) => {
+              event.preventDefault();
+              void validateConnection();
+            }}>
+              <div className="settings-heading">
+                <strong>Settings</strong>
+                <button type="button" className="icon-button" aria-label="Close settings" data-tooltip="Close" onClick={() => setSettingsOpen(false)}>×</button>
               </div>
-            )}
-
-            <div className="analysis-actions">
-              <button className="primary-button" onClick={analyze} disabled={busy || prompt.trim().length < 12}>
-                {phase === "analyzing"
-                  ? "Reading the question…"
-                  : phase === "highlighting"
-                    ? "Mapping hidden choices…"
-                    : phase === "clustering"
-                      ? "Forming semantic clusters…"
-                    : phase === "transitioning"
-                      ? "Opening interpretation map…"
-                      : phase === "review"
-                        ? "Re-run decomposition"
-                        : "Map this question"}
-              </button>
-              <span>{prompt.length.toLocaleString()} / 5,000 characters</span>
-            </div>
-            {error && <p className="analysis-error" role="alert">{error}</p>}
-          </div>
-
-          <aside className={`analysis-narrator ${result ? "has-result" : ""}`} aria-live="polite" aria-atomic="true">
-            <div className={"ai-orb " + (busy ? "thinking" : "")} aria-hidden="true"><span /></div>
-            <div>
-              <span className="narrator-kicker">
-                {phase === "idle" || phase === "error"
-                  ? "How this works"
-                  : phase === "clustering"
-                    ? "AI is assembling"
-                    : phase === "review"
-                      ? "Trace ready"
-                      : "AI is reading"}
-              </span>
-              <h2>
-                {phase === "analyzing" && "Finding words that change what evidence would count."}
-                {phase === "highlighting" && (currentHighlight?.label || "Making hidden choices visible.")}
-                {phase === "clustering" && (currentCluster
-                  ? `Moving words into “${currentCluster.label}”`
-                  : "Grouping cues that imply the same variable.")}
-                {phase === "review" && "Audit the decomposition before accepting the map."}
-                {phase === "transitioning" && "The map is ready. Moving into the editing workspace."}
-                {(phase === "idle" || phase === "error") && "First inspect the wording. Then generate the map."}
-              </h2>
-              <p>
-                {phase === "highlighting"
-                  ? currentHighlight?.why
-                  : phase === "clustering"
-                    ? currentCluster
-                      ? `${currentCluster.highlightQuotes.map((quote) => `“${quote}”`).join(" + ")} jointly imply one hidden variable. The source words remain visible so you can audit the move.`
-                      : "Related language is being grouped into candidate hidden variables."
-                    : phase === "review"
-                      ? "Each cluster below shows the exact language, inferred variable, resulting axis, candidate branches, and evidence fields this decision will require."
-                  : phase === "analyzing"
-                    ? "The model is not answering yet. It is identifying constructs, populations, outcomes, comparators, contexts, and time horizons."
-                    : phase === "transitioning"
-                      ? "Each highlighted ambiguity is now connected to a reviewable interpretation axis."
-                      : "The transition is deliberately paced so you can spot-check why each branch exists before seeing the full graph."}
-              </p>
-              {result?.warning && <div className="fallback-warning">{result.warning}</div>}
-            </div>
-            {result && phase !== "analyzing" && (
-              <div className={`cluster-assembly ${phase === "clustering" ? "is-assembling" : ""}`} id="cluster-assembly" aria-label="Semantic cluster assembly">
-                <div className="assembly-heading">
-                  <span>{phase === "highlighting" ? "Preparing destinations" : phase === "clustering" ? "Words are forming clusters" : "Semantic clusters formed"}</span>
-                  <small>{assembledClusterCount} / {result.decomposition.clusters.length}</small>
-                </div>
-                <div className="assembly-grid">
-                  {result.decomposition.clusters.map((cluster, clusterIndex) => {
-                    const clusterCues = result.decomposition.highlights
-                      .map((highlight, highlightIndex) => ({ highlight, highlightIndex }))
-                      .filter(({ highlight }) => highlight.clusterId === cluster.id);
-                    const settled = clusterIndex < assembledClusterCount;
-                    return (
-                      <button
-                        type="button"
-                        className={`cluster-drop cluster-tone-${clusterIndex % 5} ${settled ? "settled" : ""} ${clusterIndex === activeCluster ? "active" : ""}`}
-                        disabled={phase !== "review"}
-                        key={cluster.id}
-                        onClick={() => inspectCluster(clusterIndex, true)}
-                        aria-label={`Inspect cluster ${cluster.label}`}
-                        aria-pressed={phase === "review" && clusterIndex === activeCluster}
-                      >
-                        <span className="drop-index">{String(clusterIndex + 1).padStart(2, "0")}</span>
-                        <strong>{cluster.label}</strong>
-                        <span className="drop-cues">
-                          {clusterCues.map(({ highlight, highlightIndex }) => (
-                            <span
-                              className="landing-cue"
-                              key={`${cluster.id}-${highlightIndex}`}
-                              ref={(node) => {
-                                if (node) landingRefs.current.set(highlightIndex, node);
-                                else landingRefs.current.delete(highlightIndex);
-                              }}
-                            >
-                              {highlight.quote}
-                            </span>
-                          ))}
-                        </span>
-                      </button>
-                    );
-                  })}
+              <label>
+                <span>API key</span>
+                <input
+                  type="password"
+                  value={openRouterKey}
+                  onChange={(event) => {
+                    setOpenRouterKey(event.target.value);
+                    setConnectionStatus({ state: "idle", message: "Press Enter to validate." });
+                  }}
+                  placeholder="sk-or-v1-…"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </label>
+              <label>
+                <span>Model</span>
+                <input
+                  type="text"
+                  value={openRouterModel}
+                  onChange={(event) => {
+                    setOpenRouterModel(event.target.value);
+                    setConnectionStatus({ state: "idle", message: "Press Enter to validate." });
+                  }}
+                  placeholder={defaultOpenRouterModel}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </label>
+              <div className="settings-footer">
+                <p className={`connection-status ${connectionStatus.state}`} role="status">
+                  <i aria-hidden="true" />{connectionStatus.message}
+                </p>
+                <div className="settings-actions">
+                  <button type="button" className="settings-info" aria-label="Key privacy" data-tooltip="The key stays in memory for this tab and is never added to the case artifact.">?</button>
+                  <button
+                    type="submit"
+                    className="settings-validate"
+                    aria-label="Validate connection"
+                    data-tooltip="Validate key and model"
+                    disabled={connectionStatus.state === "checking"}
+                  >{connectionStatus.state === "checking" ? "…" : "✓"}</button>
                 </div>
               </div>
-            )}
-            <div className="analysis-progress" aria-hidden="true">
-              <span style={{ width: phase === "analyzing"
-                ? "18%"
-                : phase === "highlighting" && result
-                  ? String(((activeHighlight + 1) / result.decomposition.highlights.length) * 42 + 18) + "%"
-                  : phase === "clustering" && result
-                    ? String(((assembledClusterCount / result.decomposition.clusters.length) * 35) + 60) + "%"
-                    : phase === "review" || phase === "transitioning" ? "100%" : "0%" }} />
-            </div>
-          </aside>
-        </div>
+            </form>
+          )}
+        </header>
 
-        {result && (phase === "review" || phase === "transitioning") && (
+        <section className={`analysis-shell clean-shell ${phase === "transitioning" ? "leaving" : ""}`}>
+          {(phase === "idle" || phase === "error") && (
+            <section className="minimal-composer" aria-label="Question composer">
+              <div className="question-composer">
+                <textarea
+                  className="composer-input"
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  rows={5}
+                  maxLength={5000}
+                  placeholder="what is your question?"
+                  aria-label="Research question"
+                />
+                <button
+                  type="button"
+                  className="composer-submit"
+                  aria-label="Decompose question"
+                  data-tooltip={prompt.trim().length < 12 ? "Write a fuller question" : "Decompose into testable claims"}
+                  disabled={busy || prompt.trim().length < 12}
+                  onClick={() => void analyze()}
+                >
+                  <span className="decompose-icon" aria-hidden="true"><i /><i /><i /><i /></span>
+                </button>
+                {error && <p className="composer-error" role="alert">{error}</p>}
+              </div>
+            </section>
+          )}
+
+          {phase === "analyzing" && (
+            <section className="phase-screen" aria-live="polite">
+              <div className="ai-orb thinking" aria-hidden="true"><span /></div>
+              <p>Finding the questions that would change the search…</p>
+            </section>
+          )}
+
+          {phase === "eliciting" && result && currentContextQuestion && (
+            <section className="elicitation-screen" aria-label="Context interview">
+              <div className="elicitation-card" key={currentContextQuestion.id}>
+                <div className="elicitation-meta">
+                  <span>{elicitationIndex + 1} / {result.decomposition.contextQuestions.length}</span>
+                  <button
+                    type="button"
+                    className="icon-button context-info"
+                    aria-label={`Why this question matters: ${currentContextQuestion.whyItMatters}`}
+                    data-tooltip={`${currentContextQuestion.effect}: ${currentContextQuestion.whyItMatters}`}
+                  >?</button>
+                </div>
+                <h1>{currentContextQuestion.question}</h1>
+                <input
+                  type="text"
+                  value={contextAnswers[currentContextQuestion.id] ?? ""}
+                  onChange={(event) => setContextAnswers((current) => ({ ...current, [currentContextQuestion.id]: event.target.value }))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") advanceElicitation();
+                  }}
+                  placeholder="type your answer…"
+                  aria-label={currentContextQuestion.question}
+                  autoFocus
+                />
+                <div className="elicitation-actions">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Previous question"
+                    data-tooltip="Previous"
+                    disabled={elicitationIndex === 0}
+                    onClick={() => setElicitationIndex((index) => Math.max(0, index - 1))}
+                  >←</button>
+                  <div className="elicitation-dots" aria-hidden="true">
+                    {result.decomposition.contextQuestions.map((question, index) => <i className={index === elicitationIndex ? "active" : ""} key={question.id} />)}
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-button elicitation-next"
+                    aria-label={elicitationIndex === result.decomposition.contextQuestions.length - 1 ? "Refine decomposition" : "Next question"}
+                    data-tooltip={elicitationIndex === result.decomposition.contextQuestions.length - 1 ? "Refine decomposition" : "Next"}
+                    onClick={advanceElicitation}
+                  >→</button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {result && (phase === "review" || phase === "transitioning") && (
           <section className="story-board" aria-labelledby="trace-title">
+            <button type="button" className="icon-button review-back" aria-label="Edit question" data-tooltip="Edit question" onClick={returnToEditor}>←</button>
             <div className="story-heading">
               <div>
-                <div className="eyebrow">Scroll through the derivation</div>
-                <h2 id="trace-title">Decomposition trace</h2>
-                <p>The clusters are formed. Now follow each one from exact wording to the evidence it permits.</p>
+                <h2 id="trace-title">Decomposition</h2>
               </div>
               <span>{result.decomposition.clusters.length} semantic clusters</span>
             </div>
@@ -401,12 +493,35 @@ export default function Home() {
             </div>
 
             <div className="story-layout">
-              <aside className="story-index">
-                <span>Active thread</span>
+              <aside className="story-index story-question-rail">
+                <div className="pinned-question" aria-label="Question with scroll-activated semantic clusters">
+                  {segments.map((segment, index) => {
+                    if (segment.highlightIndex === null) return <span key={index}>{segment.text}</span>;
+                    const highlight = result.decomposition.highlights[segment.highlightIndex];
+                    const clusterIndex = result.decomposition.clusters.findIndex((cluster) => cluster.id === highlight.clusterId);
+                    const revealed = revealedClusters.includes(clusterIndex);
+                    const active = clusterIndex === activeCluster;
+                    return (
+                      <button
+                        type="button"
+                        className={`pinned-cue cluster-tone-${Math.max(0, clusterIndex) % 5} ${revealed ? "revealed" : ""} ${active ? "active" : ""}`}
+                        key={index}
+                        disabled={!revealed}
+                        onClick={() => inspectCluster(clusterIndex, true)}
+                        ref={(node) => {
+                          if (node) storyCueRefs.current.set(segment.highlightIndex as number, node);
+                          else storyCueRefs.current.delete(segment.highlightIndex as number);
+                        }}
+                      >
+                        {segment.text}
+                      </button>
+                    );
+                  })}
+                </div>
                 <nav aria-label="Semantic clusters">
                 {result.decomposition.clusters.map((cluster, index) => (
                   <button
-                    className={index === activeCluster ? `active cluster-tone-${index % 5}` : ""}
+                    className={`${index === activeCluster ? "active" : ""} ${revealedClusters.includes(index) ? "revealed" : ""} cluster-tone-${index % 5}`}
                     key={cluster.id}
                     onClick={() => inspectCluster(index, true)}
                     aria-pressed={index === activeCluster}
@@ -417,7 +532,7 @@ export default function Home() {
                   </button>
                 ))}
                 </nav>
-                <p>Active step {activeTraceStep + 1} of 4</p>
+                <p>{activeCluster < 0 ? "Scroll to activate the first cluster" : `Active step ${activeTraceStep + 1} of 4`}</p>
               </aside>
 
               <div className="story-stream">
@@ -425,11 +540,31 @@ export default function Home() {
                   const axis = result.decomposition.axes.find((item) => item.id === cluster.axisId);
                   if (!axis) return null;
                   return (
-                    <article className={`story-chapter cluster-tone-${clusterIndex % 5}`} id={`story-cluster-${cluster.id}`} key={cluster.id}>
+                    <article
+                      className={`story-chapter cluster-tone-${clusterIndex % 5} ${revealedClusters.includes(clusterIndex) ? "is-revealed" : ""} ${activeCluster === clusterIndex ? "is-active" : ""}`}
+                      id={`story-cluster-${cluster.id}`}
+                      key={cluster.id}
+                      data-cluster-index={clusterIndex}
+                    >
                       <header>
                         <span>Cluster {String(clusterIndex + 1).padStart(2, "0")}</span>
                         <h3>{cluster.label}</h3>
-                        <div className="chapter-cues">{cluster.highlightQuotes.map((quote) => <mark key={quote}>“{quote}”</mark>)}</div>
+                        <div className="chapter-cues">{cluster.highlightQuotes.map((quote) => {
+                          const highlightIndex = result.decomposition.highlights.findIndex(
+                            (highlight) => highlight.clusterId === cluster.id && highlight.quote === quote,
+                          );
+                          return (
+                            <mark
+                              key={quote}
+                              ref={(node) => {
+                                if (node && highlightIndex >= 0) storyLandingRefs.current.set(highlightIndex, node);
+                                else if (highlightIndex >= 0) storyLandingRefs.current.delete(highlightIndex);
+                              }}
+                            >
+                              “{quote}”
+                            </mark>
+                          );
+                        })}</div>
                       </header>
 
                       <div className="story-flow" aria-label={`Inference chain for ${cluster.label}`}>
@@ -479,13 +614,8 @@ export default function Home() {
             </div>
           </section>
         )}
-
-        <div className="analysis-principles" aria-label="Decomposition principles">
-          <span><b>01</b> Exact phrases are highlighted</span>
-          <span><b>02</b> Branches remain human-editable</span>
-          <span><b>03</b> No ambiguity is treated as probability mass</span>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
   );
 }

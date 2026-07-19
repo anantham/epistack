@@ -51,6 +51,13 @@ export const decompositionSchema = z.object({
   axes: z.array(axisSchema).min(3).max(7),
   claimTemplate: z.string().min(12).max(700),
   knownUnknowns: z.array(z.string().min(4).max(220)).min(3).max(8),
+  contextQuestions: z.array(z.object({
+    id: z.string().min(1).max(48),
+    label: z.string().min(2).max(80),
+    question: z.string().min(4).max(220),
+    whyItMatters: z.string().min(4).max(260),
+    effect: z.enum(["prune", "branch", "match"]),
+  })).min(3).max(8),
 });
 
 export const decompositionInstructions = `You are the question-compilation operator in an epistemic research system.
@@ -70,6 +77,11 @@ Rules:
 - origin is always "ai". Relevance expresses decision relevance, not truth.
 - claimTemplate must be a grammatical, concrete research question containing placeholders written exactly as {{axis-id}}. Use the axis ids you generated. It may use an axis once or omit a low-value axis, but must remain understandable after replacement with each kept branch's value.
 - knownUnknowns are attributes worth recording but not yet important enough to become axes.
+- You may receive a separate block of known decision context. Treat it as a constraint on applicability, not evidence that a general claim is true.
+- When context is supplied, visibly transform the interpretation map: park branches the context rules out; keep the branch that best matches the actual case; add or sharpen branches introduced by the person's real exposure, goal, co-exposures, setting, and feasible alternatives; and revise evidence fields, search concepts, and mismatch risks accordingly. Do not merely repeat the context in prose.
+- Preserve legitimate expansion as well as pruning. A detail can narrow one axis while creating a new decision-relevant axis or comparator elsewhere.
+- contextQuestions must ask only for unresolved facts whose answers would materially change branch pruning, create a decision-relevant branch, or improve evidence matching. Do not re-ask facts already supplied. Prefer questions about the actual exposure, goal, current routine/co-exposures, feasible comparator, population transport, and time horizon over generic demographic collection.
+- Label each context question by its main effect: "prune" removes irrelevant scope, "branch" adds a materially distinct claim, and "match" changes evidence inclusion or applicability.
 - Be concise, methodologically neutral, and domain-general.`;
 
 function slug(value: string) {
@@ -243,7 +255,7 @@ function fallbackTrace(prompt: string, axes: InterpretationAxis[]) {
   };
 }
 
-export function createFallbackDecomposition(prompt: string): DecompositionArtifact {
+export function createFallbackDecomposition(prompt: string, decisionContext = ""): DecompositionArtifact {
   const oneLine = prompt.replace(/\s+/g, " ").trim();
   const subject = oneLine.length > 120 ? `${oneLine.slice(0, 117)}…` : oneLine;
   const axes: InterpretationAxis[] = [
@@ -334,15 +346,48 @@ export function createFallbackDecomposition(prompt: string): DecompositionArtifa
       "Whether sources share data, incentives, or assumptions",
       "What new evidence would be most likely to change the conclusion",
     ],
+    contextQuestions: [
+      {
+        id: "target-outcome",
+        label: "Decision target",
+        question: "Which concrete outcome would make you act differently?",
+        whyItMatters: "A specific target prunes outcomes that are interesting but not decision-relevant.",
+        effect: "prune",
+      },
+      {
+        id: "current-exposure",
+        label: "Current exposure",
+        question: "What amount, frequency, preparation, and surrounding routine are you considering?",
+        whyItMatters: "These details determine whether a source studies the same exposure.",
+        effect: "match",
+      },
+      {
+        id: "feasible-comparator",
+        label: "Real alternative",
+        question: "What would you realistically do, eat, or choose instead?",
+        whyItMatters: "A feasible counterfactual can create a different and more actionable causal claim.",
+        effect: "branch",
+      },
+      {
+        id: "applicability",
+        label: "Applicability",
+        question: decisionContext
+          ? "Which remaining health, setting, or routine differences might make published study populations unlike this case?"
+          : "What person, place, baseline, or routine should the answer apply to?",
+        whyItMatters: "Applicability depends on whether evidence transports to the actual decision context.",
+        effect: "match",
+      },
+    ],
   };
 }
 
 export function sanitizeDecomposition(
   artifact: DecompositionArtifact,
   prompt: string,
+  decisionContext = "",
 ): DecompositionArtifact {
   const axisIds = new Set(artifact.axes.map((axis) => axis.id));
-  const fallback = createFallbackDecomposition(prompt);
+  const fallback = createFallbackDecomposition(prompt, decisionContext);
   const clusters = artifact.clusters.filter(
     (cluster) => axisIds.has(cluster.axisId)
       && cluster.highlightQuotes.length > 0

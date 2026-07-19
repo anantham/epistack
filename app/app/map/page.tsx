@@ -10,6 +10,7 @@ import pubmedDiscovery from "../../data/pubmed-discovery.json";
 import {
   decompositionSessionKey,
   type BranchStatus,
+  type ContextQuestion,
   type DecompositionCluster,
   type DecompositionResponse,
   type InterpretationAxis as Axis,
@@ -413,9 +414,11 @@ export default function InterpretationMapPage() {
   const branchSequence = useRef(0);
   const [ready, setReady] = useState(false);
   const [prompt, setPrompt] = useState(originalPrompt);
+  const [decisionContext, setDecisionContext] = useState("");
   const [axes, setAxes] = useState(initialAxes);
   const [claimTemplate, setClaimTemplate] = useState(eggsClaimTemplate);
   const [knownUnknowns, setKnownUnknowns] = useState(eggsUnknowns);
+  const [contextQuestions, setContextQuestions] = useState<ContextQuestion[]>([]);
   const [clusters, setClusters] = useState(eggsClusters);
   const [caseId, setCaseId] = useState("eggs-weight-loss");
   const [caseSummary, setCaseSummary] = useState("The original eggs case fixture is ready for human review.");
@@ -435,9 +438,11 @@ export default function InterpretationMapPage() {
           const response = JSON.parse(stored) as DecompositionResponse;
           const nextAxes = response.decomposition.axes;
           setPrompt(response.prompt);
+          setDecisionContext(response.decisionContext ?? "");
           setAxes(nextAxes);
           setClaimTemplate(response.decomposition.claimTemplate);
           setKnownUnknowns(response.decomposition.knownUnknowns);
+          setContextQuestions(response.decomposition.contextQuestions ?? []);
           setClusters(response.decomposition.clusters);
           setCaseId(response.caseId);
           setCaseSummary(response.decomposition.summary);
@@ -535,6 +540,11 @@ export default function InterpretationMapPage() {
       schemaVersion: "0.1.0",
       caseId,
       originalPrompt: prompt,
+      decisionContext: {
+        supplied: decisionContext || null,
+        usePolicy: "Constrains claim applicability, branch relevance, and retrieval; it is not evidence that the claim is true.",
+        unresolvedQuestions: contextQuestions,
+      },
       interpretationPolicy: {
         note: "Branches are candidate scopes, not mutually exclusive truth hypotheses.",
         selectedBy: "human",
@@ -617,6 +627,14 @@ export default function InterpretationMapPage() {
                 <span><b>{parkedCount}</b> parked</span>
               </div>
             </div>
+
+            {decisionContext && (
+              <div className="case-context" aria-label="Decision context used for this map">
+                <span>Decision context</span>
+                <p>{decisionContext}</p>
+                <small>Used to constrain applicability and evidence matching—not as evidence for the conclusion.</small>
+              </div>
+            )}
 
             <div className="root-node">
               <span>Original question</span>
