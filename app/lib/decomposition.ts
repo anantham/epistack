@@ -49,6 +49,7 @@ export type ContextQuestion = {
   question: string;
   whyItMatters: string;
   effect: "prune" | "branch" | "match";
+  options: string[];
 };
 
 export type DecompositionArtifact = {

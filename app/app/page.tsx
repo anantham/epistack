@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   DecompositionResponse,
   QuestionHighlight,
@@ -9,6 +9,14 @@ import { decompositionSessionKey } from "../lib/decomposition";
 
 const defaultOpenRouterModel = "anthropic/claude-sonnet-4.6";
 const brandCharacters = [..."epistack"];
+const analysisDurationsKey = "epistack:analysis-durations:v1";
+const loadingSteps = [
+  "reading the exact words",
+  "tracing grammatical roles",
+  "testing counterfactuals and bundled options",
+  "ranking high-value follow-up questions",
+  "compiling evidence requirements",
+];
 
 type AnalysisPhase = "idle" | "analyzing" | "eliciting" | "review" | "transitioning" | "error";
 type ConnectionStatus = { state: "idle" | "checking" | "valid" | "invalid"; message: string };
@@ -49,6 +57,13 @@ function wait(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
+function median(values: number[]) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [decisionContext, setDecisionContext] = useState("");
@@ -65,6 +80,10 @@ export default function Home() {
   const [revealedClusters, setRevealedClusters] = useState<number[]>([]);
   const [contextAnswers, setContextAnswers] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [analysisElapsed, setAnalysisElapsed] = useState(0);
+  const [analysisDurations, setAnalysisDurations] = useState<number[]>([]);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const storyCueRefs = useRef(new Map<number, HTMLButtonElement>());
   const storyLandingRefs = useRef(new Map<number, HTMLElement>());
   const revealedClustersRef = useRef(new Set<number>());
@@ -75,12 +94,52 @@ export default function Home() {
   );
   const currentContextQuestion = result?.decomposition.contextQuestions[elicitationIndex] ?? null;
   const busy = phase === "analyzing" || phase === "transitioning";
+  const expectedDuration = useMemo(() => median(analysisDurations), [analysisDurations]);
+  const secondsRemaining = expectedDuration === null
+    ? null
+    : Math.max(0, Math.round((expectedDuration - analysisElapsed) / 1000));
 
   useEffect(() => {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const timer = window.setTimeout(() => setIntroComplete(true), reducedMotion ? 0 : 3300);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = JSON.parse(window.localStorage.getItem(analysisDurationsKey) || "[]") as unknown;
+        if (Array.isArray(saved)) setAnalysisDurations(saved.filter((value) => typeof value === "number").slice(-12));
+      } catch {
+        setAnalysisDurations([]);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "analyzing") return;
+    const startedAt = window.performance.now();
+    const stepTimer = window.setInterval(
+      () => setLoadingStep((step) => Math.min(step + 1, loadingSteps.length - 1)),
+      2400,
+    );
+    const elapsedTimer = window.setInterval(
+      () => setAnalysisElapsed(window.performance.now() - startedAt),
+      200,
+    );
+    return () => {
+      window.clearInterval(stepTimer);
+      window.clearInterval(elapsedTimer);
+    };
+  }, [phase]);
+
+  useLayoutEffect(() => {
+    const input = composerInputRef.current;
+    if (!input) return;
+    input.style.height = "auto";
+    input.style.height = `${Math.max(210, input.scrollHeight)}px`;
+  }, [prompt, introComplete, phase]);
 
   async function animateStoryClusterFlight(payload: DecompositionResponse, clusterIndex: number, reducedMotion: boolean) {
     const cluster = payload.decomposition.clusters[clusterIndex];
@@ -196,9 +255,12 @@ export default function Home() {
     setRevealedClusters([]);
     if (!skipElicitation) setContextAnswers({});
     revealedClustersRef.current.clear();
+    setLoadingStep(0);
+    setAnalysisElapsed(0);
     setPhase("analyzing");
 
     const contextForRequest = typeof contextOverride === "string" ? contextOverride : decisionContext;
+    const requestStartedAt = window.performance.now();
 
     try {
       const response = await fetch("/api/decompose", {
@@ -213,6 +275,17 @@ export default function Home() {
       });
       const payload = await response.json() as DecompositionResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "The decomposition could not be generated.");
+
+      const duration = window.performance.now() - requestStartedAt;
+      setAnalysisDurations((current) => {
+        const next = [...current, duration].slice(-12);
+        try {
+          window.localStorage.setItem(analysisDurationsKey, JSON.stringify(next));
+        } catch {
+          // Latency history is optional; never block the decomposition.
+        }
+        return next;
+      });
 
       setResult(payload);
       window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
@@ -399,6 +472,7 @@ export default function Home() {
             <section className="minimal-composer" aria-label="Question composer">
               <div className="question-composer">
                 <textarea
+                  ref={composerInputRef}
                   className="composer-input"
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
@@ -406,12 +480,18 @@ export default function Home() {
                   maxLength={5000}
                   placeholder="what is your question?"
                   aria-label="Research question"
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      event.preventDefault();
+                      void analyze();
+                    }
+                  }}
                 />
                 <button
                   type="button"
                   className="composer-submit"
                   aria-label="Decompose question"
-                  data-tooltip={prompt.trim().length < 12 ? "Write a fuller question" : "Decompose into testable claims"}
+                  data-tooltip={prompt.trim().length < 12 ? "Write a fuller question" : "Decompose into testable claims · ⌘↵"}
                   disabled={busy || prompt.trim().length < 12}
                   onClick={() => void analyze()}
                 >
@@ -425,7 +505,15 @@ export default function Home() {
           {phase === "analyzing" && (
             <section className="phase-screen" aria-live="polite">
               <div className="ai-orb thinking" aria-hidden="true"><span /></div>
-              <p>Finding the questions that would change the search…</p>
+              <div className="loading-copy">
+                <p>{loadingSteps[loadingStep]}…</p>
+                <span>
+                  {secondsRemaining === null
+                    ? `${Math.round(analysisElapsed / 1000)}s`
+                    : secondsRemaining > 0 ? `about ${secondsRemaining}s left` : "any moment"}
+                </span>
+                <small>{expectedDuration === null ? "timing the first run" : `based on ${analysisDurations.length} recent run${analysisDurations.length === 1 ? "" : "s"}`}</small>
+              </div>
             </section>
           )}
 
@@ -442,6 +530,16 @@ export default function Home() {
                   >?</button>
                 </div>
                 <h1>{currentContextQuestion.question}</h1>
+                <div className="context-options" aria-label="Suggested answers">
+                  {currentContextQuestion.options.map((option) => (
+                    <button
+                      type="button"
+                      className={(contextAnswers[currentContextQuestion.id] ?? "") === option ? "selected" : ""}
+                      key={option}
+                      onClick={() => setContextAnswers((current) => ({ ...current, [currentContextQuestion.id]: option }))}
+                    >{option}</button>
+                  ))}
+                </div>
                 <input
                   type="text"
                   value={contextAnswers[currentContextQuestion.id] ?? ""}

@@ -58,6 +58,7 @@ export const decompositionSchema = z.object({
     question: z.string().min(4).max(220),
     whyItMatters: z.string().min(4).max(260),
     effect: z.enum(["prune", "branch", "match"]),
+    options: z.array(z.string().min(1).max(100)).min(2).max(5),
   })).min(3).max(8),
 });
 
@@ -88,26 +89,69 @@ export const decompositionOutputSchema = jsonSchema<z.infer<typeof decomposition
 
 export const decompositionInstructions = `You are the question-compilation operator in an epistemic research system.
 
-Turn a vague paragraph into a compact, human-editable interpretation map. Do not answer the question and do not retrieve evidence. Your job is to expose ambiguity that would materially change what evidence is relevant.
+Turn a vague paragraph into a compact, human-editable interpretation map. Do not answer it and do not retrieve evidence. Expose the substantive sub-questions, hidden decisions, and unknowns that would materially change the answer or the evidence search. Do not produce dictionary senses or cosmetic distinctions.
 
-Rules:
-- Identify 3–7 decision-relevant axes. Avoid exhaustive combinatorics and cosmetic distinctions.
-- Give each axis 2–4 concrete branches. Exactly one branch per axis must have status "kept" as the most ordinary or decision-useful provisional reading. Other branches are "candidate" or "parked".
-- Branches are alternative scopes, not mutually exclusive truth hypotheses.
-- Preserve uncertainty. Do not invent details the paragraph does not contain.
-- Every highlight quote must be an exact, case-sensitive substring of the submitted paragraph. Link it to both an axis id and a semantic cluster id.
-- Cluster separate surface cues when they imply the same latent variable. For example, "eat" and "moderation" can belong to one dose/frequency cluster even when they are not adjacent.
-- For each cluster, expose an inspectable methodological rationale: the quoted cues, the latent variable inferred from them, the interpretation axis they motivate, and the fields/search concepts/mismatch risks that evidence ingestion must preserve.
-- This rationale is a concise audit trace, not private chain-of-thought. State only what a reviewer needs to evaluate the decomposition decision.
-- Use stable lowercase kebab-case ids, unique across axes and within each branch list.
-- origin is always "ai". Relevance expresses decision relevance, not truth.
-- claimTemplate must be a grammatical, concrete research question containing placeholders written exactly as {{axis-id}}. Use the axis ids you generated. It may use an axis once or omit a low-value axis, but must remain understandable after replacement with each kept branch's value.
-- knownUnknowns are attributes worth recording but not yet important enough to become axes.
-- You may receive a separate block of known decision context. Treat it as a constraint on applicability, not evidence that a general claim is true.
-- When context is supplied, visibly transform the interpretation map: park branches the context rules out; keep the branch that best matches the actual case; add or sharpen branches introduced by the person's real exposure, goal, co-exposures, setting, and feasible alternatives; and revise evidence fields, search concepts, and mismatch risks accordingly. Do not merely repeat the context in prose.
-- Preserve legitimate expansion as well as pruning. A detail can narrow one axis while creating a new decision-relevant axis or comparator elsewhere.
-- contextQuestions must ask only for unresolved facts whose answers would materially change branch pruning, create a decision-relevant branch, or improve evidence matching. Do not re-ask facts already supplied. Prefer questions about the actual exposure, goal, current routine/co-exposures, feasible comparator, population transport, and time horizon over generic demographic collection.
-- Label each context question by its main effect: "prune" removes irrelevant scope, "branch" adds a materially distinct claim, and "match" changes evidence inclusion or applicability.
+GRAMMAR GROUNDING
+- Begin with roles in the submitted language: frame or modal, subject, verb or action, object, adjective or qualifier, and materially implied terms. Every semantic cluster must trace to one or more exact quoted cues, even when the cues are separated in the sentence.
+- Then translate the grammatical cue into a decision-relevant latent variable. "Good", "better", "worth", and "should" usually hide an outcome, value, stakeholder, or trade-off. A verb often hides dose, feasibility, implementation, or a counterfactual. A noun often hides subtype or construct validity.
+
+RECURRING LENSES — check each and use only those that matter:
+- frame and values: good or worthwhile by which measure, for whose objective?
+- what exactly: which subtype, operational definition, intervention, or scope?
+- versus what: the actual counterfactual or feasible comparator, including status quo or do nothing. Include this for causal, comparative, and decision questions.
+- who or jurisdiction: for whom, whose decision, which authority, which population?
+- where and context of use: setting, geography, market, implementation environment?
+- when and time horizon: immediate mechanism, decision horizon, or durable outcome?
+- how much: dose, number, frequency, duration, and the threshold where the answer could flip?
+- feasibility and failure: can it be done, at what effort, and what happens if it fails?
+- cost all-in versus means: financing, incentives, operating cost, opportunity cost, and affordability?
+- downside, world model, and personal fit: risks, future assumptions, routine, preferences, and constraints?
+- legal or regulatory regime: rights, protections, taxation, lock-in, rules, and authority where relevant.
+
+HARD LESSONS
+- OPTIONS ARE BUNDLES. Alternatives are often different real scenarios, not one object with one field changed. Decompose each bundle. A rent-home and the buy-home may differ in location, commute, rights, maintenance, and financial exposure.
+- CONSTRAINT CASCADE. Trace variables that force downstream choices: budget → feasible home → neighbourhood → commute; time available → training route → reachable skill → job prospects.
+- Concrete beats categorical. Use quantitative or observable branches when possible: one egg/day versus three or more; less than three years versus ten or more; a specific replacement food rather than "moderation".
+- Preserve uncertainty. Branches are alternative scopes, not truth hypotheses. Never invent facts absent from the paragraph or known context.
+
+TRANSFER THE METHOD FROM THESE WORKED EXAMPLES — do not copy their nouns into unrelated cases:
+
+"Are eggs good to eat?"
+- frame "good" → good for what: cardiovascular events, mortality, diabetes, satiety or weight, protein, micronutrients, ethics.
+- object "eggs" → what counts: whole versus whites, standard versus fortified, preparation and production when evidentially relevant.
+- verb "eat" → dose, frequency, preparation, and versus what: one/day or three+/day; boiled or fried; replacing refined carbohydrate, meat, or nothing.
+- implied subject → for whom: healthy adults, diabetes, high LDL or hyper-response, athlete, child, older adult.
+
+"Should I switch careers into software engineering?"
+- frame "should" → goals: income, location freedom, family time, enjoyment, flexibility.
+- destination → frontend, backend, data/ML, employee, consultant, startup, large company.
+- subject "I" → career capital, transferable skills, education, network, hiring access.
+- verb "switch" → time and cost to job-ready, income gap, probability of hire, downside if it fails.
+- implied future and fit → the AI-disruption world model and whether the daily work suits the asker.
+
+"Should we build more nuclear power plants?"
+- frame "should" → climate, system cost, energy security, safety, waste, public welfare.
+- subject "we" → jurisdiction, authority, delivery capability, and historical track record.
+- "build more" → baseline fleet, increment, technology, construction time, financing, fuel, and waste.
+- implied comparator → coal or gas, renewables plus storage, life extension, demand reduction, or no build.
+
+"Is it better to rent or buy a home?"
+- budget is the pivot: rent-budget and buy-budget purchase different bundles, often in different places.
+- cascade each bundle into home, neighbourhood, commute, school access, legal rights, maintenance, and total cost.
+- compare rent-and-invest-the-difference, transaction costs, taxes, flexibility, and the break-even time horizon.
+
+OUTPUT RULES
+- Identify 4–7 decision-relevant axes. Avoid exhaustive combinatorics.
+- Give each axis 2–4 concrete branches. Exactly one is "kept" as the most ordinary or decision-useful provisional reading; others are "candidate" or "parked".
+- Every highlight quote is an exact, case-sensitive substring of the submitted paragraph and links to both an axis and semantic cluster.
+- For each cluster, provide a concise audit trace, not private chain-of-thought: quoted cues, latent variable, rationale, required evidence fields, search concepts, and mismatch risks.
+- Use stable lowercase kebab-case ids. origin is always "ai". Relevance means decision relevance, not truth.
+- claimTemplate is a grammatical research question using placeholders exactly as {{axis-id}}. It must remain readable after substituting kept branch values.
+- knownUnknowns are worth recording but not important enough to become axes.
+- Treat known decision context as an applicability constraint, never as evidence. Park branches the context rules out, keep matching branches, add newly relevant axes, and revise evidence requirements. Do not merely repeat it.
+- Preserve legitimate expansion as well as pruning: one answer may collapse an axis while creating a new comparator or risk.
+- Ask 3–5 contextQuestions, ordered by expected value of information: first ask the fact most likely to collapse branches or change evidence inclusion. Do not re-ask supplied facts. Each question gets 2–5 short, concrete answer options that are useful handles, while still permitting free text.
+- Label each question's main effect: "prune" removes scope, "branch" creates a materially different claim, and "match" changes evidence inclusion or transportability.
 - Be concise, methodologically neutral, and domain-general.`;
 
 function slug(value: string) {
@@ -379,6 +423,7 @@ export function createFallbackDecomposition(prompt: string, decisionContext = ""
         question: "Which concrete outcome would make you act differently?",
         whyItMatters: "A specific target prunes outcomes that are interesting but not decision-relevant.",
         effect: "prune",
+        options: ["Health risk", "Weight or satiety", "Performance", "Cost or convenience"],
       },
       {
         id: "current-exposure",
@@ -386,6 +431,7 @@ export function createFallbackDecomposition(prompt: string, decisionContext = ""
         question: "What amount, frequency, preparation, and surrounding routine are you considering?",
         whyItMatters: "These details determine whether a source studies the same exposure.",
         effect: "match",
+        options: ["Occasional or low exposure", "About daily", "Several times daily", "Not decided yet"],
       },
       {
         id: "feasible-comparator",
@@ -393,6 +439,7 @@ export function createFallbackDecomposition(prompt: string, decisionContext = ""
         question: "What would you realistically do, eat, or choose instead?",
         whyItMatters: "A feasible counterfactual can create a different and more actionable causal claim.",
         effect: "branch",
+        options: ["Keep the status quo", "Choose the nearest substitute", "Do nothing", "I have several realistic alternatives"],
       },
       {
         id: "applicability",
@@ -402,6 +449,7 @@ export function createFallbackDecomposition(prompt: string, decisionContext = ""
           : "What person, place, baseline, or routine should the answer apply to?",
         whyItMatters: "Applicability depends on whether evidence transports to the actual decision context.",
         effect: "match",
+        options: ["Healthy general population", "A specific health or risk group", "A specific place or system", "My personal routine"],
       },
     ],
   };

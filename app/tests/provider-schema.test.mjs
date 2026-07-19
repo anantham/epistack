@@ -5,6 +5,7 @@ import {
   decompositionProviderJsonSchema,
   decompositionSchema,
 } from "../lib/decomposition-server.ts";
+import { readFile } from "node:fs/promises";
 
 const unsupportedStructuredOutputKeywords = new Set([
   "minLength", "maxLength", "pattern", "format",
@@ -36,4 +37,13 @@ test("semantic cardinality checks still run after provider generation", () => {
   );
   assert.equal(decompositionSchema.safeParse(complete).success, true);
   assert.equal(decompositionSchema.safeParse({ ...complete, axes: complete.axes.slice(0, 1) }).success, false);
+});
+
+test("context elicitation offers concrete answer handles", async () => {
+  const [serverSource, typeSource] = await Promise.all([
+    readFile(new URL("../lib/decomposition-server.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/decomposition.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(serverSource, /options: z\.array/);
+  assert.match(typeSource, /options: string\[\]/);
 });
