@@ -324,46 +324,91 @@ function EvidenceBar({ axis, stats }) {
   )
 }
 
-// the deep-dive subagent's output — a full provenance card for ONE study
-function ProvenanceCard({ p }) {
-  const tier = norm(p.journal_tier)
+// relation → colour family: green = props up the claim, amber = works against it, grey = neither
+const relClass = (r) => {
+  const n = norm(r)
+  if (/support|mechan/.test(n)) return 'good'
+  if (/contradict|undercut|fails|dispute/.test(n)) return 'warn'
+  return 'neutral' // qualifies · bounds · not-informative · transports
+}
+
+// the deep-dive subagent's output — a RESULT LEDGER (paper decomposed into its distinct results)
+function ResultLedger({ d }) {
+  const s = d.study || {}
+  const results = Array.isArray(d.results) ? d.results : []
+  const tier = norm(s.journal_tier)
   const tierClass = /top|reputable|high|q1/.test(tier) ? 'good' : /predator|preprint|low|q3|q4|unknown/.test(tier) ? 'warn' : ''
-  const tierShort = String(p.journal_tier || '').split(/[—,.;(]/)[0].trim().slice(0, 46)
-  const openGood = /yes|public|open|available|github|osf|zenodo|dryad/i.test(String(p.open_data || '')) && !/no\b|not |unclear/i.test(String(p.open_data || ''))
-  const critiqued = p.critiques && !/^(none|no known|not )/i.test(String(p.critiques).trim())
-  const rows = [
-    ['design', p.design],
-    ['sample', p.n],
-    ['effect size', p.effect],
-    ['p-value', p.pvalue],
-    ['exposure', p.exposure],
-    ['population', p.population],
-    ['year', p.year],
-    ['journal', p.journal && `${p.journal}${p.journal_tier ? ` — ${p.journal_tier}` : ''}`],
-    ['peer-reviewed', typeof p.peer_reviewed === 'boolean' ? (p.peer_reviewed ? 'yes' : 'no') : p.peer_reviewed],
-    ['investigators', p.investigators],
-    ['funding', p.funding],
-    ['conflicts', p.coi],
-    ['open data', p.open_data],
-    ['critiques / replications', p.critiques],
-    ['limitations', p.limitations],
+  const tierShort = String(s.journal_tier || '').split(/[—,.;(]/)[0].trim().slice(0, 46)
+  const openGood = /yes|public|open|available|github|osf|zenodo|dryad/i.test(String(s.open_data || '')) && !/no\b|not |unclear/i.test(String(s.open_data || ''))
+  const critiqued = s.critiques && !/^(none|no known|not )/i.test(String(s.critiques).trim())
+  const studyRows = [
+    ['design', s.design],
+    ['journal', s.journal && `${s.journal}${s.journal_tier ? ` — ${s.journal_tier}` : ''}`],
+    ['peer-reviewed', typeof s.peer_reviewed === 'boolean' ? (s.peer_reviewed ? 'yes' : 'no') : s.peer_reviewed],
+    ['investigators', s.investigators],
+    ['funding', s.funding],
+    ['conflicts', s.coi],
+    ['open data', s.open_data],
+    ['dataset', s.dataset],
+    ['critiques / replications', s.critiques],
   ].filter(([, v]) => v)
+  const ac = d.authorConclusion || {}
+  const acBroad = /broad|underdetermin|stronger|overstat|beyond/i.test(String(ac.assessment || ''))
   return (
-    <div className="prov">
+    <div className="ledger">
       <div className="prov-chips">
-        {p.journal_tier && <span className={`pchip ${tierClass}`} title={p.journal_tier}>{tierClass === 'good' ? '◆ ' : tierClass === 'warn' ? '△ ' : ''}{tierShort}</span>}
+        {s.journal_tier && <span className={`pchip ${tierClass}`} title={s.journal_tier}>{tierClass === 'good' ? '◆ ' : tierClass === 'warn' ? '△ ' : ''}{tierShort}</span>}
         <span className={`pchip ${openGood ? 'good' : 'warn'}`}>{openGood ? '◆ open data' : '△ data not open'}</span>
         {critiqued && <span className="pchip warn">△ critiqued</span>}
-        {p.pvalue && <span className="pchip">p {p.pvalue}</span>}
+        {s.dataset && <span className="pchip" title={`dataset: ${s.dataset}`}>dataset: {String(s.dataset).slice(0, 24)}</span>}
       </div>
-      <div className="prov-grid">
-        {rows.map(([k, v]) => (
-          <div className={`prov-row${k === 'critiques / replications' && critiqued ? ' hot' : ''}`} key={k}>
-            <span className="prov-k">{k}</span>
-            <span className="prov-v">{String(v)}</span>
+
+      <div className="ld-results">
+        <div className="ld-label">
+          {results.length} result{results.length === 1 ? '' : 's'} in this paper — reasoning at the result level
+        </div>
+        {results.map((r, i) => (
+          <div className={`result rel-${relClass(r.relation)}`} key={i}>
+            <div className="rs-top">
+              {r.relation && <span className={`rs-rel rel-${relClass(r.relation)}`}>{r.relation}</span>}
+              {r.status && <span className="rs-status">{r.status}</span>}
+              {r.estimate && <span className="rs-est">{r.estimate}</span>}
+            </div>
+            <div className="rs-statement">{r.statement}</div>
+            {r.relationNote && <div className="rs-note">→ {r.relationNote}</div>}
+            <div className="rs-scope">
+              {r.population && <span><b>pop</b> {r.population}</span>}
+              {r.exposure && <span><b>exposure</b> {r.exposure}</span>}
+              {r.outcome && <span><b>outcome</b> {r.outcome}</span>}
+              {r.n && <span><b>n</b> {r.n}</span>}
+              {r.model && <span><b>model</b> {r.model}</span>}
+            </div>
+            {r.locus && <div className="rs-locus" title="passage pointer — spot-check here">↳ {r.locus}</div>}
           </div>
         ))}
       </div>
+
+      {ac.text && (
+        <div className={`ld-author${acBroad ? ' broad' : ''}`}>
+          <span className="rlabel">author's conclusion — a claim, not the data</span>
+          <div className="au-text">“{ac.text}”</div>
+          {ac.assessment && <div className="au-assess">{acBroad ? '⚠ ' : ''}{ac.assessment}</div>}
+        </div>
+      )}
+
+      {studyRows.length > 0 && (
+        <details className="ld-study">
+          <summary>study-level provenance (shared by every result above)</summary>
+          <div className="prov-grid">
+            {studyRows.map(([k, v]) => (
+              <div className={`prov-row${k === 'critiques / replications' && critiqued ? ' hot' : ''}`} key={k}>
+                <span className="prov-k">{k}</span>
+                <span className="prov-v">{String(v)}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   )
 }
@@ -406,17 +451,17 @@ function FindingCard({ f, question, axisName }) {
           </a>
         )}
         <button className="dd-btn" onClick={deepdive} disabled={dd === 'loading'}>
-          {dd === 'loading' ? '🔬 subagent digging…' : dd && !dd.error ? '↻ re-dig' : '🔬 deep-dive'}
+          {dd === 'loading' ? '🔬 subagent digging…' : dd && !dd.error ? '↻ re-dig' : '🔬 deep-dive → results'}
         </button>
       </div>
       {dd === 'loading' && (
         <div className="dd-working">
           <span className="scan" />
-          <span>a subagent is verifying methodology, sample, journal, funding, open-data & critiques…</span>
+          <span>a subagent is decomposing the paper into its distinct results, tagging each to the claim…</span>
         </div>
       )}
       {dd && dd !== 'loading' && dd.error && <div className="dd-err">deep-dive failed: {dd.error}</div>}
-      {dd && dd !== 'loading' && !dd.error && <ProvenanceCard p={dd} />}
+      {dd && dd !== 'loading' && !dd.error && <ResultLedger d={dd} />}
     </div>
   )
 }

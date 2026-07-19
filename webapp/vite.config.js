@@ -183,35 +183,50 @@ Return ONLY JSON, no prose, no fences:
 Rules: EXACTLY one agent per open axis; "dimension" must equal the given axis id verbatim. Make focus and crux concrete and personalised. Valid JSON only.`
 }
 
-// A deep-dive subagent: drill into ONE study and return a full provenance card
+// A deep-dive subagent: DECOMPOSE the paper into its distinct RESULTS (a paper is a container, not a datum)
 function deepDivePrompt(p) {
-  return `You are a provenance subagent. Use web search to VERIFY and profile ONE study behind a claim, so a careful reader can judge how much to trust it. Read the source; find the underlying paper; check for critiques, letters, or replications.
+  return `You are a result-level extraction subagent. Use web search to find the paper behind a claim and DECOMPOSE it into its distinct RESULTS — a paper is a container, not one unit of evidence. Reason at the result level; keep the paper as context. A subgroup result, a secondary endpoint, or an adjusted-vs-unadjusted estimate is a DIFFERENT result with its OWN scope. Separate MEASURED results from the AUTHOR'S CONCLUSION — the conclusion is itself a claim, often broader than the results support. Give every result an exact passage/table pointer so a human can spot-check it.
 
 DECISION: ${JSON.stringify(p.question)}
 AXIS: ${JSON.stringify(p.axis || '')}
-CLAIM: ${JSON.stringify(p.claim)}
+CLAIM UNDER EXAMINATION: ${JSON.stringify(p.claim)}
 SOURCE: ${JSON.stringify(p.source || '')}
 URL: ${JSON.stringify(p.url || '')}
 
-Return ONLY JSON, no prose, no fences. Be specific and quantitative; if a field is genuinely unknown after searching, use "unclear" (do NOT invent):
+Use "unclear" for anything you cannot verify after searching (do NOT invent numbers or pointers). Return ONLY JSON, no prose, no fences:
 {
-  "design": "study design / methodology (e.g. double-blind RCT, prospective cohort, meta-analysis of N trials)",
-  "n": "sample size / number of participants or studies pooled",
-  "effect": "effect size with 95% CI if reported (e.g. HR 1.06, 95% CI 1.03–1.10)",
-  "pvalue": "reported p-value or significance, if any",
-  "exposure": "the exact exposure/intervention (for eggs: what kind — whole vs whites, dose/day, duration)",
-  "population": "who was studied (age, health status, country)",
-  "year": "publication year",
-  "journal": "journal or venue name",
-  "journal_tier": "reputation in a few words: top-tier / reputable / low-impact / predatory / preprint (not peer-reviewed), and why",
-  "peer_reviewed": true,
-  "investigators": "principal investigators / lead authors + their institution",
-  "funding": "who funded it",
-  "coi": "declared conflicts of interest",
-  "open_data": "is the data/code publicly available? (yes + where, e.g. OSF/GitHub / no / unclear)",
-  "critiques": "known critiques, published letters, failed replications, or retraction status — or 'none found'",
-  "limitations": "the key limitations",
-  "confidence": "high|medium|low — how much weight this study deserves overall"
+  "study": {
+    "design": "study design / methodology (e.g. double-blind RCT, prospective cohort, meta-analysis of N trials)",
+    "year": "publication year",
+    "journal": "journal or venue name",
+    "journal_tier": "reputation in a few words: top-tier / reputable / low-impact / predatory / preprint",
+    "peer_reviewed": true,
+    "investigators": "principal investigators / lead authors + institution",
+    "funding": "who funded it",
+    "coi": "declared conflicts of interest",
+    "open_data": "is data/code public? (yes + where / no / unclear)",
+    "dataset": "the underlying cohort/dataset identity (e.g. ARIC, NHANES, Framingham) — for detecting shared-data dependence across studies",
+    "critiques": "known critiques, letters, failed replications, retraction status — or 'none found'"
+  },
+  "results": [
+    {
+      "statement": "the specific MEASURED result, one line including the number",
+      "locus": "exact pointer — table/figure/page, or a short quoted passage",
+      "population": "population & subgroup for THIS result",
+      "exposure": "exposure / dose / comparator for THIS result",
+      "outcome": "outcome & time horizon for THIS result",
+      "estimate": "effect estimate with 95% CI if reported",
+      "model": "statistical model + adjustment set",
+      "status": "primary | secondary | subgroup | exploratory | post-hoc",
+      "n": "sample size for THIS analysis",
+      "relation": "supports | contradicts | qualifies | undercuts-method | bounds | mechanistically-explains | not-informative",
+      "relationNote": "one line: how THIS result bears on the claim under examination"
+    }
+  ],
+  "authorConclusion": {
+    "text": "the paper's own stated conclusion",
+    "assessment": "how it relates to the measured results above — e.g. 'supported by the results', 'broader than the results support', 'underdetermined by results'"
+  }
 }`
 }
 
