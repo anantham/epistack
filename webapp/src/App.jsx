@@ -440,6 +440,9 @@ function FindingCard({ f, question, axisName }) {
         {f.supports && <span className="tag t-supports">→ {f.supports}</span>}
         {f.kind && <span className="tag t-kind">{f.kind}</span>}
         {f.n && <span className="tag t-n">n={f.n}</span>}
+        {f.dataset && !/^(unclear|primary study|n\/a|none)/i.test(String(f.dataset).trim()) && (
+          <span className="tag t-dataset" title="underlying dataset — for dependence grouping">◇ {String(f.dataset).slice(0, 40)}</span>
+        )}
         {f.confidence && <span className={`tag t-conf c-${conf}`}>{f.confidence}</span>}
         {coi && <span className="tag t-coi">⚠ {f.coi}</span>}
       </div>
@@ -462,6 +465,79 @@ function FindingCard({ f, question, axisName }) {
       )}
       {dd && dd !== 'loading' && dd.error && <div className="dd-err">deep-dive failed: {dd.error}</div>}
       {dd && dd !== 'loading' && !dd.error && <ResultLedger d={dd} />}
+    </div>
+  )
+}
+
+// dependence grouping — cluster the axis's sources into independent evidence families
+function DependencePanel({ axis, findings, question }) {
+  const [dep, setDep] = useState(null) // null | 'loading' | result | {error}
+  async function run() {
+    setDep('loading')
+    try {
+      const r = await fetch('/api/dependence', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          dimensionName: axis.name,
+          findings: findings.map((f) => ({ claim: f.claim, source: f.source, url: f.url, kind: f.kind, dataset: f.dataset, year: f.year })),
+        }),
+      })
+      const j = await r.json()
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+      setDep(j)
+    } catch (e) {
+      setDep({ error: String(e.message || e) })
+    }
+  }
+  const done = dep && dep !== 'loading' && !dep.error
+  const total = done ? dep.totalSources || findings.length : findings.length
+  const indep = done ? dep.independentCount : null
+  const inflated = indep != null && total > indep
+  return (
+    <div className="dependence">
+      <div className="dep-bar">
+        <button className="lane-run" onClick={run} disabled={dep === 'loading'}>
+          {dep === 'loading' ? 'grouping…' : done ? '↻ regroup' : '⚖ group by evidence family'}
+        </button>
+        {indep != null && (
+          <span className={`dep-count${inflated ? ' inflated' : ''}`}>
+            <b>{total}</b> sources → <b>{indep}</b> independent {indep === 1 ? 'family' : 'families'}
+          </span>
+        )}
+      </div>
+      {dep === 'loading' && (
+        <div className="dd-working">
+          <span className="scan" />
+          <span>checking which sources share a cohort, dataset, or team — correlated evidence is not independent votes…</span>
+        </div>
+      )}
+      {dep && dep.error && <div className="dd-err">{dep.error}</div>}
+      {done && (
+        <>
+          {dep.note && <div className={`dep-note${inflated ? ' inflated' : ''}`}>{dep.note}</div>}
+          <div className="dep-families">
+            {(dep.families || []).map((fam, i) => {
+              const members = fam.members || []
+              return (
+                <div className={`dep-fam${members.length > 1 ? ' correlated' : ''}`} key={i}>
+                  <div className="df-head">
+                    <span className="df-name">{fam.label}</span>
+                    <span className="df-count">
+                      {members.length} {members.length === 1 ? 'source' : 'sources'}
+                      {members.length > 1 ? ' · counts once' : ''}
+                    </span>
+                  </div>
+                  {fam.basis && <div className="df-basis">{fam.basis}</div>}
+                  {members.length > 0 && <div className="df-members">{members.join(' · ')}</div>}
+                  {fam.note && <div className="df-note">{fam.note}</div>}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -523,6 +599,7 @@ function ResearchLane({ axis, lane, stats, brief, now, onRun, question }) {
               <FindingCard key={i} f={f} question={question} axisName={axis.name} />
             ))}
           </div>
+          <DependencePanel axis={axis} findings={findings} question={question} />
         </>
       )}
     </div>
@@ -791,6 +868,7 @@ function ResearchStage({ question, data, pdata, context }) {
             confidence: f.confidence,
             coi: f.coi,
             year: f.year,
+            dataset: f.dataset,
           })),
         }))
       const r = await fetch('/api/decide', {

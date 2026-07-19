@@ -308,6 +308,26 @@ body{margin:0}
 .dp-conf-chip.c-low{ color:var(--flag); background:var(--flag-wash); border-color:var(--flag-line) }
 .dp-conf-note{ font-size:13.5px; color:var(--ink-2); line-height:1.5 }
 
+/* dependence grouping — independent evidence families */
+.tag.t-dataset{ color:var(--ink-2); border-color:var(--line); background:var(--surface) }
+.dependence{ margin-top:14px; border-top:1px solid var(--line-2); padding-top:12px }
+.dep-bar{ display:flex; align-items:center; gap:12px; flex-wrap:wrap }
+.dep-count{ font-family:var(--font-mono); font-size:12px; color:var(--ink-2) }
+.dep-count b{ color:var(--ink); font-variant-numeric:tabular-nums }
+.dep-count.inflated{ color:var(--flag) } .dep-count.inflated b{ color:var(--flag) }
+.dep-note{ font-size:13px; color:var(--ink-2); line-height:1.5; margin-top:10px; border-left:3px solid var(--line); padding-left:12px }
+.dep-note.inflated{ border-left-color:var(--flag); color:var(--flag) }
+.dep-families{ display:flex; flex-direction:column; gap:8px; margin-top:10px }
+.dep-fam{ border:1px solid var(--line-2); border-left:3px solid var(--accent-line); border-radius:7px; padding:10px 13px; background:var(--surface-2) }
+.dep-fam.correlated{ border-left-color:var(--flag) }
+.df-head{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap }
+.df-name{ font-size:13.5px; font-weight:600; color:var(--ink) }
+.df-count{ font-family:var(--font-mono); font-size:10.5px; color:var(--ink-3); white-space:nowrap }
+.dep-fam.correlated .df-count{ color:var(--flag) }
+.df-basis{ font-size:12.5px; color:var(--ink-2); margin-top:5px; line-height:1.45 }
+.df-members{ font-family:var(--font-mono); font-size:11px; color:var(--ink-3); margin-top:6px; line-height:1.5 }
+.df-note{ font-size:12.5px; color:var(--ink-2); font-style:italic; margin-top:6px; line-height:1.45 }
+
 /* lanes ⇄ matrix toggle */
 .view-toggle{ display:inline-flex; gap:2px; background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:3px; align-self:flex-start }
 .view-toggle button{ font-family:var(--font-mono); font-size:12px; color:var(--ink-3); background:transparent; border:none; border-radius:6px; padding:6px 13px; cursor:pointer }

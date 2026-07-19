@@ -124,7 +124,7 @@ AXIS: ${JSON.stringify(p.dimensionName)} — ${JSON.stringify(p.dimensionPrompt 
 CANDIDATE RESOLUTIONS (tag each finding to the closest one, verbatim): ${JSON.stringify(p.resolutions || [])}
 ${hasCtx ? `THE ASKER — PERSONALIZE TO THEM. Prefer evidence about their specific subgroup/situation, prioritise studies whose population matches them, and for EACH finding say in one line how it applies to THEM:\n${JSON.stringify(p.context)}\n` : ''}
 ${p.brief ? `ORCHESTRATOR BRIEF — prioritise exactly this: ${JSON.stringify(p.brief)}\n` : ''}Search the web now. Return 3-4 REAL findings — prefer meta-analyses, RCTs, and official guidelines; be quantitative; flag conflicts of interest honestly.${hasCtx ? ' Bias hard toward evidence that applies to THIS asker.' : ''} Return ONLY JSON, no prose, no fences:
-{"findings":[{"claim":"one specific, quantitative sentence","supports":"one of the candidate resolutions, verbatim (or 'unclear')","source":"publication or org","url":"a real, working URL","kind":"meta-analysis|RCT|cohort|guideline|observational|expert","n":"sample size or scale, if stated","year":"YYYY","confidence":"high|medium|low","coi":"funding/conflict note, or 'none noted'"${hasCtx ? ',"relevance":"one line: how this applies to THIS asker specifically"' : ''}}]}`
+{"findings":[{"claim":"one specific, quantitative sentence","supports":"one of the candidate resolutions, verbatim (or 'unclear')","source":"publication or org","url":"a real, working URL","kind":"meta-analysis|RCT|cohort|guideline|observational|expert","n":"sample size or scale, if stated","year":"YYYY","confidence":"high|medium|low","coi":"funding/conflict note, or 'none noted'","dataset":"the underlying cohort/dataset/registry if identifiable (e.g. ARIC, NHANES, Framingham); for a meta-analysis name the pooled cohorts; 'primary study' for an original trial; else 'unclear' — used to detect shared-data dependence"${hasCtx ? ',"relevance":"one line: how this applies to THIS asker specifically"' : ''}}]}`
 }
 
 // DECIDE — synthesize the whole graph into ONE person's actionable answer (no web; reasons over the evidence)
@@ -133,9 +133,9 @@ function decidePrompt(p) {
 
 QUESTION: ${JSON.stringify(p.question)}
 ${p.context ? `THE ASKER: ${JSON.stringify(p.context)}\n` : ''}
-EVIDENCE — dimensions, each with its uncertainty and its findings (claim, the stance it supports, and the source's provenance): ${JSON.stringify(p.dimensions || [])}
+EVIDENCE — dimensions, each with its findings (claim, the stance it supports, provenance, and a "dataset" hint naming the underlying cohort/data): ${JSON.stringify(p.dimensions || [])}
 
-Be decisive but honest. Explicitly account for: what the evidence genuinely SETTLED vs. merely performed settling; correlated evidence (studies sharing cohorts are not independent votes); claims where rhetoric outweighs evidence; conflicts of interest; and the hard limit that population data cannot tell an individual their own response. Return ONLY JSON, no prose, no fences:
+Be decisive but honest. Explicitly account for: what the evidence genuinely SETTLED vs. merely performed settling; **INDEPENDENCE — group findings by their "dataset" field; sources sharing a cohort/dataset (e.g. several studies all pooling Framingham/ARIC) are ONE evidence family, not independent votes, so count families not sources and say so when apparent agreement is really one dataset counted repeatedly**; claims where rhetoric outweighs evidence; conflicts of interest; and the hard limit that population data cannot tell an individual their own response. Return ONLY JSON, no prose, no fences:
 {
   "answer": "the direct recommendation for THIS person, 1-2 plain sentences",
   "stance": "yes | lean-yes | it-depends | lean-no | no",
@@ -147,6 +147,26 @@ Be decisive but honest. Explicitly account for: what the evidence genuinely SETT
   "confidenceNote": "honest calibration: what's genuinely contested, out-of-model risk (funding environment, single-analyst limits), and what population data can't tell this individual",
   "missing": ["an important source, perspective, or data NOT represented in the evidence above"]
 }`
+}
+
+// DEPENDENCE GROUPING — cluster findings into INDEPENDENT evidence families (shared cohort/data/team ≠ independent votes)
+function dependencePrompt(p) {
+  return `You are auditing evidence INDEPENDENCE. Sources that look separate are often NOT independent votes — they can pool the same cohort, reanalyse the same dataset, share a research team, or be a primary study plus the meta-analyses that swallow it. Cluster the findings into INDEPENDENT EVIDENCE FAMILIES: two findings are in the same family if their conclusions rest on substantially the SAME underlying data, cohort, or authors. A genuinely separate dataset/team = a new family.
+
+QUESTION: ${JSON.stringify(p.question)}
+DIMENSION: ${JSON.stringify(p.dimensionName)}
+FINDINGS (each is one source; note the dataset hint where present): ${JSON.stringify(p.findings || [])}
+
+Return ONLY JSON, no prose, no fences:
+{
+  "families": [
+    { "id": "f1", "label": "short name for this evidence family (e.g. 'Framingham/ARIC pooled cohorts')", "basis": "why these share dependence — shared cohort / shared team / primary+its-meta-analyses / same dataset reanalysed", "members": ["source name", "source name"], "note": "one line on what this family collectively shows" }
+  ],
+  "independentCount": 3,
+  "totalSources": 6,
+  "note": "one line: e.g. '6 sources but only 3 independent families — much of the apparent agreement is the Framingham cohort counted repeatedly'"
+}
+Rules: every source must belong to exactly one family. A family may have one member (genuinely standalone). independentCount = number of families. Be conservative about calling things independent — if two share a major cohort, they are the SAME family. Valid JSON only.`
 }
 
 // CROSS-EXAMINE — structure disparate findings into a CLAIM × SOURCE matrix (agreement/contradiction)
@@ -279,6 +299,7 @@ function apiPlugin() {
       server.middlewares.use('/api/plan', handle((p) => (p.question && p.axes ? orchestratorPrompt(p) : null)))
       server.middlewares.use('/api/matrix', handle((p) => (p.dimensionName && p.findings ? matrixPrompt(p) : null)))
       server.middlewares.use('/api/decide', handle((p) => (p.question && p.dimensions ? decidePrompt(p) : null)))
+      server.middlewares.use('/api/dependence', handle((p) => (p.dimensionName && p.findings ? dependencePrompt(p) : null)))
     },
   }
 }
