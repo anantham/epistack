@@ -7,7 +7,8 @@ import type {
 } from "../lib/decomposition";
 import { decompositionSessionKey, interpretationMapStorageKey } from "../lib/decomposition";
 
-const defaultOpenRouterModel = "anthropic/claude-sonnet-4.6";
+const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
+const previousDefaultOpenRouterModel = "anthropic/claude-sonnet-4.6";
 const brandCharacters = [..."epistack"];
 const analysisDurationsKey = "epistack:analysis-durations:v1";
 const legacyAnalysisDurationsKey = "epistack_decomp_ms";
@@ -161,7 +162,8 @@ export default function Home() {
           }
         }
         if (typeof savedPreferences.model === "string" && savedPreferences.model.trim()) {
-          setOpenRouterModel(savedPreferences.model);
+          const savedModel = savedPreferences.model.trim();
+          setOpenRouterModel(savedModel === previousDefaultOpenRouterModel ? defaultOpenRouterModel : savedModel);
         }
       } catch {
         // Invalid local preferences should never block the app.

@@ -65,6 +65,11 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(api, /https:\/\/openrouter\.ai\/api\/v1/);
   assert.match(api, /OpenRouter ·/);
   assert.match(api, /openRouterFailureFromThrown/);
+  assert.match(frame, /anthropic\/claude-opus-4\.8/);
+  assert.match(api, /anthropic\/claude-opus-4\.8/);
+  assert.match(api, /maxOutputTokens: 12000/);
+  assert.match(api, /for \(let attempt = 0; attempt < 2; attempt \+= 1\)/);
+  assert.match(api, /previous attempt missed required fields/);
   assert.match(api, /Add an OpenRouter key in Settings/);
   assert.match(api, /status: 401/);
   assert.doesNotMatch(api, /mode: "local-fallback"/);
@@ -184,7 +189,7 @@ test("arbitrary questions use a key-gated elicitation and refinement path", asyn
   assert.doesNotMatch(frame, /sessionStorage\.setItem\([^\n]*openRouterKey/);
   assert.match(api, /OPENROUTER_API_KEY/);
   assert.match(api, /EPISTACK_OPENROUTER_MODEL/);
-  assert.match(envExample, /EPISTACK_OPENROUTER_MODEL=anthropic\/claude-sonnet-4\.6/);
+  assert.match(envExample, /EPISTACK_OPENROUTER_MODEL=anthropic\/claude-opus-4\.8/);
   assert.doesNotMatch(envExample, /OPENAI_API_KEY/);
 });
 
