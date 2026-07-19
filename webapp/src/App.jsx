@@ -192,6 +192,82 @@ function ClusterSection({ cluster, wordIdxs, tokens, wordRefs, active, onActivat
   )
 }
 
+// Stage 2 · CONTEXTUALIZE — elicit the asker's situation, then show what it prunes/opens
+function ElicitPanel({ elicit, ans, setAns, ctx, setCtx, onGo, busy, err }) {
+  return (
+    <div className="elicit">
+      <div className="elicit-head">
+        <h3>make it about you</h3>
+        <p>A few facts prune most of this. The questions below come from the axes above — answer what you can, skip the rest.</p>
+      </div>
+      {(elicit || []).map((q) => (
+        <div className="elicit-q" key={q.id}>
+          <div className="elicit-qtext">{q.question}</div>
+          {q.why && <div className="elicit-why">pins: {q.why}</div>}
+          <div className="elicit-opts">
+            {(q.options || []).map((o) => (
+              <button
+                key={o}
+                className={`opt${ans[q.id] === o ? ' on' : ''}`}
+                onClick={() => setAns((a) => ({ ...a, [q.id]: a[q.id] === o ? undefined : o }))}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <textarea
+        className="elicit-ctx"
+        rows={3}
+        placeholder="anything else about you — age, where you live, health, goals, what you already eat…"
+        value={ctx}
+        onChange={(e) => setCtx(e.target.value)}
+      />
+      {err && <div className="elicit-err">Couldn't personalize: {err}</div>}
+      <button className="btn-decompose elicit-go" onClick={onGo} disabled={busy}>
+        {busy ? 'personalizing…' : 'personalize ⚡'}
+      </button>
+    </div>
+  )
+}
+
+function PersonalizedMap({ data, pdata, onRedo }) {
+  const st = (id) => (pdata.clusters || []).find((c) => c.id === id) || { status: 'open' }
+  const orig = (data.clusters || []).map((c) => ({ ...c, ...st(c.id) }))
+  const news = (pdata.newClusters || []).map((c) => ({ ...c, status: 'new' }))
+  const order = { open: 0, new: 1, pinned: 2, dropped: 3 }
+  const all = [...orig, ...news].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9))
+  const label = { pinned: '✓ settled by you', open: '○ worth investigating', dropped: '— skip', new: '＋ new for you' }
+  return (
+    <div className="pmap">
+      {pdata.takeaway && (
+        <div className="takeaway">
+          <span className="rlabel">for you, it comes down to</span>
+          {pdata.takeaway}
+        </div>
+      )}
+      <div className="axis-rows">
+        {all.map((a) => (
+          <div className={`axis-row st-${a.status}`} key={a.id} style={{ '--c': a.color || 'var(--accent)' }}>
+            <span className="st-badge">{label[a.status] || a.status}</span>
+            <div className="axis-main">
+              <div className="axis-name">{a.name}</div>
+              {a.status === 'pinned' && a.value && <div className="axis-val">you: {a.value}</div>}
+              {(a.status === 'open' || a.status === 'new') && a.prompt && <div className="axis-prompt">{a.prompt}</div>}
+              {(a.status === 'open' || a.status === 'new') && a.resolutions && a.resolutions.length > 0 && (
+                <div className="axis-res2">{a.resolutions.join(' · ')}</div>
+              )}
+              {a.reason && <div className="axis-reason">{a.reason}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <button className="btn-ghost" onClick={onRedo}>↺ edit context</button>
+    </div>
+  )
+}
+
 export default function App() {
   const [question, setQuestion] = useState('')
   const [phase, setPhase] = useState('landing') // landing | loading | clustered | error
@@ -212,6 +288,7 @@ export default function App() {
   const [pdata, setPdata] = useState(null)
   const [elicitAns, setElicitAns] = useState({})
   const [ctxText, setCtxText] = useState('')
+  const [step, setStep] = useState(1)
 
   const wordRefs = useRef({})
   const taRef = useRef(null)
@@ -284,6 +361,7 @@ export default function App() {
     setPdata(null)
     setElicitAns({})
     setCtxText('')
+    setStep(1)
     const cached = getCache()[q]
     if (cached) {
       setFromCache(true)
@@ -317,11 +395,48 @@ export default function App() {
     }
   }
 
+  async function handlePersonalize() {
+    setPersonalizing(true)
+    setErr('')
+    const answers = (data?.elicit || []).map((q) => ({ q: q.question, a: elicitAns[q.id] })).filter((x) => x.a)
+    const context = [ctxText.trim(), ...answers.map((x) => `${x.q} → ${x.a}`)].filter(Boolean).join('\n')
+    if (!context) {
+      setPersonalizing(false)
+      return
+    }
+    try {
+      const r = await fetch('/api/personalize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          question: question.trim(),
+          clusters: data.clusters.map((c) => ({ id: c.id, name: c.name, resolutions: c.resolutions })),
+          context,
+        }),
+      })
+      const j = await r.json()
+      if (!r.ok || j.error) {
+        setErr(j.error || `HTTP ${r.status}`)
+        setPersonalizing(false)
+        return
+      }
+      setPdata(j)
+      setPersonalized(true)
+    } catch (e) {
+      setErr(String(e.message || e))
+    }
+    setPersonalizing(false)
+  }
+
   function reset() {
     setPhase('landing')
     setData(null)
     setErr('')
     setActivated([])
+    setPersonalized(false)
+    setPdata(null)
+    setElicitAns({})
+    setCtxText('')
     wordRefs.current = {}
   }
 
@@ -451,22 +566,71 @@ export default function App() {
         )}
 
         {phase === 'clustered' && data && (
-          <div className="sections">
-            {data.clusters.map((c) => (
-              <ClusterSection
-                key={c.id}
-                cluster={c}
-                wordIdxs={wordIdxsFor(c.id)}
-                tokens={tokens}
-                wordRefs={wordRefs}
-                active={activated.includes(c.id)}
-                onActivate={onActivate}
-                onEdit={editHandlers}
-                question={question}
-              />
-            ))}
-            <button className="add-dim" onClick={addCluster}>＋ add a dimension of your own</button>
-          </div>
+          <>
+            <div className="stepper">
+              {[[1, 'expand'], [2, 'contextualize'], [3, 'research']].map(([n, label]) => (
+                <button key={n} className={`step-tab${step === n ? ' on' : ''}`} onClick={() => setStep(n)}>
+                  <span className="step-n">{n}</span>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {step === 1 && (
+              <>
+                <div className="sections">
+                  {data.clusters.map((c) => (
+                    <ClusterSection
+                      key={c.id}
+                      cluster={c}
+                      wordIdxs={wordIdxsFor(c.id)}
+                      tokens={tokens}
+                      wordRefs={wordRefs}
+                      active={activated.includes(c.id)}
+                      onActivate={onActivate}
+                      onEdit={editHandlers}
+                      question={question}
+                    />
+                  ))}
+                  <button className="add-dim" onClick={addCluster}>＋ add a dimension of your own</button>
+                </div>
+                <button className="step-next" onClick={() => setStep(2)}>next · make it about you →</button>
+              </>
+            )}
+
+            {step === 2 &&
+              (!personalized ? (
+                <ElicitPanel
+                  elicit={data.elicit}
+                  ans={elicitAns}
+                  setAns={setElicitAns}
+                  ctx={ctxText}
+                  setCtx={setCtxText}
+                  onGo={handlePersonalize}
+                  busy={personalizing}
+                  err={err}
+                />
+              ) : (
+                <>
+                  <PersonalizedMap data={data} pdata={pdata} onRedo={() => setPersonalized(false)} />
+                  <button className="step-next" onClick={() => setStep(3)}>next · research the open axes →</button>
+                </>
+              ))}
+
+            {step === 3 && (
+              <div className="research-stub">
+                <h3>3 · deep research</h3>
+                <p>
+                  Point research agents at the axes still <b>open</b> for you, have them scour the web,{' '}
+                  <b>tag each finding against these dimensions</b>, and enrich the filtered graph — with the agents'
+                  progress visible as they work.
+                </p>
+                <p>
+                  <em>next build — the pipeline's third stage.</em>
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
