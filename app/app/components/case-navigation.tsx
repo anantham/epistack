@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 
-export type InvestigationStage = "frame" | "evidence" | "assess" | "synthesize";
+export type InvestigationStage = "frame" | "research" | "evidence" | "assess" | "synthesize";
 
 const stages: Array<{ id: InvestigationStage; label: string; href: string }> = [
   { id: "frame", label: "Frame", href: "/" },
+  { id: "research", label: "Research", href: "/research" },
   { id: "evidence", label: "Evidence", href: "/evidence" },
   { id: "assess", label: "Assess", href: "/inventory" },
   { id: "synthesize", label: "Decide", href: "/synthesis" },

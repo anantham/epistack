@@ -116,17 +116,18 @@ test("evidence corpus keeps discovery separate and decomposes sources into resul
   assert.match(ledger, /vander-wal-free-living-weight/);
   assert.match(ledger, /keogh-within-arm-loss/);
   assert.match(ledger, /emrani-heterogeneity/);
-  assert.match(synthesisPage, /Decision under consideration/);
+  assert.match(synthesisPage, /DecisionWorkbench/);
   assert.match(synthesisPage, /Highest-value next information/);
   assert.match(synthesisPage, /Six breakfasts can test usability, not universal health/);
   assert.match(discoveryPage, /Keep discovery separate from evidence/);
 });
 
 test("the investigation is split into focused navigable routes", async () => {
-  const [frame, map, navigation, matrix, inventory, discoveries, synthesis] = await Promise.all([
+  const [frame, map, navigation, research, matrix, inventory, discoveries, synthesis] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/map/page.tsx", root), "utf8"),
     readFile(new URL("app/components/case-navigation.tsx", root), "utf8"),
+    readFile(new URL("app/research/page.tsx", root), "utf8"),
     readFile(new URL("app/matrix/page.tsx", root), "utf8"),
     readFile(new URL("app/inventory/page.tsx", root), "utf8"),
     readFile(new URL("app/discoveries/page.tsx", root), "utf8"),
@@ -137,6 +138,7 @@ test("the investigation is split into focused navigable routes", async () => {
   assert.doesNotMatch(frame, /className="map-section"/);
   assert.match(map, /decompositionSessionKey/);
   assert.match(map, /claimTemplate/);
+  assert.match(navigation, /href: "\/research"/);
   assert.match(navigation, /href: "\/evidence"/);
   assert.match(navigation, /href: "\/matrix"/);
   assert.match(navigation, /href: "\/inventory"/);
@@ -145,6 +147,7 @@ test("the investigation is split into focused navigable routes", async () => {
   assert.match(navigation, /aria-label={`Stage \${index \+ 1}: \${stage\.label}`}/);
   assert.doesNotMatch(navigation, /className="wordmark"/);
   assert.doesNotMatch(navigation, /Discovery queue<\/Link>/);
+  assert.match(research, /ResearchDashboard/);
   assert.match(inventory, /controlled-trial records/);
   assert.match(matrix, /Claim matrix|Cross-examine claims/);
   assert.match(discoveries, /Evidence intake/);

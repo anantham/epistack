@@ -2,6 +2,7 @@ import Link from "next/link";
 import { claimRead, corpusMeta } from "../../data/eggs-weight-corpus";
 import { atomicResults, evidenceFamilies } from "../../data/eggs-result-ledger";
 import { CaseHeader } from "../components/case-navigation";
+import { DecisionWorkbench } from "./decision-workbench";
 
 const outcomeRows = [
   {
@@ -43,16 +44,7 @@ export default function SynthesisPage() {
           </div>
         </header>
 
-        <section className="decision-question">
-          <span>Decision under consideration</span>
-          <h2>Should I buy 12 eggs from a local Muttichur farmer next week and substitute two per day for my current breakfast?</h2>
-          <div>
-            <b>Current conditional policy</b>
-            <p>
-              Do not expect an egg-specific weight-loss advantage. If eggs are feasible and replace a less satiating breakfast, a short, reversible preference-and-satiety trial may be informative—but this corpus does not answer farm quality, long-term cardiovascular risk, or individual clinical suitability.
-            </p>
-          </div>
-        </section>
+        <DecisionWorkbench />
 
         <div className="decision-grid">
           <section className="decision-basis">

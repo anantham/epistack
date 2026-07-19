@@ -1,0 +1,99 @@
+import { jsonSchema } from "ai";
+import { z } from "zod";
+
+export const deepDiveSchema = z.object({
+  study: z.object({
+    design: z.string().min(3).max(140),
+    population: z.string().min(3).max(320),
+    exposure: z.string().min(3).max(320),
+    comparator: z.string().min(3).max(320),
+    limitations: z.array(z.string().min(3).max(260)).min(1).max(6),
+  }),
+  evidenceFamily: z.object({
+    label: z.string().min(3).max(160),
+    reason: z.string().min(8).max(360),
+  }),
+  results: z.array(z.object({
+    analysisLabel: z.string().min(3).max(160),
+    analysisType: z.string().min(3).max(100),
+    outcome: z.string().min(2).max(220),
+    timeHorizon: z.string().min(2).max(120),
+    resultRole: z.enum(["primary", "secondary", "exploratory", "methodological", "author-interpretation"]),
+    resultText: z.string().min(8).max(520),
+    estimate: z.string().max(220),
+    exactExcerpt: z.string().max(420),
+    locator: z.string().min(3).max(180),
+    claimFrameId: z.enum(["weight-superiority", "free-living-weight-loss", "acute-satiety", "short-term-ldl"]),
+    relation: z.enum(["supports", "contradicts", "qualifies", "undercuts", "bounds", "not-informative"]),
+    scopeMatch: z.enum(["direct", "partial", "indirect"]),
+    rationale: z.string().min(8).max(420),
+  })).min(1).max(6),
+  authorConclusion: z.string().max(520),
+  conclusionFit: z.enum(["matches-results", "broader-than-results", "narrower-than-results", "not-stated"]),
+  extractionCaveat: z.string().min(8).max(420),
+});
+
+const unsupportedProviderKeywords = new Set([
+  "minLength", "maxLength", "pattern", "format",
+  "minimum", "maximum", "multipleOf",
+  "patternProperties", "unevaluatedProperties", "propertyNames", "minProperties", "maxProperties",
+  "unevaluatedItems", "contains", "minContains", "maxContains", "minItems", "maxItems", "uniqueItems",
+]);
+
+function removeUnsupportedProviderConstraints(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(removeUnsupportedProviderConstraints);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !unsupportedProviderKeywords.has(key))
+      .map(([key, child]) => [key, removeUnsupportedProviderConstraints(child)]),
+  );
+}
+
+export const deepDiveProviderJsonSchema = removeUnsupportedProviderConstraints(
+  z.toJSONSchema(deepDiveSchema),
+) as ReturnType<typeof z.toJSONSchema>;
+
+export const deepDiveOutputSchema = jsonSchema<z.infer<typeof deepDiveSchema>>(deepDiveProviderJsonSchema);
+
+export type DeepDiveCandidate = z.infer<typeof deepDiveSchema>;
+
+export type DeepDiveSource = {
+  pmid: string;
+  title: string;
+  authors: string;
+  journal: string;
+  published: string;
+  doi: string | null;
+  url: string;
+  abstract: string;
+};
+
+export type DeepDiveResponse = {
+  source: DeepDiveSource;
+  candidate: DeepDiveCandidate;
+  model: string;
+  verificationStatus: "abstract-only";
+};
+
+export const deepDiveInstructions = `You extract proposed atomic evidence records from one PubMed abstract.
+
+You are not deciding whether eggs are good. Decompose the document container into distinct reported results. One abstract may support one scoped claim and contradict, qualify, undercut, bound, or fail to inform another.
+
+CLAIM FRAMES
+- weight-superiority: Among adults with overweight or obesity following an energy-restricted diet, substituting two whole eggs at breakfast for an energy-matched egg-free breakfast causes greater weight loss over at least eight weeks.
+- free-living-weight-loss: Adding an egg breakfast without an energy-restriction programme causes weight loss compared with an energy-matched egg-free breakfast over eight weeks or longer.
+- acute-satiety: Compared with an isoenergetic higher-carbohydrate breakfast, an egg breakfast reduces hunger or subsequent energy intake over the same day to 36 hours.
+- short-term-ldl: During energy restriction, eating two eggs for breakfast five days per week does not worsen LDL cholesterol relative to breakfast cereal over six months.
+
+RULES
+- Use only facts present in the supplied citation and abstract. Never fill a missing number from memory.
+- exactExcerpt must be a short exact substring of the supplied abstract or an empty string.
+- locator must say which abstract section or sentence contains the result. Never imply that full text was checked.
+- Within-arm change is not evidence for between-group superiority.
+- Keep primary, secondary, exploratory, methodological, and author-interpretation records distinct.
+- If a reported result does not answer a claim, use not-informative; do not force polarity.
+- relation and scopeMatch are proposed assessment judgments, so give an inspectable rationale.
+- One evidence family contains all results from this source unless the abstract explicitly reports distinct participant samples.
+- extractionCaveat must name what cannot be verified without full text.
+- Be concise. Return complete structured data, not prose outside the schema.`;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   atomicResults,
   claimFrames,
@@ -31,6 +31,20 @@ function readable(value: string) {
 export function EvidenceBrowser() {
   const [claimId, setClaimId] = useState<"all" | string>("all");
   const [relation, setRelation] = useState<"all" | EvidenceRelation>("all");
+  const [focusedResultId, setFocusedResultId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const resultId = new URLSearchParams(window.location.search).get("result");
+    if (!resultId || !atomicResults.some((result) => result.id === resultId)) return;
+    setFocusedResultId(resultId);
+    const result = atomicResults.find((candidate) => candidate.id === resultId);
+    if (result) {
+      setClaimId(result.claimId);
+      window.requestAnimationFrame(() => {
+        document.getElementById(`result-${resultId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    }
+  }, []);
 
   const filteredResults = useMemo(() => atomicResults.filter((result) => {
     const matchesClaim = claimId === "all" || result.claimId === claimId;
@@ -102,7 +116,7 @@ export function EvidenceBrowser() {
           const summary = sourceRelationshipSummary(sourceResults);
           const counts = relationCounts(sourceResults);
           return (
-            <article className="result-source-card" key={source.id}>
+            <article className={`result-source-card ${sourceResults.some((result) => result.id === focusedResultId) ? "focused-source" : ""}`} key={source.id}>
               <header>
                 <div className="source-card-topline">
                   <span className={`direction ${summary}`}>{readable(summary)}</span>
@@ -122,7 +136,12 @@ export function EvidenceBrowser() {
                   const claim = getClaim(result.claimId);
                   const family = getEvidenceFamily(result.evidenceFamilyId);
                   return (
-                    <details className="atomic-result" key={result.id} open={sourceResults.length <= 2}>
+                    <details
+                      className={`atomic-result ${result.id === focusedResultId ? "focused-result" : ""}`}
+                      id={`result-${result.id}`}
+                      key={result.id}
+                      open={result.id === focusedResultId || sourceResults.length <= 2}
+                    >
                       <summary>
                         <span className={`relation-mark ${result.relation}`}>{readable(result.relation)}</span>
                         <span className="result-summary-copy">
