@@ -225,7 +225,7 @@ export default function Home() {
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "The decomposition could not be generated.";
       setError(message);
-      if (/key|OpenRouter|credits/i.test(message)) setSettingsOpen(true);
+      if (/key|OpenRouter|credits|model|provider|endpoint/i.test(message)) setSettingsOpen(true);
       setPhase("error");
     }
   }

@@ -80,6 +80,7 @@ export async function POST(request: Request) {
       headers: {
         "HTTP-Referer": origin,
         "X-OpenRouter-Title": "Epistack Evidence Lab",
+        "X-OpenRouter-Metadata": "enabled",
       },
     });
     const { output } = await generateText({

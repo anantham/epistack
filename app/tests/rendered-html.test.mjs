@@ -168,10 +168,11 @@ test("arbitrary questions use a key-gated elicitation and refinement path", asyn
 });
 
 test("settings validate the key, credits, and model with distinct failures", async () => {
-  const [frame, validation, failures] = await Promise.all([
+  const [frame, validation, failures, api] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/api/openrouter/validate/route.ts", root), "utf8"),
     readFile(new URL("lib/openrouter-errors.ts", root), "utf8"),
+    readFile(new URL("app/api/decompose/route.ts", root), "utf8"),
   ]);
 
   assert.match(frame, /validateConnection/);
@@ -186,4 +187,9 @@ test("settings validate the key, credits, and model with distinct failures", asy
   assert.match(failures, /insufficient credits/);
   assert.match(failures, /model ID is not available/);
   assert.match(failures, /rate-limiting/);
+  assert.match(failures, /provider_name/);
+  assert.match(failures, /providerMessage/);
+  assert.match(failures, /without a specific reason/);
+  assert.doesNotMatch(failures, /message: rawMessage \|\|/);
+  assert.match(api, /X-OpenRouter-Metadata/);
 });
