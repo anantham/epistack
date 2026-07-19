@@ -24,12 +24,30 @@ export type QuestionHighlight = {
   label: string;
   why: string;
   axisId: string;
+  clusterId: string;
+};
+
+export type EvidenceIngestionRequirements = {
+  requiredFields: string[];
+  searchConcepts: string[];
+  mismatchRisks: string[];
+};
+
+export type DecompositionCluster = {
+  id: string;
+  label: string;
+  axisId: string;
+  highlightQuotes: string[];
+  latentVariable: string;
+  rationale: string;
+  ingestionRequirements: EvidenceIngestionRequirements;
 };
 
 export type DecompositionArtifact = {
   caseTitle: string;
   summary: string;
   highlights: QuestionHighlight[];
+  clusters: DecompositionCluster[];
   axes: InterpretationAxis[];
   claimTemplate: string;
   knownUnknowns: string[];

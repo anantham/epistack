@@ -20,16 +20,17 @@ For model-backed decomposition, copy `.env.example` to `.env.local` and set `OPE
 ## What to try
 
 1. Enter any vague research question or paragraph.
-2. Watch the compiler highlight exact phrases and explain which hidden choice each phrase carries.
-3. Follow the paced transition to the separate Interpretation Map page.
-4. Select any interpretation branch to inspect the model's rationale.
-5. Keep a different branch, park one, or edit its meaning.
-6. Add an interpretation the model missed and watch the claim template recompile.
-7. Create an explicitly labeled probability placeholder.
-8. For the eggs fixture, continue to Evidence and inspect the existing claim-matched corpus.
-9. Use Assess for the 32-study inventory and the Discovery Queue for unassessed matches.
-10. Open Synthesize to inspect the provisional read, load-bearing evidence, and cruxes.
-11. Save a revision or export the complete framing artifact as JSON.
+2. Watch the compiler highlight exact phrases, including non-adjacent words that form one semantic cluster.
+3. Inspect the trace from quoted cues to a hidden variable, an interpretation axis, and its evidence-ingestion contract.
+4. Approve the scope and follow the paced transition to the separate Interpretation Map page.
+5. Select any interpretation branch to inspect the model's rationale.
+6. Keep a different branch, park one, or edit its meaning.
+7. Add an interpretation the model missed and watch the claim template recompile.
+8. Create an explicitly labeled probability placeholder.
+9. For the eggs fixture, continue to Evidence and inspect the existing claim-matched corpus.
+10. Use Assess for the 32-study inventory and the Discovery Queue for unassessed matches.
+11. Open Synthesize to inspect the provisional read, load-bearing evidence, and cruxes.
+12. Save a revision or export the complete framing artifact as JSON.
 
 ## Current boundary
 
@@ -39,6 +40,9 @@ It currently implements:
 
 - visible AI-proposed branches;
 - exact-phrase highlighting before map generation;
+- semantic clustering of non-adjacent cues such as `eat` and `moderation`;
+- a reviewable cues → latent variable → axis → branch trace;
+- evidence-ingestion fields, search concepts, and mismatch risks derived from that trace;
 - arbitrary-question decomposition through the AI SDK;
 - a domain-general local fallback with an explicit warning;
 - human selection, editing, addition, and reversible parking;

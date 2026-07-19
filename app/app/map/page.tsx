@@ -10,6 +10,7 @@ import pubmedDiscovery from "../../data/pubmed-discovery.json";
 import {
   decompositionSessionKey,
   type BranchStatus,
+  type DecompositionCluster,
   type DecompositionResponse,
   type InterpretationAxis as Axis,
   type InterpretationBranch as Branch,
@@ -342,6 +343,61 @@ const eggsUnknowns = [
   "Egg feed, housing, shell color, and certification",
 ];
 
+const eggsClusters: DecompositionCluster[] = [
+  {
+    id: "object-cues",
+    label: "Object or construct",
+    axisId: "object",
+    highlightQuotes: ["eggs"],
+    latentVariable: "Which kind of egg or egg-derived food is the exposure?",
+    rationale: "The everyday noun can refer to whole eggs, whites, ingredients, or eggs from other species.",
+    ingestionRequirements: {
+      requiredFields: ["egg type", "whole egg versus component", "species"],
+      searchConcepts: ["whole egg", "egg white", "hen egg"],
+      mismatchRisks: ["Evidence about egg components may be generalized to whole eggs."],
+    },
+  },
+  {
+    id: "exposure-cues",
+    label: "Dose and frequency",
+    axisId: "exposure",
+    highlightQuotes: ["eat", "moderation"],
+    latentVariable: "Dose, frequency, preparation, and duration of egg consumption",
+    rationale: "The verb names an exposure while moderation implies an unspecified amount and cadence; together they motivate a dose/frequency axis.",
+    ingestionRequirements: {
+      requiredFields: ["eggs per serving", "servings per week", "intervention duration", "preparation"],
+      searchConcepts: ["daily egg intake", "eggs per week", "dose response"],
+      mismatchRisks: ["Trials using incompatible doses may be combined as if they tested the same exposure."],
+    },
+  },
+  {
+    id: "outcome-cues",
+    label: "Outcome construct",
+    axisId: "outcome",
+    highlightQuotes: ["good", "Bad", "Great"],
+    latentVariable: "Which benefit or harm makes eggs good or bad?",
+    rationale: "Evaluative language hides distinct outcomes such as weight, satiety, cardiovascular risk, and muscle gain.",
+    ingestionRequirements: {
+      requiredFields: ["outcome definition", "measurement instrument", "effect size", "timepoint"],
+      searchConcepts: ["benefit outcomes", "adverse outcomes", "validated measures"],
+      mismatchRisks: ["Evidence for one outcome may be presented as an overall health verdict."],
+    },
+  },
+  {
+    id: "population-cues",
+    label: "Population and effect modification",
+    axisId: "population",
+    highlightQuotes: ["across people", "predicts this"],
+    latentVariable: "Who the result applies to and which characteristics modify it",
+    rationale: "The question explicitly anticipates heterogeneity, so population and effect modifiers must be preserved during ingestion.",
+    ingestionRequirements: {
+      requiredFields: ["eligibility criteria", "baseline health", "demographics", "subgroup results"],
+      searchConcepts: ["effect modification", "subgroup", "metabolic risk"],
+      mismatchRisks: ["Average effects may erase clinically important heterogeneity."],
+    },
+  },
+];
+
 function selectedBranch(axis: Axis) {
   return axis.branches.find((branch) => branch.status === "kept");
 }
@@ -360,6 +416,7 @@ export default function InterpretationMapPage() {
   const [axes, setAxes] = useState(initialAxes);
   const [claimTemplate, setClaimTemplate] = useState(eggsClaimTemplate);
   const [knownUnknowns, setKnownUnknowns] = useState(eggsUnknowns);
+  const [clusters, setClusters] = useState(eggsClusters);
   const [caseId, setCaseId] = useState("eggs-weight-loss");
   const [caseSummary, setCaseSummary] = useState("The original eggs case fixture is ready for human review.");
   const [sourceMode, setSourceMode] = useState("fixture");
@@ -381,6 +438,7 @@ export default function InterpretationMapPage() {
           setAxes(nextAxes);
           setClaimTemplate(response.decomposition.claimTemplate);
           setKnownUnknowns(response.decomposition.knownUnknowns);
+          setClusters(response.decomposition.clusters);
           setCaseId(response.caseId);
           setCaseSummary(response.decomposition.summary);
           setSourceMode(response.mode === "ai" ? response.model : "local fallback");
@@ -483,6 +541,7 @@ export default function InterpretationMapPage() {
         unselectedBehavior: "parked, never silently deleted",
       },
       axes,
+      decompositionTrace: clusters,
       compiledClaim: claimCreated
         ? {
             statement: activeQuestion,
@@ -554,6 +613,7 @@ export default function InterpretationMapPage() {
               <div className="map-stats" aria-label="Map status">
                 <span><b>{axes.length}</b> axes</span>
                 <span><b>{branchCount}</b> branches</span>
+                <span><b>{clusters.length}</b> traces</span>
                 <span><b>{parkedCount}</b> parked</span>
               </div>
             </div>
@@ -581,6 +641,20 @@ export default function InterpretationMapPage() {
                         <p>{axis.question}</p>
                       </div>
                     </div>
+                    {clusters.filter((cluster) => cluster.axisId === axis.id).map((cluster) => (
+                      <details className="axis-trace" key={cluster.id}>
+                        <summary>
+                          Derived from {cluster.highlightQuotes.map((quote) => `“${quote}”`).join(" + ")} → {cluster.latentVariable}
+                        </summary>
+                        <div>
+                          <p>{cluster.rationale}</p>
+                          <span>Evidence ingestion must retain</span>
+                          <ul>{cluster.ingestionRequirements.requiredFields.map((field) => <li key={field}>{field}</li>)}</ul>
+                          <span>Mismatch risk</span>
+                          <p>{cluster.ingestionRequirements.mismatchRisks.join(" ")}</p>
+                        </div>
+                      </details>
+                    ))}
                     <div className="branch-grid">
                       {axis.branches.map((branch) => {
                         const selected = focused.axisId === axis.id && focused.branchId === branch.id;
@@ -697,7 +771,7 @@ export default function InterpretationMapPage() {
                 <div>
                   <span className="prior-label">Analysis prior</span>
                   <strong>{prior}%</strong>
-                  <p>P(the egg breakfast causes greater weight loss than the selected comparator)</p>
+                  <p>P(the compiled claim is true within its stated scope)</p>
                 </div>
                 <label>
                   <span>Neutral starting value</span>

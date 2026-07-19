@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type {
+  DecompositionCluster,
   DecompositionArtifact,
   InterpretationAxis,
   InterpretationBranch,
@@ -32,7 +33,21 @@ export const decompositionSchema = z.object({
     label: z.string().min(2).max(80),
     why: z.string().min(4).max(220),
     axisId: z.string().min(1).max(48),
+    clusterId: z.string().min(1).max(48),
   })).min(2).max(8),
+  clusters: z.array(z.object({
+    id: z.string().min(1).max(48),
+    label: z.string().min(2).max(90),
+    axisId: z.string().min(1).max(48),
+    highlightQuotes: z.array(z.string().min(1).max(180)).min(1).max(5),
+    latentVariable: z.string().min(2).max(140),
+    rationale: z.string().min(4).max(280),
+    ingestionRequirements: z.object({
+      requiredFields: z.array(z.string().min(2).max(100)).min(2).max(8),
+      searchConcepts: z.array(z.string().min(2).max(100)).min(2).max(8),
+      mismatchRisks: z.array(z.string().min(2).max(140)).min(1).max(6),
+    }),
+  })).min(2).max(7),
   axes: z.array(axisSchema).min(3).max(7),
   claimTemplate: z.string().min(12).max(700),
   knownUnknowns: z.array(z.string().min(4).max(220)).min(3).max(8),
@@ -47,7 +62,10 @@ Rules:
 - Give each axis 2–4 concrete branches. Exactly one branch per axis must have status "kept" as the most ordinary or decision-useful provisional reading. Other branches are "candidate" or "parked".
 - Branches are alternative scopes, not mutually exclusive truth hypotheses.
 - Preserve uncertainty. Do not invent details the paragraph does not contain.
-- Every highlight quote must be an exact, case-sensitive substring of the submitted paragraph. Link it to an axis id and explain the hidden choice in plain language.
+- Every highlight quote must be an exact, case-sensitive substring of the submitted paragraph. Link it to both an axis id and a semantic cluster id.
+- Cluster separate surface cues when they imply the same latent variable. For example, "eat" and "moderation" can belong to one dose/frequency cluster even when they are not adjacent.
+- For each cluster, expose an inspectable methodological rationale: the quoted cues, the latent variable inferred from them, the interpretation axis they motivate, and the fields/search concepts/mismatch risks that evidence ingestion must preserve.
+- This rationale is a concise audit trace, not private chain-of-thought. State only what a reviewer needs to evaluate the decomposition decision.
 - Use stable lowercase kebab-case ids, unique across axes and within each branch list.
 - origin is always "ai". Relevance expresses decision relevance, not truth.
 - claimTemplate must be a grammatical, concrete research question containing placeholders written exactly as {{axis-id}}. Use the axis ids you generated. It may use an axis once or omit a low-value axis, but must remain understandable after replacement with each kept branch's value.
@@ -74,37 +92,155 @@ function branch(
   return { id, label, value, detail, why, status, relevance, origin: "ai" };
 }
 
-function fallbackHighlights(prompt: string, axes: InterpretationAxis[]): QuestionHighlight[] {
-  const expressions = [
-    /\b(good|bad|great|best|better|worse|safe|dangerous|effective|successful)\b/gi,
-    /\b(should|can|could|does|do|is|are)\b/gi,
-    /\b(for whom|how much|how often|in moderation|over time|what predicts this)\b/gi,
+const traceSpecs: Record<string, Omit<DecompositionCluster, "id" | "axisId" | "highlightQuotes">> = {
+  subject: {
+    label: "Object or construct",
+    latentVariable: "The precise object, action, or construct being evaluated",
+    rationale: "Everyday nouns often collapse materially different objects that should retrieve different evidence.",
+    ingestionRequirements: {
+      requiredFields: ["construct definition", "operationalization", "object or intervention subtype"],
+      searchConcepts: ["synonyms and taxonomies", "construct-specific terminology"],
+      mismatchRisks: ["Evidence about a neighboring construct may be treated as direct evidence."],
+    },
+  },
+  exposure: {
+    label: "Dose and frequency",
+    latentVariable: "Dose, frequency, duration, preparation, and mode of exposure",
+    rationale: "Action words and qualifiers such as moderation jointly determine what the exposure actually is.",
+    ingestionRequirements: {
+      requiredFields: ["dose or amount", "frequency", "exposure duration", "preparation or delivery mode"],
+      searchConcepts: ["daily and weekly exposure terms", "dose-response terminology", "adherence"],
+      mismatchRisks: ["Studies with incompatible doses or frequencies may be pooled as if they tested the same exposure."],
+    },
+  },
+  outcome: {
+    label: "Outcome construct",
+    latentVariable: "The measurable benefit, harm, or success criterion carrying the conclusion",
+    rationale: "Evaluative words hide multiple outcomes that can move independently or trade off.",
+    ingestionRequirements: {
+      requiredFields: ["outcome definition", "measurement instrument", "effect size", "outcome timing"],
+      searchConcepts: ["benefit and harm outcomes", "validated outcome measures"],
+      mismatchRisks: ["A proxy or rhetorical success claim may substitute for the decision-relevant outcome."],
+    },
+  },
+  population: {
+    label: "Population and setting",
+    latentVariable: "Who or where the conclusion is intended to generalize to",
+    rationale: "Population language signals heterogeneity and transportability constraints.",
+    ingestionRequirements: {
+      requiredFields: ["eligibility criteria", "baseline characteristics", "geography", "setting"],
+      searchConcepts: ["subgroup terms", "effect modifiers", "external validity"],
+      mismatchRisks: ["Average results may be transported to a population absent from the source."],
+    },
+  },
+  comparator: {
+    label: "Comparator",
+    latentVariable: "The baseline or counterfactual against which the subject is evaluated",
+    rationale: "A claim cannot be interpreted causally without saying what happens instead.",
+    ingestionRequirements: {
+      requiredFields: ["comparator definition", "co-interventions", "baseline exposure"],
+      searchConcepts: ["versus and comparator terms", "usual care or status quo"],
+      mismatchRisks: ["A weak or incomparable baseline can manufacture an apparent advantage."],
+    },
+  },
+  context: {
+    label: "Context and implementation",
+    latentVariable: "The surrounding conditions under which the relationship is expected to hold",
+    rationale: "Implementation and setting can turn the nominally same intervention into a different program.",
+    ingestionRequirements: {
+      requiredFields: ["implementation details", "setting", "co-exposures"],
+      searchConcepts: ["implementation fidelity", "real-world effectiveness"],
+      mismatchRisks: ["Nominally identical programs may differ in their active ingredients."],
+    },
+  },
+  horizon: {
+    label: "Time horizon",
+    latentVariable: "The period over which an outcome must appear and persist",
+    rationale: "Immediate mechanisms, short-term outcomes, and durable effects are different claims.",
+    ingestionRequirements: {
+      requiredFields: ["follow-up duration", "measurement schedule", "attrition by timepoint"],
+      searchConcepts: ["short-term and long-term follow-up", "durability"],
+      mismatchRisks: ["Short studies may be used to support claims about durable outcomes."],
+    },
+  },
+};
+
+function exactMatches(prompt: string, candidates: string[]) {
+  const lower = prompt.toLowerCase();
+  return candidates.flatMap((candidate) => {
+    const index = lower.indexOf(candidate.toLowerCase());
+    return index >= 0 ? [{ quote: prompt.slice(index, index + candidate.length), index, end: index + candidate.length }] : [];
+  });
+}
+
+function fallbackTrace(prompt: string, axes: InterpretationAxis[]) {
+  const cueGroups = [
+    { axisId: "subject", candidates: ["eggs", "private cars", "cars", "policy", "program", "treatment", "AI"] },
+    { axisId: "exposure", candidates: ["eat", "moderation", "how often", "how much", "daily", "weekly", "ban", "use"] },
+    { axisId: "outcome", candidates: ["good", "bad", "great", "worked", "effective", "safe", "better", "worse", "successful"] },
+    { axisId: "population", candidates: ["across people", "for whom", "people", "cities", "children", "adults", "women", "men"] },
+    { axisId: "comparator", candidates: ["compared with", "versus", "instead of", "than"] },
+    { axisId: "context", candidates: ["geographically", "centers", "at home", "in schools", "where"] },
+    { axisId: "horizon", candidates: ["over time", "long term", "short term"] },
   ];
-  const matches: Array<{ quote: string; index: number }> = [];
-  for (const expression of expressions) {
-    for (const match of prompt.matchAll(expression)) {
-      if (match.index !== undefined && !matches.some((item) => item.index === match.index)) {
-        matches.push({ quote: match[0], index: match.index });
-      }
+  const clusters: DecompositionCluster[] = [];
+  const occupied = new Set<number>();
+  for (const group of cueGroups) {
+    const axis = axes.find((item) => item.id === group.axisId);
+    const spec = traceSpecs[group.axisId];
+    if (!axis || !spec) continue;
+    const matches = exactMatches(prompt, group.candidates)
+      .filter((item) => !occupied.has(item.index))
+      .sort((a, b) => a.index - b.index || (b.end - b.index) - (a.end - a.index))
+      .filter((item, index, all) => !all.slice(0, index).some(
+        (prior) => item.index < prior.end && item.end > prior.index,
+      ))
+      .slice(0, 3);
+    if (!matches.length) continue;
+    matches.forEach((item) => occupied.add(item.index));
+    clusters.push({
+      id: `${group.axisId}-cues`,
+      axisId: group.axisId,
+      highlightQuotes: matches.map((item) => item.quote),
+      ...spec,
+    });
+  }
+
+  if (clusters.length < 2) {
+    const stopWords = new Set(["about", "after", "before", "could", "does", "from", "have", "should", "their", "there", "these", "those", "what", "when", "where", "which", "would"]);
+    const content = [...prompt.matchAll(/\b[A-Za-z][A-Za-z'-]{4,}\b/g)]
+      .filter((match) => !stopWords.has(match[0].toLowerCase()))
+      .slice(0, 3);
+    for (const [index, match] of content.entries()) {
+      const axisId = index === 0 ? "subject" : index === 1 ? "outcome" : "context";
+      if (clusters.some((cluster) => cluster.axisId === axisId)) continue;
+      clusters.push({
+        id: `${axisId}-cues`,
+        axisId,
+        highlightQuotes: [match[0]],
+        ...traceSpecs[axisId],
+      });
     }
   }
-  if (matches.length < 2) {
-    for (const match of prompt.matchAll(/\b[A-Za-z][A-Za-z'-]{4,}\b/g)) {
-      if (match.index !== undefined && !matches.some((item) => item.index === match.index)) {
-        matches.push({ quote: match[0], index: match.index });
-      }
-      if (matches.length >= 4) break;
-    }
-  }
-  return matches
-    .sort((a, b) => a.index - b.index)
-    .slice(0, 6)
-    .map((match, index) => ({
-      quote: match.quote,
-      label: axes[index % axes.length].label,
-      why: axes[index % axes.length].question,
-      axisId: axes[index % axes.length].id,
-    }));
+
+  const limitedClusters = clusters.slice(0, 7);
+  const highlights: QuestionHighlight[] = limitedClusters
+    .flatMap((cluster) => cluster.highlightQuotes.map((quote) => ({
+      quote,
+      label: cluster.label,
+      why: cluster.rationale,
+      axisId: cluster.axisId,
+      clusterId: cluster.id,
+    })))
+    .slice(0, 8);
+  const usedQuotes = new Set(highlights.map((highlight) => highlight.quote));
+  return {
+    highlights,
+    clusters: limitedClusters.map((cluster) => ({
+      ...cluster,
+      highlightQuotes: cluster.highlightQuotes.filter((quote) => usedQuotes.has(quote)),
+    })).filter((cluster) => cluster.highlightQuotes.length > 0),
+  };
 }
 
 export function createFallbackDecomposition(prompt: string): DecompositionArtifact {
@@ -119,6 +255,16 @@ export function createFallbackDecomposition(prompt: string): DecompositionArtifa
         branch("literal-subject", "Literal reading", subject, "Use the subject exactly as the question states it.", "This preserves the submitted wording before adding narrower constructs.", "kept", "high"),
         branch("narrow-construct", "Narrow construct", "a precisely defined version of the subject", "Replace the everyday label with a measurable construct.", "Evidence can only match a construct that has operational boundaries.", "candidate", "high"),
         branch("broader-system", "Broader system", "the surrounding system that contains the subject", "Treat the named subject as one component of a larger system.", "System context may dominate the named component.", "parked", "medium"),
+      ],
+    },
+    {
+      id: "exposure",
+      label: "How much, how often, and in what form?",
+      question: "What dose, frequency, duration, preparation, or implementation defines the exposure?",
+      branches: [
+        branch("ordinary-exposure", "Ordinary repeated exposure", "the ordinary repeated form of the exposure implied by the question", "Use the most familiar recurring version as the provisional scope.", "This supplies a concrete starting point without pretending the wording specified a dose.", "kept", "high"),
+        branch("low-exposure", "Lower or occasional exposure", "a lower-dose or occasional form of the exposure", "Separate sporadic or low-dose exposure from a routine pattern.", "Dose and frequency can change both mechanism and outcome.", "candidate", "high"),
+        branch("high-exposure", "Higher or sustained exposure", "a higher-dose or sustained form of the exposure", "Represent the stronger end of the plausible exposure range.", "Evidence at one exposure level should not silently generalize to another.", "candidate", "high"),
       ],
     },
     {
@@ -173,12 +319,14 @@ export function createFallbackDecomposition(prompt: string): DecompositionArtifa
     },
   ];
 
+  const trace = fallbackTrace(prompt, axes);
   return {
     caseTitle: oneLine.split(/[?.!]/)[0].slice(0, 86) || "Untitled question",
     summary: "A local, domain-general decomposition is shown because a model connection is not configured. It is editable and preserves the same artifact contract as an AI-generated map.",
-    highlights: fallbackHighlights(prompt, axes),
+    highlights: trace.highlights,
+    clusters: trace.clusters,
     axes,
-    claimTemplate: "For {{population}}, does {{subject}}, under {{context}}, lead to {{outcome}} over {{horizon}}, compared with {{comparator}}?",
+    claimTemplate: "For {{population}}, does {{exposure}} of {{subject}}, under {{context}}, lead to {{outcome}} over {{horizon}}, compared with {{comparator}}?",
     knownUnknowns: [
       "Whether the everyday terms map cleanly to measurable constructs",
       "Whether the available evidence matches the intended population and setting",
@@ -195,8 +343,16 @@ export function sanitizeDecomposition(
 ): DecompositionArtifact {
   const axisIds = new Set(artifact.axes.map((axis) => axis.id));
   const fallback = createFallbackDecomposition(prompt);
+  const clusters = artifact.clusters.filter(
+    (cluster) => axisIds.has(cluster.axisId)
+      && cluster.highlightQuotes.length > 0
+      && cluster.highlightQuotes.every((quote) => prompt.includes(quote)),
+  );
+  const clusterIds = new Set(clusters.map((cluster) => cluster.id));
   const highlights = artifact.highlights.filter(
-    (highlight) => prompt.includes(highlight.quote) && axisIds.has(highlight.axisId),
+    (highlight) => prompt.includes(highlight.quote)
+      && axisIds.has(highlight.axisId)
+      && clusterIds.has(highlight.clusterId),
   );
   const axes = artifact.axes.map((axis) => {
     let keptSeen = false;
@@ -214,9 +370,12 @@ export function sanitizeDecomposition(
     return { ...axis, branches };
   });
 
+  if (highlights.length < 2 || clusters.length < 2) return fallback;
+
   return {
     ...artifact,
     axes,
-    highlights: highlights.length >= 2 ? highlights : fallback.highlights,
+    highlights,
+    clusters,
   };
 }

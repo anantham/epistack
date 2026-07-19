@@ -20,8 +20,15 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(frame, /Let the AI show you what your question is hiding\./);
   assert.match(frame, /locateHighlights/);
   assert.match(frame, /AI is reading/);
+  assert.match(frame, /Decomposition trace/);
+  assert.match(frame, /Exact language/);
+  assert.match(frame, /Hidden variable/);
+  assert.match(frame, /Evidence contract/);
+  assert.match(frame, /semantic clusters/);
   assert.match(frame, /window\.location\.assign\("\/map"\)/);
   assert.match(map, /Interpretation map/);
+  assert.match(map, /decompositionTrace/);
+  assert.match(map, /axis-trace/);
   assert.match(map, /Keep as active/);
   assert.match(map, /Park branch/);
   assert.match(map, /Add a missing interpretation/);
@@ -102,6 +109,11 @@ test("arbitrary questions have a transparent domain-general fallback", async () 
   assert.match(server, /createFallbackDecomposition/);
   assert.match(server, /Branches are alternative scopes/);
   assert.match(server, /exact, case-sensitive substring/);
+  assert.match(server, /"eat", "moderation"/);
+  assert.match(server, /Dose and frequency/);
+  assert.match(server, /ingestionRequirements/);
+  assert.match(server, /mismatchRisks/);
+  assert.match(server, /concise audit trace, not private chain-of-thought/);
   assert.match(api, /mode: "local-fallback"/);
   assert.match(api, /OPENAI_API_KEY/);
   assert.match(envExample, /EPISTACK_DECOMPOSITION_MODEL=gpt-5\.6-terra/);

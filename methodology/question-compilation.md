@@ -15,6 +15,9 @@ The operator is collaborative. AI supplies breadth and clerical structure; the h
 
 ## Output
 
+- Exact source-language cues linked to stable semantic clusters
+- A reviewable trace from each cluster to its latent variable and interpretation axis
+- An evidence-ingestion contract for every cluster
 - A bounded set of interpretation axes
 - Candidate branches for each axis
 - Rationale and origin for every branch
@@ -31,7 +34,31 @@ Identify why the user may be asking and list distinct outcome families before re
 
 The human selects the first outcome family to investigate. Other outcomes remain parked; they are not combined into one goodness score.
 
-### 2. Propose a bounded divisibility space
+### 2. Cluster surface cues into latent variables
+
+Preserve the exact words that prompted each interpretation, including non-adjacent cues that jointly imply a hidden choice. In the eggs question:
+
+- `eggs` points to uncertainty about the object or construct;
+- `good`, `bad`, and `great` point to an outcome family that needs operationalization;
+- `eat` and `moderation` jointly point to exposure, dose, frequency, preparation, and duration; and
+- `across people` and `predicts this` point to population and effect modification.
+
+For each cluster, emit a concise, inspectable trace:
+
+```text
+exact quote(s) → semantic cluster → latent variable → interpretation axis
+               → candidate branches → evidence-ingestion requirements
+```
+
+The evidence-ingestion requirements must name:
+
+- fields that must be extracted from sources;
+- concepts and synonyms retrieval should search for; and
+- mismatch risks that should block or weaken propagation to the compiled claim.
+
+For example, the `eat` + `moderation` cluster should cause the system to extract dose, frequency, duration, and preparation rather than treating every study of egg consumption as interchangeable. This trace is a methodological rationale designed for audit and revision; it is not private model chain-of-thought.
+
+### 3. Propose a bounded divisibility space
 
 Generate candidate axes such as:
 
@@ -47,7 +74,7 @@ Generate candidate axes such as:
 
 The model should propose two to six branches per axis. This is a usability bound, not a claim of completeness.
 
-### 3. Explain decision relevance
+### 4. Explain decision relevance
 
 For each branch, state:
 
@@ -57,7 +84,7 @@ For each branch, state:
 - whether it is a separate question or a possible modifier; and
 - what would cause a parked branch to be reopened.
 
-### 4. Human review
+### 5. Human review
 
 For every axis, the investigator may:
 
@@ -69,7 +96,7 @@ For every axis, the investigator may:
 
 Parking is reversible and does not delete the branch.
 
-### 5. Compile the active path
+### 6. Compile the active path
 
 Construct a question containing, where applicable:
 
@@ -81,7 +108,7 @@ For the first eggs slice:
 
 > Among adults with overweight or obesity who are actively pursuing weight loss, does consuming two whole hen eggs at breakfast at least five days per week instead of an energy-matched egg-free breakfast, while following an energy-restricted diet, cause greater loss of body weight after 8–12 weeks?
 
-### 6. Validate assessability
+### 7. Validate assessability
 
 A compiled claim is ready only if:
 
@@ -92,7 +119,7 @@ A compiled claim is ready only if:
 - normative and empirical components are separated; and
 - the claim can be contradicted by some possible evidence.
 
-### 7. Create the initial belief object
+### 8. Create the initial belief object
 
 Only now create a probability. Record:
 
@@ -104,7 +131,7 @@ Only now create a probability. Record:
 
 Do not distribute probability mass across interpretation branches unless they have been explicitly defined as mutually exclusive and collectively exhaustive hypotheses.
 
-### 8. Record—not necessarily expand—unknown attributes
+### 9. Record—not necessarily expand—unknown attributes
 
 Unknown details such as egg size, preparation, feed, housing, certification, and geography should be preserved. They become active branches only when at least one of these holds:
 
