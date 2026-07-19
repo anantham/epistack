@@ -10,12 +10,21 @@ import { decompositionSessionKey } from "../lib/decomposition";
 const defaultOpenRouterModel = "anthropic/claude-sonnet-4.6";
 const brandCharacters = [..."epistack"];
 const analysisDurationsKey = "epistack:analysis-durations:v1";
+const legacyAnalysisDurationsKey = "epistack_decomp_ms";
+const provisionalEstimateMs = 90_000;
 const loadingSteps = [
-  "reading the exact words",
-  "tracing grammatical roles",
-  "testing counterfactuals and bundled options",
-  "ranking high-value follow-up questions",
+  "bisecting the question",
+  "isolating load-bearing words",
+  "mapping hidden comparators",
+  "clustering related ideas",
+  "testing dimensions of perturbation",
+  "unbundling the options",
+  "tracing constraint cascades",
+  "probing population mismatches",
+  "ranking high-information follow-ups",
   "compiling evidence requirements",
+  "stress-testing claim boundaries",
+  "checking what the question leaves unsaid",
 ];
 
 type AnalysisPhase = "idle" | "analyzing" | "eliciting" | "review" | "transitioning" | "error";
@@ -64,6 +73,13 @@ function median(values: number[]) {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
+function formatCountdown(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [decisionContext, setDecisionContext] = useState("");
@@ -94,10 +110,11 @@ export default function Home() {
   );
   const currentContextQuestion = result?.decomposition.contextQuestions[elicitationIndex] ?? null;
   const busy = phase === "analyzing" || phase === "transitioning";
-  const expectedDuration = useMemo(() => median(analysisDurations), [analysisDurations]);
-  const secondsRemaining = expectedDuration === null
-    ? null
-    : Math.max(0, Math.round((expectedDuration - analysisElapsed) / 1000));
+  const empiricalDuration = useMemo(() => median(analysisDurations), [analysisDurations]);
+  const expectedDuration = empiricalDuration ?? provisionalEstimateMs;
+  const remainingDuration = expectedDuration - analysisElapsed;
+  const countdown = formatCountdown(Math.abs(remainingDuration));
+  const analysisProgress = Math.min(94, Math.max(3, (analysisElapsed / expectedDuration) * 100));
 
   useEffect(() => {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -108,8 +125,12 @@ export default function Home() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        const saved = JSON.parse(window.localStorage.getItem(analysisDurationsKey) || "[]") as unknown;
-        if (Array.isArray(saved)) setAnalysisDurations(saved.filter((value) => typeof value === "number").slice(-12));
+        const current = window.localStorage.getItem(analysisDurationsKey);
+        const legacy = window.localStorage.getItem(legacyAnalysisDurationsKey);
+        const saved = JSON.parse(current || legacy || "[]") as unknown;
+        if (Array.isArray(saved)) {
+          setAnalysisDurations(saved.filter((value) => typeof value === "number" && Number.isFinite(value) && value > 0).slice(-12));
+        }
       } catch {
         setAnalysisDurations([]);
       }
@@ -121,8 +142,8 @@ export default function Home() {
     if (phase !== "analyzing") return;
     const startedAt = window.performance.now();
     const stepTimer = window.setInterval(
-      () => setLoadingStep((step) => Math.min(step + 1, loadingSteps.length - 1)),
-      2400,
+      () => setLoadingStep((step) => (step + 1) % loadingSteps.length),
+      3200,
     );
     const elapsedTimer = window.setInterval(
       () => setAnalysisElapsed(window.performance.now() - startedAt),
@@ -506,13 +527,17 @@ export default function Home() {
             <section className="phase-screen" aria-live="polite">
               <div className="ai-orb thinking" aria-hidden="true"><span /></div>
               <div className="loading-copy">
-                <p>{loadingSteps[loadingStep]}…</p>
-                <span>
-                  {secondsRemaining === null
-                    ? `${Math.round(analysisElapsed / 1000)}s`
-                    : secondsRemaining > 0 ? `about ${secondsRemaining}s left` : "any moment"}
-                </span>
-                <small>{expectedDuration === null ? "timing the first run" : `based on ${analysisDurations.length} recent run${analysisDurations.length === 1 ? "" : "s"}`}</small>
+                <p className="loading-operation" key={loadingStep}>{loadingSteps[loadingStep]}…</p>
+                <div className="loading-eta" aria-label={remainingDuration > 0 ? `${countdown} estimated time remaining` : `${countdown} past the estimate`}>
+                  <strong>{remainingDuration > 0 ? countdown : `+${countdown}`}</strong>
+                  <span>{remainingDuration > 0 ? "remaining" : "past estimate"}</span>
+                </div>
+                <div className="loading-rail" aria-hidden="true"><span style={{ width: `${analysisProgress}%` }} /></div>
+                <small>
+                  {empiricalDuration === null
+                    ? "provisional benchmark · this run will recalibrate it"
+                    : `empirical ETA · median of ${analysisDurations.length} successful run${analysisDurations.length === 1 ? "" : "s"}`}
+                </small>
               </div>
             </section>
           )}

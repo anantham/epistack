@@ -164,6 +164,12 @@ test("arbitrary questions use a key-gated elicitation and refinement path", asyn
   assert.match(frame, /type your answer/);
   assert.match(frame, /currentContextQuestion\.options\.map/);
   assert.match(frame, /loadingSteps/);
+  assert.match(frame, /bisecting the question/);
+  assert.match(frame, /clustering related ideas/);
+  assert.match(frame, /testing dimensions of perturbation/);
+  assert.match(frame, /formatCountdown/);
+  assert.match(frame, /provisional benchmark/);
+  assert.match(frame, /step \+ 1\) % loadingSteps\.length/);
   assert.match(frame, /analysisDurationsKey/);
   assert.match(frame, /event\.metaKey \|\| event\.ctrlKey/);
   assert.match(frame, /composerInputRef/);

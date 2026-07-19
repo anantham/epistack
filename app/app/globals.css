@@ -458,21 +458,60 @@ main {
   align-items: center;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 10px;
+  min-width: 290px;
 }
 
-.loading-copy span,
 .loading-copy small {
   color: var(--ink-soft);
   font-family: var(--font-geist-mono), monospace;
 }
 
-.loading-copy span {
-  font-size: 11px;
+.loading-operation {
+  animation: loading-operation-in 520ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
+  min-height: 14px;
+}
+
+.loading-eta {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+}
+
+.loading-eta strong {
+  color: var(--ink);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 25px;
+  font-weight: 430;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.05em;
+}
+
+.loading-eta span {
+  color: var(--ink-soft);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+}
+
+.loading-rail {
+  background: rgba(35, 92, 67, 0.1);
+  border-radius: 999px;
+  height: 2px;
+  overflow: hidden;
+  width: 180px;
+}
+
+.loading-rail span {
+  background: var(--green);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  transition: width 400ms linear;
 }
 
 .loading-copy small {
+  font-variant-numeric: tabular-nums;
   font-size: 9px;
   opacity: 0.62;
 }
@@ -2875,6 +2914,11 @@ h2 {
 
 @keyframes elicitation-card-in {
   from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes loading-operation-in {
+  from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
