@@ -127,6 +127,23 @@ ${p.brief ? `ORCHESTRATOR BRIEF — prioritise exactly this: ${JSON.stringify(p.
 {"findings":[{"claim":"one specific, quantitative sentence","supports":"one of the candidate resolutions, verbatim (or 'unclear')","source":"publication or org","url":"a real, working URL","kind":"meta-analysis|RCT|cohort|guideline|observational|expert","n":"sample size or scale, if stated","year":"YYYY","confidence":"high|medium|low","coi":"funding/conflict note, or 'none noted'"${hasCtx ? ',"relevance":"one line: how this applies to THIS asker specifically"' : ''}}]}`
 }
 
+// CROSS-EXAMINE — structure disparate findings into a CLAIM × SOURCE matrix (agreement/contradiction)
+function matrixPrompt(p) {
+  return `You are structuring disparate research findings into a CLAIM × SOURCE matrix so a human can see at a glance where the sources AGREE and where they CONTRADICT. First MERGE findings that assert the SAME claim in different forms into one claim. Then, for EACH source, decide its stance on EACH claim: "supports", "disputes", or "silent" (the source did not address that claim).
+
+QUESTION: ${JSON.stringify(p.question)}
+DIMENSION: ${JSON.stringify(p.dimensionName)}
+CANDIDATE RESOLUTIONS: ${JSON.stringify(p.resolutions || [])}
+FINDINGS (each is one claim from one source): ${JSON.stringify(p.findings || [])}
+
+Return ONLY JSON, no prose, no fences:
+{
+  "sources": [ { "id": "s1", "name": "short source label", "url": "real url", "kind": "study kind", "year": "YYYY" } ],
+  "claims": [ { "id": "c1", "text": "the distinct claim in one line", "resolution": "which candidate resolution it maps to (verbatim, or 'other')", "stances": { "s1": "supports|disputes|silent", "s2": "..." } } ]
+}
+Rules: DEDUPE sources (the same study cited twice = ONE source). MERGE the same claim stated in different forms. A source "supports" a claim only if its finding actually asserts it; "disputes" if it argues against it; otherwise "silent". Every source id referenced in any stances map MUST appear in sources. Valid JSON only.`
+}
+
 // The ORCHESTRATOR — plans the research: assigns each open axis its own specialised agent + brief
 function orchestratorPrompt(p) {
   return `You are the research ORCHESTRATOR. Given a decision, the axes still open, and who is asking, produce a PLAN that gives EACH axis its own specialised research agent with a focused, personalised brief.
@@ -223,6 +240,7 @@ function apiPlugin() {
         handle((p) => (p.claim ? deepDivePrompt(p) : null), 'WebSearch,WebFetch'),
       )
       server.middlewares.use('/api/plan', handle((p) => (p.question && p.axes ? orchestratorPrompt(p) : null)))
+      server.middlewares.use('/api/matrix', handle((p) => (p.dimensionName && p.findings ? matrixPrompt(p) : null)))
     },
   }
 }

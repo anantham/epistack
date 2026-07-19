@@ -527,6 +527,120 @@ function GraphState({ axes, statsById }) {
   )
 }
 
+// claim × source matrix — the cross-examined, mergeable structure (dedup sources by url, claims by meaning)
+function MatrixCell({ stance }) {
+  const s = norm(stance)
+  const kind = s === 'supports' ? 'sup' : s === 'disputes' ? 'dis' : 'sil'
+  const sym = s === 'supports' ? '✚' : s === 'disputes' ? '✕' : '·'
+  return (
+    <span className={`mcell m-${kind}`} title={s || 'silent'}>
+      {sym}
+    </span>
+  )
+}
+
+function AxisMatrix({ axis, findings, question }) {
+  const [m, setM] = useState(null) // null | 'loading' | result | {error}
+  async function build() {
+    setM('loading')
+    try {
+      const r = await fetch('/api/matrix', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          dimensionName: axis.name,
+          resolutions: axis.resolutions || [],
+          findings: findings.map((f) => ({ claim: f.claim, source: f.source, url: f.url, supports: f.supports, kind: f.kind, year: f.year })),
+        }),
+      })
+      const j = await r.json()
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+      setM(j)
+    } catch (e) {
+      setM({ error: String(e.message || e) })
+    }
+  }
+  const shorten = (s) => {
+    const t = String(s || '').replace(/\(.*?\)/g, '').trim()
+    return t.length > 24 ? t.slice(0, 22) + '…' : t
+  }
+  return (
+    <div className="axmatrix" style={{ '--c': axis.color || 'var(--accent)' }}>
+      <div className="axm-head">
+        <span className="lane-dot" />
+        <span className="lane-name">{axis.name}</span>
+        <button className="lane-run" onClick={build} disabled={m === 'loading'}>
+          {m === 'loading' ? 'cross-examining…' : m && !m.error ? '↻ redo' : `⚖ cross-examine ${findings.length}`}
+        </button>
+      </div>
+      {m === 'loading' && (
+        <div className="lane-working">
+          <span className="scan" />
+          <span>merging same-claim-different-form, deduping sources, judging each source's stance…</span>
+        </div>
+      )}
+      {m && m !== 'loading' && m.error && <div className="dd-err">{m.error}</div>}
+      {m && m !== 'loading' && !m.error && (
+        <div className="mx-wrap">
+          <table className="matrix">
+            <thead>
+              <tr>
+                <th className="mx-corner">claim ＼ source</th>
+                {(m.sources || []).map((s) => (
+                  <th key={s.id} className="mx-src">
+                    <a href={s.url} target="_blank" rel="noreferrer" title={s.name}>
+                      {shorten(s.name)}
+                    </a>
+                    {s.year && <span className="mx-src-meta">{s.year}</span>}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(m.claims || []).map((c) => {
+                const sup = (m.sources || []).filter((s) => norm(c.stances?.[s.id]) === 'supports').length
+                const dis = (m.sources || []).filter((s) => norm(c.stances?.[s.id]) === 'disputes').length
+                return (
+                  <tr key={c.id} className={dis > 0 && sup > 0 ? 'mx-conflict' : ''}>
+                    <th className="mx-claim">
+                      <span className="mx-claim-text">{c.text}</span>
+                      <span className="mx-claim-meta">
+                        {c.resolution}
+                        {sup ? ` · ${sup}✚` : ''}
+                        {dis ? ` · ${dis}✕` : ''}
+                      </span>
+                    </th>
+                    {(m.sources || []).map((s) => (
+                      <td key={s.id}>
+                        <MatrixCell stance={c.stances?.[s.id]} />
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <div className="mx-legend">✚ supports · ✕ disputes · · silent — a row with both ✚ and ✕ is a live contradiction across sources</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MatrixView({ axes, lanes, question }) {
+  const withFindings = axes.filter((a) => (lanes[a.id]?.findings || []).length > 0)
+  if (!withFindings.length)
+    return <div className="mx-empty">Dispatch the agents first — then cross-examine their findings into a claim × source matrix.</div>
+  return (
+    <div className="matrices">
+      {withFindings.map((a) => (
+        <AxisMatrix key={a.id} axis={a} findings={lanes[a.id].findings} question={question} />
+      ))}
+    </div>
+  )
+}
+
 function ResearchStage({ question, data, pdata, context }) {
   const axes = useMemo(() => {
     if (pdata) {
@@ -542,6 +656,7 @@ function ResearchStage({ question, data, pdata, context }) {
   const [lanes, setLanes] = useState({})
   const [now, setNow] = useState(() => Date.now())
   const [plan, setPlan] = useState(null) // null | 'planning' | result | {error}
+  const [view, setView] = useState('lanes') // lanes | matrix
   const statsById = useMemo(
     () => Object.fromEntries(axes.map((a) => [a.id, axisStats(a, lanes[a.id]?.findings || [])])),
     [axes, lanes],
@@ -706,20 +821,35 @@ function ResearchStage({ question, data, pdata, context }) {
         </div>
       )}
 
-      <div className="lanes">
-        {axes.map((a) => (
-          <ResearchLane
-            key={a.id}
-            axis={a}
-            lane={lanes[a.id]}
-            stats={statsById[a.id]}
-            brief={briefFor(a.id)}
-            now={now}
-            onRun={() => research(a)}
-            question={question}
-          />
-        ))}
-      </div>
+      {started && (
+        <div className="view-toggle">
+          <button className={view === 'lanes' ? 'on' : ''} onClick={() => setView('lanes')}>
+            lanes
+          </button>
+          <button className={view === 'matrix' ? 'on' : ''} onClick={() => setView('matrix')}>
+            claim × source matrix
+          </button>
+        </div>
+      )}
+
+      {view === 'matrix' ? (
+        <MatrixView axes={axes} lanes={lanes} question={question} />
+      ) : (
+        <div className="lanes">
+          {axes.map((a) => (
+            <ResearchLane
+              key={a.id}
+              axis={a}
+              lane={lanes[a.id]}
+              stats={statsById[a.id]}
+              brief={briefFor(a.id)}
+              now={now}
+              onRun={() => research(a)}
+              question={question}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
