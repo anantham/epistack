@@ -27,7 +27,12 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(frame, /semantic clusters/);
   assert.match(frame, /question-cue/);
   assert.match(frame, /Inference chain/);
-  assert.match(frame, /Next inference/);
+  assert.match(frame, /Semantic cluster assembly/);
+  assert.match(frame, /animateClusterFlight/);
+  assert.match(frame, /flying-cue/);
+  assert.match(frame, /Scroll slowly to reveal the inference chain/);
+  assert.match(frame, /story-step/);
+  assert.match(frame, /IntersectionObserver/);
   assert.match(frame, /activeTraceStep/);
   assert.match(frame, /window\.location\.assign\("\/map"\)/);
   assert.match(map, /Interpretation map/);
