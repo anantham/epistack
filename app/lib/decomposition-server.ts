@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { jsonSchema } from "ai";
 import type {
   DecompositionCluster,
   DecompositionArtifact,
@@ -59,6 +60,31 @@ export const decompositionSchema = z.object({
     effect: z.enum(["prune", "branch", "match"]),
   })).min(3).max(8),
 });
+
+const unsupportedProviderKeywords = new Set([
+  "minLength", "maxLength", "pattern", "format",
+  "minimum", "maximum", "multipleOf",
+  "patternProperties", "unevaluatedProperties", "propertyNames", "minProperties", "maxProperties",
+  "unevaluatedItems", "contains", "minContains", "maxContains", "minItems", "maxItems", "uniqueItems",
+]);
+
+function removeUnsupportedProviderConstraints(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(removeUnsupportedProviderConstraints);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !unsupportedProviderKeywords.has(key))
+      .map(([key, child]) => [key, removeUnsupportedProviderConstraints(child)]),
+  );
+}
+
+export const decompositionProviderJsonSchema = removeUnsupportedProviderConstraints(
+  z.toJSONSchema(decompositionSchema),
+) as ReturnType<typeof z.toJSONSchema>;
+
+export const decompositionOutputSchema = jsonSchema<z.infer<typeof decompositionSchema>>(
+  decompositionProviderJsonSchema,
+);
 
 export const decompositionInstructions = `You are the question-compilation operator in an epistemic research system.
 

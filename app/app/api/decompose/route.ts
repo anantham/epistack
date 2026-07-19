@@ -3,6 +3,7 @@ import { generateText, Output } from "ai";
 import { env } from "cloudflare:workers";
 import {
   decompositionInstructions,
+  decompositionOutputSchema,
   decompositionSchema,
   sanitizeDecomposition,
 } from "../../../lib/decomposition-server";
@@ -88,12 +89,20 @@ export async function POST(request: Request) {
       output: Output.object({
         name: "question_decomposition",
         description: "A human-editable interpretation map for an underspecified research question.",
-        schema: decompositionSchema,
+        schema: decompositionOutputSchema,
       }),
       system: decompositionInstructions,
       prompt: `Decompose this submitted paragraph without answering it.\n\nSUBMITTED QUESTION:\n${prompt}\n\nKNOWN DECISION CONTEXT:\n${decisionContext || "None supplied. Ask only high-value follow-up questions."}`,
       maxOutputTokens: 6000,
     });
+
+    const validatedOutput = decompositionSchema.safeParse(output);
+    if (!validatedOutput.success) {
+      return Response.json({
+        error: "The model returned an incomplete decomposition. Retry once, then choose another model in Settings.",
+        code: "invalid_model_output",
+      }, { status: 502 });
+    }
 
     return Response.json({
       caseId,
@@ -102,7 +111,7 @@ export async function POST(request: Request) {
       warning: null,
       prompt,
       decisionContext,
-      decomposition: sanitizeDecomposition(output, prompt, decisionContext),
+      decomposition: sanitizeDecomposition(validatedOutput.data, prompt, decisionContext),
     });
   } catch (thrown) {
     const failure = openRouterFailureFromThrown(thrown);

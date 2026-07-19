@@ -59,6 +59,8 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(map, /interpretation branches above do not share this probability mass/i);
   assert.match(api, /generateText/);
   assert.match(api, /Output\.object/);
+  assert.match(api, /decompositionOutputSchema/);
+  assert.match(api, /decompositionSchema\.safeParse/);
   assert.match(api, /https:\/\/openrouter\.ai\/api\/v1/);
   assert.match(api, /OpenRouter ·/);
   assert.match(api, /openRouterFailureFromThrown/);
