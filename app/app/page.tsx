@@ -2,13 +2,12 @@
 
 import { useMemo, useRef, useState } from "react";
 import {
-  claimRead,
   corpusMeta,
   evidenceSources,
   studyInventory,
-  type EvidenceDirection,
 } from "../data/eggs-weight-corpus";
 import pubmedDiscovery from "../data/pubmed-discovery.json";
+import { CaseHeader } from "./components/case-navigation";
 
 type BranchStatus = "kept" | "candidate" | "parked";
 
@@ -368,10 +367,6 @@ export default function Home() {
   const [claimCreated, setClaimCreated] = useState(false);
   const [prior, setPrior] = useState(50);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [evidenceFilter, setEvidenceFilter] = useState<"all" | EvidenceDirection>("all");
-  const [showAllStudies, setShowAllStudies] = useState(false);
-  const [discoveryQuery, setDiscoveryQuery] = useState("");
-  const [showAllDiscoveries, setShowAllDiscoveries] = useState(false);
 
   const activeQuestion = useMemo(() => buildQuestion(axes), [axes]);
   const activeAxis = axes.find((axis) => axis.id === focused.axisId) ?? axes[0];
@@ -382,23 +377,6 @@ export default function Home() {
     (sum, axis) => sum + axis.branches.filter((branch) => branch.status === "parked").length,
     0,
   );
-  const filteredSources = evidenceFilter === "all"
-    ? evidenceSources
-    : evidenceSources.filter((source) => source.direction === evidenceFilter);
-  const displayedStudies = showAllStudies ? studyInventory : studyInventory.slice(0, 8);
-  const filteredDiscoveries = useMemo(() => {
-    const query = discoveryQuery.trim().toLowerCase();
-    if (!query) return pubmedDiscovery.records;
-    return pubmedDiscovery.records.filter((record) =>
-      [record.title, record.journal, record.published, ...record.authors]
-        .join(" ")
-        .toLowerCase()
-        .includes(query),
-    );
-  }, [discoveryQuery]);
-  const displayedDiscoveries = showAllDiscoveries
-    ? filteredDiscoveries
-    : filteredDiscoveries.slice(0, 12);
 
   function decompose() {
     setIsThinking(true);
@@ -540,19 +518,7 @@ export default function Home() {
 
   return (
     <main>
-      <header className="topbar">
-        <a className="wordmark" href="#top" aria-label="Epistack home">
-          <span className="wordmark-mark">E</span>
-          <span>Epistack</span>
-        </a>
-        <nav className="stage-nav" aria-label="Investigation stages">
-          <a className="stage active" href="#top"><b>1</b> Frame</a>
-          <a className="stage ready" href="#evidence"><b>2</b> Evidence</a>
-          <span className="stage"><b>3</b> Assess</span>
-          <span className="stage"><b>4</b> Synthesize</span>
-        </nav>
-        <button className="quiet-button" onClick={exportArtifact}>Export JSON</button>
-      </header>
+      <CaseHeader active="frame" onExport={exportArtifact} />
 
       <section className="prompt-section" id="top">
         <div className="eyebrow">Question compiler · Eggs case</div>
@@ -747,191 +713,6 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="evidence-section" id="evidence" aria-labelledby="evidence-title">
-            <div className="section-heading">
-              <div>
-                <div className="eyebrow">Claim-matched corpus · Human review required</div>
-                <h2 id="evidence-title">What the evidence actually says</h2>
-              </div>
-              <div className="map-stats" aria-label="Evidence corpus status">
-                <span><b>{studyInventory.length}</b> trial records</span>
-                <span><b>{evidenceSources.length}</b> deep extractions</span>
-                <span><b>{pubmedDiscovery.recordsFetched}</b> discoveries</span>
-              </div>
-            </div>
-
-            <div className="evidence-overview">
-              <article className="current-read">
-                <span className="read-status">Current read · {claimRead.status}</span>
-                <h3>{claimRead.summary}</h3>
-                <p>
-                  This is a provisional interpretation of the corpus, not a medical recommendation and not a completed probability update.
-                </p>
-              </article>
-              <div className="crux-panel">
-                <div>
-                  <span>Load-bearing evidence</span>
-                  <ul>{claimRead.loadBearing.map((item) => <li key={item}>{item}</li>)}</ul>
-                </div>
-                <div>
-                  <span>What would change the answer?</span>
-                  <ul>{claimRead.cruxes.map((item) => <li key={item}>{item}</li>)}</ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="corpus-boundary">
-              <div>
-                <span>Coverage</span>
-                <strong>{corpusMeta.reviewCoverage}</strong>
-                <small>{corpusMeta.updateCoverage}</small>
-              </div>
-              <p>{corpusMeta.caveat}</p>
-            </div>
-
-            <div className="evidence-toolbar" aria-label="Filter evidence">
-              <span>Show relationship to claim</span>
-              <div>
-                {(["all", "supports", "challenges", "mixed", "context"] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    className={evidenceFilter === filter ? "active" : ""}
-                    onClick={() => setEvidenceFilter(filter)}
-                  >
-                    {filter === "all" ? "All" : filter[0].toUpperCase() + filter.slice(1)}
-                    <b>
-                      {filter === "all"
-                        ? evidenceSources.length
-                        : evidenceSources.filter((source) => source.direction === filter).length}
-                    </b>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="source-grid">
-              {filteredSources.map((source) => (
-                <article className="source-card" key={source.id}>
-                  <div className="source-card-topline">
-                    <span className={`direction ${source.direction}`}>{source.direction}</span>
-                    <span>{source.directness} · {source.sourceType}</span>
-                  </div>
-                  <h3>{source.title}</h3>
-                  <p className="source-byline">{source.authors} · {source.year} · {source.sample}</p>
-                  <p className="source-finding">{source.finding}</p>
-                  <dl className="pico-grid">
-                    <div><dt>Population</dt><dd>{source.population}</dd></div>
-                    <div><dt>Exposure</dt><dd>{source.intervention}</dd></div>
-                    <div><dt>Comparator</dt><dd>{source.comparator}</dd></div>
-                    <div><dt>Duration</dt><dd>{source.duration}</dd></div>
-                  </dl>
-                  <details>
-                    <summary>Inspect quality and provenance</summary>
-                    <div className="quality-block">
-                      <p><b>Risk of bias:</b> {source.riskOfBias.replace("-", " ")}</p>
-                      <p><b>Funding:</b> {source.funding}</p>
-                      <p><b>Locator:</b> {source.locator}</p>
-                      <div><b>Transparency</b><ul>{source.transparency.map((item) => <li key={item}>{item}</li>)}</ul></div>
-                      <div><b>Limitations</b><ul>{source.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>
-                    </div>
-                  </details>
-                  <a href={source.url} target="_blank" rel="noreferrer">
-                    Open source <span aria-hidden="true">↗</span>
-                  </a>
-                </article>
-              ))}
-            </div>
-
-            <section className="inventory" aria-labelledby="inventory-title">
-              <div className="inventory-heading">
-                <div>
-                  <div className="eyebrow">Systematic-review spine</div>
-                  <h3 id="inventory-title">All {studyInventory.length} controlled-trial records</h3>
-                  <p>Transcribed from the 2023 review’s study table. Arrows describe the reported direction, not our confidence.</p>
-                </div>
-                <button onClick={() => setShowAllStudies((value) => !value)}>
-                  {showAllStudies ? "Show first 8" : `Show all ${studyInventory.length}`}
-                </button>
-              </div>
-              <div className="inventory-table-wrap">
-                <table>
-                  <thead><tr><th>Study</th><th>Population</th><th>Exposure → comparator</th><th>Duration</th><th>Reported</th><th>RoB</th></tr></thead>
-                  <tbody>
-                    {displayedStudies.map((item) => (
-                      <tr key={item.id}>
-                        <td><strong>{item.citation}</strong><small>{item.country} · {item.design}</small></td>
-                        <td>{item.healthStatus}<small>{item.participants}</small></td>
-                        <td>{item.intervention}<small>vs {item.comparator}</small></td>
-                        <td>{item.durationWeeks} wk</td>
-                        <td><span className={`inventory-result ${item.direction}`}>{item.result}</span></td>
-                        <td><span className={`risk ${item.riskOfBias}`}>{item.riskOfBias.replace("-", " ")}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <div className="search-audit">
-              <div>
-                <span>Reproducible discovery trail</span>
-                <strong>{pubmedDiscovery.countReportedByPubMed} PubMed matches</strong>
-                <small>Fetched {pubmedDiscovery.fetchedAt.slice(0, 10)}</small>
-              </div>
-              <div>
-                <p>{pubmedDiscovery.evidencePolicy}</p>
-                <code>{pubmedDiscovery.query}</code>
-              </div>
-            </div>
-
-            <section className="discovery-inbox" aria-labelledby="discovery-title">
-              <div className="discovery-heading">
-                <div>
-                  <div className="eyebrow">Unassessed intake queue</div>
-                  <h3 id="discovery-title">PubMed discoveries</h3>
-                  <p>
-                    These records matched the search, but matching is not endorsement. Open, screen, extract, and verify before promotion into evidence.
-                  </p>
-                </div>
-                <label>
-                  <span>Search {pubmedDiscovery.recordsFetched} records</span>
-                  <input
-                    type="search"
-                    placeholder="Title, author, journal, or year"
-                    value={discoveryQuery}
-                    onChange={(event) => setDiscoveryQuery(event.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="discovery-list">
-                {displayedDiscoveries.map((record) => (
-                  <article key={record.pmid}>
-                    <div>
-                      <span className="unassessed">Unassessed</span>
-                      <small>{record.published} · {record.journal}</small>
-                    </div>
-                    <h4>{record.title}</h4>
-                    <p>{record.authors.slice(0, 4).join(", ")}{record.authors.length > 4 ? " et al." : ""}</p>
-                    <div className="discovery-meta">
-                      <span>PMID {record.pmid}</span>
-                      {record.doi && <span>DOI {record.doi}</span>}
-                      {record.publicationTypes.slice(0, 2).map((type) => <span key={type}>{type}</span>)}
-                    </div>
-                    <a href={record.url} target="_blank" rel="noreferrer">Screen source ↗</a>
-                  </article>
-                ))}
-              </div>
-              <div className="discovery-footer">
-                <span>Showing {displayedDiscoveries.length} of {filteredDiscoveries.length} matching records</span>
-                {filteredDiscoveries.length > 12 && (
-                  <button onClick={() => setShowAllDiscoveries((value) => !value)}>
-                    {showAllDiscoveries ? "Show first 12" : `Show all ${filteredDiscoveries.length}`}
-                  </button>
-                )}
-              </div>
-            </section>
-          </section>
-
           <section className="unknowns-section" aria-labelledby="unknowns-title">
             <div>
               <div className="eyebrow">Preserved uncertainty</div>
@@ -947,6 +728,15 @@ export default function Home() {
               <li><span>Medium</span> Baseline metabolic risk and medication use</li>
               <li><span>Unclear</span> Egg feed, housing, shell color, and certification</li>
             </ul>
+          </section>
+
+          <section className="route-handoff" aria-label="Continue investigation">
+            <div>
+              <div className="eyebrow">Next workspace</div>
+              <h2>Now inspect evidence against this framing.</h2>
+              <p>Your selected frame remains an explicit artifact; the evidence workspace keeps source review focused and separate.</p>
+            </div>
+            <a className="primary-link" href="/evidence">Continue to evidence →</a>
           </section>
         </>
       )}

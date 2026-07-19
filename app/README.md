@@ -23,10 +23,12 @@ Open the local URL printed by the development server.
 4. Add an interpretation the model missed.
 5. Watch the concrete question update from the selected path.
 6. Create an explicitly labeled probability placeholder.
-7. Jump to Evidence and filter sources by whether they support, challenge, mix, or contextualize the claim.
+7. Continue to the dedicated Evidence page and filter deep source extractions by relationship to the claim.
 8. Expand a source to inspect funding, risk of bias, provenance, and limitations.
-9. Open the complete 32-study inventory and the reproducible PubMed discovery trail.
-10. Save a revision or export the complete artifact as JSON.
+9. Use the separate Assess page for the complete 32-study trial inventory.
+10. Screen the 164-record Discovery Queue without confusing search matches for assessed evidence.
+11. Open Synthesize to inspect the provisional read, load-bearing evidence, and cruxes.
+12. Save a revision or export the complete framing artifact as JSON.
 
 ## Current boundary
 
@@ -46,6 +48,14 @@ It currently implements:
 - 164 PubMed discovery records; and
 - normalized schema for sources, evidence, assessments, and beliefs.
 
+The interface is organized as a case workspace rather than one long report:
+
+- `/` — frame and compile the question;
+- `/evidence` — inspect claim-matched deep source extractions;
+- `/inventory` — search and assess the controlled-trial inventory;
+- `/discoveries` — screen the unassessed PubMed intake queue; and
+- `/synthesis` — audit the provisional conclusion and its cruxes.
+
 Discovery is intentionally not treated as evidence. The app does not yet automatically verify full text, extract passages, perform entailment checks, independently reproduce the meta-analysis, or update the claim probability. Those steps require model assistance plus human review.
 
 ## Commands
@@ -60,7 +70,12 @@ npm run evidence:discover
 
 ## Main files
 
-- `app/page.tsx` — interaction and eggs fixture
+- `app/page.tsx` — framing interaction and eggs fixture
+- `app/components/case-navigation.tsx` — persistent stage and evidence-view navigation
+- `app/evidence/` — deep source review
+- `app/inventory/` — controlled-trial assessment
+- `app/discoveries/` — unassessed search intake
+- `app/synthesis/` — provisional synthesis and cruxes
 - `app/globals.css` — responsive interface
 - `app/api/cases/route.ts` — save and retrieve snapshots
 - `data/eggs-weight-corpus.ts` — assessed sources and 32-study review inventory

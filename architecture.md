@@ -20,6 +20,18 @@ Versioned evidence and belief state
 
 The decomposition map is the primary work surface. A side inspector shows why the model proposed a branch, how it will affect the compiled question, who last edited it, and whether it is active or parked.
 
+## Route architecture
+
+The eggs case is split by epistemic task rather than rendered as one scrolling document:
+
+- Frame (`/`) owns question decomposition and claim compilation.
+- Evidence (`/evidence`) owns claim-matched source extraction and provenance inspection.
+- Assess (`/inventory`) owns the systematic-review trial inventory.
+- Discovery Queue (`/discoveries`) owns unassessed search results.
+- Synthesize (`/synthesis`) owns the provisional read, load-bearing evidence, and cruxes.
+
+Persistent stage navigation connects the workflow, while evidence-specific subnavigation keeps corpus views close without mixing their epistemic status.
+
 ## Interaction contract
 
 Every AI operation should appear as a reviewable proposal rather than an invisible mutation.
@@ -139,7 +151,7 @@ The scalable unit is not a single giant graph. It is a set of small, versioned s
 
 ## First prototype boundary
 
-The current browser prototype implements the framing operator:
+The current browser prototype implements a framing operator and a claim-matched evidence workspace:
 
 - enter the competition's vague eggs prompt;
 - inspect seven proposed axes and their candidate branches;
@@ -147,6 +159,10 @@ The current browser prototype implements the framing operator:
 - preserve the model's rationale and branch origin;
 - compile the selected path into one concrete weight-loss question;
 - create an explicitly labeled neutral probability placeholder; and
-- save or export the resulting artifact.
+- save or export the resulting artifact;
+- inspect 11 deeply extracted sources with provenance and limitations;
+- search a 32-publication controlled-trial inventory;
+- screen a separate 164-record PubMed discovery queue; and
+- inspect a provisional synthesis with load-bearing evidence and cruxes.
 
-It does not yet retrieve studies, evaluate evidence, or update the probability. Those operations should be added only after the framing artifact is tested with users.
+It does not yet automatically verify full text, extract evidence passages, reproduce the meta-analysis, adjudicate conflicting assessments, or perform a formal probability update. Discovery matches remain explicitly unassessed until human promotion.

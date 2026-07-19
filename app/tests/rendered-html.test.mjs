@@ -36,8 +36,11 @@ test("starter preview has been removed", async () => {
 });
 
 test("evidence corpus keeps discovery separate from assessed evidence", async () => {
-  const [page, corpus, discovery] = await Promise.all([
-    readFile(new URL("app/page.tsx", root), "utf8"),
+  const [evidencePage, evidenceBrowser, synthesisPage, discoveryPage, corpus, discovery] = await Promise.all([
+    readFile(new URL("app/evidence/page.tsx", root), "utf8"),
+    readFile(new URL("app/evidence/evidence-browser.tsx", root), "utf8"),
+    readFile(new URL("app/synthesis/page.tsx", root), "utf8"),
+    readFile(new URL("app/discoveries/page.tsx", root), "utf8"),
     readFile(new URL("data/eggs-weight-corpus.ts", root), "utf8"),
     readFile(new URL("data/pubmed-discovery.json", root), "utf8"),
   ]);
@@ -48,7 +51,27 @@ test("evidence corpus keeps discovery separate from assessed evidence", async ()
   assert.equal(discoveryArtifact.recordsFetched, 164);
   assert.equal(discoveryArtifact.records.length, discoveryArtifact.recordsFetched);
   assert.match(discoveryArtifact.evidencePolicy, /Discovery is not evidence/);
-  assert.match(page, /Load-bearing evidence/);
-  assert.match(page, /Inspect quality and provenance/);
-  assert.match(page, /What would change the answer\?/);
+  assert.match(evidencePage, /Inspect the evidence, one source at a time/);
+  assert.match(evidenceBrowser, /Inspect quality and provenance/);
+  assert.match(synthesisPage, /Load-bearing evidence/);
+  assert.match(synthesisPage, /What would change the answer\?/);
+  assert.match(discoveryPage, /Keep discovery separate from evidence/);
+});
+
+test("the investigation is split into focused navigable routes", async () => {
+  const [frame, navigation, inventory, discoveries, synthesis] = await Promise.all([
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/components/case-navigation.tsx", root), "utf8"),
+    readFile(new URL("app/inventory/page.tsx", root), "utf8"),
+    readFile(new URL("app/discoveries/page.tsx", root), "utf8"),
+    readFile(new URL("app/synthesis/page.tsx", root), "utf8"),
+  ]);
+
+  assert.doesNotMatch(frame, /className="evidence-section"/);
+  assert.match(navigation, /href: "\/evidence"/);
+  assert.match(navigation, /href: "\/inventory"/);
+  assert.match(navigation, /href: "\/synthesis"/);
+  assert.match(inventory, /controlled-trial records/);
+  assert.match(discoveries, /Evidence intake/);
+  assert.match(synthesis, /Provisional synthesis/);
 });

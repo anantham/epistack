@@ -10,6 +10,8 @@ The central idea is simple:
 
 The project is currently in the methodology and prototype-design phase.
 
+The current eggs vertical slice is organized as a small case workspace rather than one long report. Frame, Evidence, Assess, and Synthesize are separate routes, with dedicated Trial Inventory and Discovery Queue views. This keeps source inspection, unassessed intake, and conclusions from collapsing into an overwhelming scroll.
+
 ## The problem
 
 Off-the-shelf deep-research systems are increasingly good at finding sources and producing fluent, cited reports. But a well-cited report can still be wrong in important ways:
