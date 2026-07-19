@@ -142,7 +142,7 @@ Be decisive but honest. Explicitly account for: what the evidence genuinely SETT
   "for": ["a concrete reason to do it, grounded in a specific finding"],
   "against": ["a concrete reason not to / a real risk, grounded in a specific finding"],
   "crux": "the single unresolved question the decision most hinges on",
-  "decisiveTest": "the n=1 experiment that would resolve the crux for THEM — exactly what to measure, and for how long",
+  "decisiveTest": "an n=1 experiment that would most INFORM the crux for THEM (what to measure, for how long) AND an honest note on what it still would NOT resolve (e.g. a biomarker response test does not settle long-term outcomes); if no single test suffices, say so",
   "confidence": "low | medium | high",
   "confidenceNote": "honest calibration: what's genuinely contested, out-of-model risk (funding environment, single-analyst limits), and what population data can't tell this individual",
   "missing": ["an important source, perspective, or data NOT represented in the evidence above"]

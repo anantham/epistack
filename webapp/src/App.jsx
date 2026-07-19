@@ -461,7 +461,7 @@ function ResearchLane({ axis, lane, stats, brief, now, onRun, question }) {
           <EvidenceBar axis={axis} stats={stats} />
           <div className="lane-buckets">
             <span className={`lane-verdict v-${v.key}`}>{v.label}</span>
-            <span className="lane-u">uncertainty {Math.round(stats.u * 100)}%</span>
+            <span className="lane-u">spread {Math.round(stats.u * 100)}%</span>
             {buckets.map((b, i) => (
               <span key={i} className={`bucket${b.n ? ' hit' : ''}`}>
                 {b.r} <b>{b.n}</b>
@@ -495,9 +495,10 @@ function GraphState({ axes, statsById }) {
       <div className="gs-head">
         <div className="gs-title-wrap">
           <span className="rlabel">the caring graph</span>
-          <div className="gs-title">uncertainty across {axes.length} {axes.length === 1 ? 'axis' : 'axes'}</div>
+          <div className="gs-title">evidence spread across {axes.length} {axes.length === 1 ? 'axis' : 'axes'}</div>
           <div className="gs-note">
-            {examined}/{axes.length} examined{contested ? ` · ${contested} genuinely contested` : ''}
+            {examined}/{axes.length} examined{contested ? ` · ${contested} genuinely contested` : ''} · spread of what agents
+            retrieved, not probability of truth
           </div>
         </div>
         <div className="gs-meter">
@@ -871,7 +872,7 @@ function ResearchStage({ question, data, pdata, context }) {
               )}
               {decision.decisiveTest && (
                 <div className="dp-test">
-                  <span className="rlabel">the test that settles it for you (n=1)</span>
+                  <span className="rlabel">an n=1 test that would inform this (may not fully resolve it)</span>
                   {decision.decisiveTest}
                 </div>
               )}
