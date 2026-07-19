@@ -38,6 +38,7 @@ type PersistedWorkspace = {
   decisionContext?: string;
   result?: DecompositionResponse | null;
   contextAnswers?: Record<string, string>;
+  contextSelections?: Record<string, string[]>;
   elicitationIndex?: number;
   phase?: "idle" | "eliciting" | "review";
 };
@@ -107,6 +108,7 @@ export default function Home() {
   const [elicitationIndex, setElicitationIndex] = useState(0);
   const [revealedClusters, setRevealedClusters] = useState<number[]>([]);
   const [contextAnswers, setContextAnswers] = useState<Record<string, string>>({});
+  const [contextSelections, setContextSelections] = useState<Record<string, string[]>>({});
   const [error, setError] = useState("");
   const [loadingStep, setLoadingStep] = useState(0);
   const [analysisElapsed, setAnalysisElapsed] = useState(0);
@@ -181,6 +183,9 @@ export default function Home() {
         if (savedWorkspace.contextAnswers && typeof savedWorkspace.contextAnswers === "object") {
           setContextAnswers(savedWorkspace.contextAnswers);
         }
+        if (savedWorkspace.contextSelections && typeof savedWorkspace.contextSelections === "object") {
+          setContextSelections(savedWorkspace.contextSelections);
+        }
         if (typeof savedWorkspace.elicitationIndex === "number") {
           setElicitationIndex(Math.max(0, savedWorkspace.elicitationIndex));
         }
@@ -222,6 +227,7 @@ export default function Home() {
           decisionContext,
           result,
           contextAnswers,
+          contextSelections,
           elicitationIndex,
           phase: persistedPhase,
         });
@@ -231,7 +237,7 @@ export default function Home() {
       }
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [contextAnswers, decisionContext, elicitationIndex, phase, prompt, result, storageReady]);
+  }, [contextAnswers, contextSelections, decisionContext, elicitationIndex, phase, prompt, result, storageReady]);
 
   useEffect(() => {
     if (phase !== "analyzing") return;
@@ -369,7 +375,10 @@ export default function Home() {
     setActiveTraceStep(0);
     setElicitationIndex(0);
     setRevealedClusters([]);
-    if (!skipElicitation) setContextAnswers({});
+    if (!skipElicitation) {
+      setContextAnswers({});
+      setContextSelections({});
+    }
     revealedClustersRef.current.clear();
     setLoadingStep(0);
     setAnalysisElapsed(0);
@@ -459,10 +468,25 @@ export default function Home() {
     setConnectionStatus({ state: "idle", message: "Saved key removed from this browser." });
   }
 
+  function toggleContextOption(questionId: string, option: string) {
+    setContextSelections((current) => {
+      const selected = current[questionId] ?? [];
+      const next = selected.includes(option)
+        ? selected.filter((item) => item !== option)
+        : [...selected, option];
+      return { ...current, [questionId]: next };
+    });
+  }
+
   async function refineWithContext() {
     if (!result) return;
     const additions = result.decomposition.contextQuestions
-      .map((question) => ({ question, answer: contextAnswers[question.id]?.trim() }))
+      .map((question) => {
+        const selected = contextSelections[question.id] ?? [];
+        const typed = contextAnswers[question.id]?.trim();
+        const answer = Array.from(new Set([...selected, ...(typed ? [typed] : [])])).join("; ");
+        return { question, answer };
+      })
       .filter((item) => item.answer)
       .map((item) => `${item.question.label}: ${item.answer}`);
     if (!additions.length) {
@@ -660,13 +684,14 @@ export default function Home() {
                   >?</button>
                 </div>
                 <h1>{currentContextQuestion.question}</h1>
-                <div className="context-options" aria-label="Suggested answers">
+                <div className="context-options" aria-label="Suggested answers; choose any that apply">
                   {currentContextQuestion.options.map((option) => (
                     <button
                       type="button"
-                      className={(contextAnswers[currentContextQuestion.id] ?? "") === option ? "selected" : ""}
+                      className={(contextSelections[currentContextQuestion.id] ?? []).includes(option) ? "selected" : ""}
                       key={option}
-                      onClick={() => setContextAnswers((current) => ({ ...current, [currentContextQuestion.id]: option }))}
+                      aria-pressed={(contextSelections[currentContextQuestion.id] ?? []).includes(option)}
+                      onClick={() => toggleContextOption(currentContextQuestion.id, option)}
                     >{option}</button>
                   ))}
                 </div>

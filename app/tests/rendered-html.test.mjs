@@ -169,6 +169,10 @@ test("arbitrary questions use a key-gated elicitation and refinement path", asyn
   assert.match(frame, /Context interview/);
   assert.match(frame, /type your answer/);
   assert.match(frame, /currentContextQuestion\.options\.map/);
+  assert.match(frame, /toggleContextOption/);
+  assert.match(frame, /contextSelections/);
+  assert.match(frame, /aria-pressed=/);
+  assert.match(frame, /choose any that apply/);
   assert.match(frame, /loadingSteps/);
   assert.match(frame, /bisecting the question/);
   assert.match(frame, /clustering related ideas/);
