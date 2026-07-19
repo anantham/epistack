@@ -74,3 +74,4 @@ export type DecompositionResponse = {
 };
 
 export const decompositionSessionKey = "epistack:decomposition:v1";
+export const interpretationMapStorageKey = "epistack:interpretation-map:v1";

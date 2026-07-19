@@ -5,12 +5,14 @@ import type {
   DecompositionResponse,
   QuestionHighlight,
 } from "../lib/decomposition";
-import { decompositionSessionKey } from "../lib/decomposition";
+import { decompositionSessionKey, interpretationMapStorageKey } from "../lib/decomposition";
 
 const defaultOpenRouterModel = "anthropic/claude-sonnet-4.6";
 const brandCharacters = [..."epistack"];
 const analysisDurationsKey = "epistack:analysis-durations:v1";
 const legacyAnalysisDurationsKey = "epistack_decomp_ms";
+const preferencesStorageKey = "epistack:preferences:v1";
+const workspaceStorageKey = "epistack:workspace:v1";
 const provisionalEstimateMs = 90_000;
 const loadingSteps = [
   "bisecting the question",
@@ -29,6 +31,15 @@ const loadingSteps = [
 
 type AnalysisPhase = "idle" | "analyzing" | "eliciting" | "review" | "transitioning" | "error";
 type ConnectionStatus = { state: "idle" | "checking" | "valid" | "invalid"; message: string };
+type PersistedPreferences = { apiKey?: string; model?: string };
+type PersistedWorkspace = {
+  prompt?: string;
+  decisionContext?: string;
+  result?: DecompositionResponse | null;
+  contextAnswers?: Record<string, string>;
+  elicitationIndex?: number;
+  phase?: "idle" | "eliciting" | "review";
+};
 
 type TextSegment = {
   text: string;
@@ -99,6 +110,7 @@ export default function Home() {
   const [loadingStep, setLoadingStep] = useState(0);
   const [analysisElapsed, setAnalysisElapsed] = useState(0);
   const [analysisDurations, setAnalysisDurations] = useState<number[]>([]);
+  const [storageReady, setStorageReady] = useState(false);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const storyCueRefs = useRef(new Map<number, HTMLButtonElement>());
   const storyLandingRefs = useRef(new Map<number, HTMLElement>());
@@ -137,6 +149,87 @@ export default function Home() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const savedPreferences = JSON.parse(window.localStorage.getItem(preferencesStorageKey) || "{}") as PersistedPreferences;
+        if (typeof savedPreferences.apiKey === "string") {
+          setOpenRouterKey(savedPreferences.apiKey);
+          if (savedPreferences.apiKey.trim()) {
+            setConnectionStatus({ state: "idle", message: "Saved in this browser. Press Enter to revalidate." });
+          }
+        }
+        if (typeof savedPreferences.model === "string" && savedPreferences.model.trim()) {
+          setOpenRouterModel(savedPreferences.model);
+        }
+      } catch {
+        // Invalid local preferences should never block the app.
+      }
+
+      try {
+        const savedWorkspace = JSON.parse(window.localStorage.getItem(workspaceStorageKey) || "{}") as PersistedWorkspace;
+        const legacyResult = window.sessionStorage.getItem(decompositionSessionKey);
+        const hasSavedResult = Object.prototype.hasOwnProperty.call(savedWorkspace, "result");
+        const restoredResult = hasSavedResult
+          ? savedWorkspace.result ?? null
+          : legacyResult ? JSON.parse(legacyResult) as DecompositionResponse : null;
+        if (typeof savedWorkspace.prompt === "string") setPrompt(savedWorkspace.prompt);
+        if (typeof savedWorkspace.decisionContext === "string") setDecisionContext(savedWorkspace.decisionContext);
+        if (savedWorkspace.contextAnswers && typeof savedWorkspace.contextAnswers === "object") {
+          setContextAnswers(savedWorkspace.contextAnswers);
+        }
+        if (typeof savedWorkspace.elicitationIndex === "number") {
+          setElicitationIndex(Math.max(0, savedWorkspace.elicitationIndex));
+        }
+        if (restoredResult?.decomposition) {
+          setResult(restoredResult);
+          if (!savedWorkspace.prompt) setPrompt(restoredResult.prompt);
+          if (!savedWorkspace.decisionContext) setDecisionContext(restoredResult.decisionContext ?? "");
+          const canResumeInterview = savedWorkspace.phase === "eliciting" && restoredResult.decomposition.contextQuestions.length > 0;
+          setPhase(canResumeInterview ? "eliciting" : "review");
+        }
+      } catch {
+        // A stale investigation cache can be replaced by the next successful run.
+      }
+      setStorageReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const preferences = JSON.stringify({ apiKey: openRouterKey, model: openRouterModel });
+        window.localStorage.setItem(preferencesStorageKey, preferences);
+      } catch {
+        // Browser persistence is a convenience; requests still work without it.
+      }
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [openRouterKey, openRouterModel, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady || phase === "analyzing" || phase === "transitioning") return;
+    const timer = window.setTimeout(() => {
+      try {
+        const persistedPhase = phase === "eliciting" ? "eliciting" : result ? "review" : "idle";
+        const workspace = JSON.stringify({
+          prompt,
+          decisionContext,
+          result,
+          contextAnswers,
+          elicitationIndex,
+          phase: persistedPhase,
+        });
+        window.localStorage.setItem(workspaceStorageKey, workspace);
+      } catch {
+        // Keep the live session usable even if storage is unavailable or full.
+      }
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [contextAnswers, decisionContext, elicitationIndex, phase, prompt, result, storageReady]);
 
   useEffect(() => {
     if (phase !== "analyzing") return;
@@ -310,6 +403,8 @@ export default function Home() {
 
       setResult(payload);
       window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
+      window.localStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
+      window.localStorage.removeItem(interpretationMapStorageKey);
       setDecisionContext(contextForRequest);
       setActiveCluster(-1);
       setActiveTraceStep(0);
@@ -353,6 +448,13 @@ export default function Home() {
     } catch {
       setConnectionStatus({ state: "invalid", message: "Could not reach OpenRouter. Check the connection and try again." });
     }
+  }
+
+  function forgetSavedSettings() {
+    window.localStorage.removeItem(preferencesStorageKey);
+    setOpenRouterKey("");
+    setOpenRouterModel(defaultOpenRouterModel);
+    setConnectionStatus({ state: "idle", message: "Saved key removed from this browser." });
   }
 
   async function refineWithContext() {
@@ -405,6 +507,7 @@ export default function Home() {
     if (!result) return;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(result));
+    window.localStorage.setItem(decompositionSessionKey, JSON.stringify(result));
     setPhase("transitioning");
     await wait(reducedMotion ? 80 : 800);
     window.location.assign("/map");
@@ -474,7 +577,8 @@ export default function Home() {
                   <i aria-hidden="true" />{connectionStatus.message}
                 </p>
                 <div className="settings-actions">
-                  <button type="button" className="settings-info" aria-label="Key privacy" data-tooltip="The key stays in memory for this tab and is never added to the case artifact.">?</button>
+                  <button type="button" className="settings-info" aria-label="Key privacy" data-tooltip="Saved in this browser only. Never added to the case artifact or hosted environment.">?</button>
+                  <button type="button" className="settings-info settings-forget" aria-label="Forget saved key and model" data-tooltip="Forget saved key and model" onClick={forgetSavedSettings}>⌫</button>
                   <button
                     type="submit"
                     className="settings-validate"

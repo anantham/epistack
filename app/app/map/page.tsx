@@ -9,6 +9,7 @@ import {
 import pubmedDiscovery from "../../data/pubmed-discovery.json";
 import {
   decompositionSessionKey,
+  interpretationMapStorageKey,
   type BranchStatus,
   type ContextQuestion,
   type DecompositionCluster,
@@ -410,6 +411,24 @@ function buildQuestion(axes: Axis[], template: string) {
   });
 }
 
+type PersistedInterpretationMap = {
+  prompt: string;
+  decisionContext: string;
+  axes: Axis[];
+  claimTemplate: string;
+  knownUnknowns: string[];
+  contextQuestions: ContextQuestion[];
+  clusters: DecompositionCluster[];
+  caseId: string;
+  caseSummary: string;
+  sourceMode: string;
+  focused: { axisId: string; branchId: string };
+  showRationale: boolean;
+  newBranches: Record<string, string>;
+  claimCreated: boolean;
+  prior: number;
+};
+
 export default function InterpretationMapPage() {
   const branchSequence = useRef(0);
   const [ready, setReady] = useState(false);
@@ -432,7 +451,36 @@ export default function InterpretationMapPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const stored = window.sessionStorage.getItem(decompositionSessionKey);
+      const savedMap = window.localStorage.getItem(interpretationMapStorageKey);
+      if (savedMap) {
+        try {
+          const workspace = JSON.parse(savedMap) as PersistedInterpretationMap;
+          if (Array.isArray(workspace.axes) && workspace.axes.length > 0) {
+            setPrompt(workspace.prompt);
+            setDecisionContext(workspace.decisionContext);
+            setAxes(workspace.axes);
+            setClaimTemplate(workspace.claimTemplate);
+            setKnownUnknowns(workspace.knownUnknowns);
+            setContextQuestions(workspace.contextQuestions);
+            setClusters(workspace.clusters);
+            setCaseId(workspace.caseId);
+            setCaseSummary(workspace.caseSummary);
+            setSourceMode(workspace.sourceMode);
+            setFocused(workspace.focused);
+            setShowRationale(workspace.showRationale);
+            setNewBranches(workspace.newBranches);
+            setClaimCreated(workspace.claimCreated);
+            setPrior(workspace.prior);
+            setReady(true);
+            return;
+          }
+        } catch {
+          window.localStorage.removeItem(interpretationMapStorageKey);
+        }
+      }
+
+      const stored = window.localStorage.getItem(decompositionSessionKey)
+        || window.sessionStorage.getItem(decompositionSessionKey);
       if (stored) {
         try {
           const response = JSON.parse(stored) as DecompositionResponse;
@@ -452,6 +500,7 @@ export default function InterpretationMapPage() {
             branchId: (selectedBranch(nextAxes[0]) ?? nextAxes[0].branches[0]).id,
           });
         } catch {
+          window.localStorage.removeItem(decompositionSessionKey);
           window.sessionStorage.removeItem(decompositionSessionKey);
         }
       }
@@ -459,6 +508,52 @@ export default function InterpretationMapPage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const workspace: PersistedInterpretationMap = {
+          prompt,
+          decisionContext,
+          axes,
+          claimTemplate,
+          knownUnknowns,
+          contextQuestions,
+          clusters,
+          caseId,
+          caseSummary,
+          sourceMode,
+          focused,
+          showRationale,
+          newBranches,
+          claimCreated,
+          prior,
+        };
+        window.localStorage.setItem(interpretationMapStorageKey, JSON.stringify(workspace));
+      } catch {
+        // Editing remains available even when browser storage is unavailable.
+      }
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [
+    axes,
+    caseId,
+    caseSummary,
+    claimCreated,
+    claimTemplate,
+    clusters,
+    contextQuestions,
+    decisionContext,
+    focused,
+    knownUnknowns,
+    newBranches,
+    prior,
+    prompt,
+    ready,
+    showRationale,
+    sourceMode,
+  ]);
 
   const activeQuestion = useMemo(() => buildQuestion(axes, claimTemplate), [axes, claimTemplate]);
   const activeAxis = axes.find((axis) => axis.id === focused.axisId) ?? axes[0];

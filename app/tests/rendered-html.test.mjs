@@ -213,3 +213,20 @@ test("settings validate the key, credits, and model with distinct failures", asy
   assert.doesNotMatch(failures, /message: rawMessage \|\|/);
   assert.match(api, /X-OpenRouter-Metadata/);
 });
+
+test("device-local settings and investigation state survive reloads", async () => {
+  const [frame, map] = await Promise.all([
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/map/page.tsx", root), "utf8"),
+  ]);
+
+  assert.match(frame, /epistack:preferences:v1/);
+  assert.match(frame, /epistack:workspace:v1/);
+  assert.match(frame, /localStorage\.setItem\(preferencesStorageKey/);
+  assert.match(frame, /localStorage\.setItem\(workspaceStorageKey/);
+  assert.match(frame, /forgetSavedSettings/);
+  assert.match(frame, /Saved in this browser/);
+  assert.match(map, /localStorage\.getItem\(decompositionSessionKey\)/);
+  assert.match(map, /localStorage\.setItem\(interpretationMapStorageKey/);
+  assert.doesNotMatch(frame, /localStorage\.setItem\([^\n]*openRouterKey[^\n]*\)/);
+});
