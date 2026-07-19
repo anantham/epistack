@@ -84,12 +84,6 @@ main {
   display: inline-block;
 }
 
-.brand-intro i {
-  animation: brand-character-in 320ms 880ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
-  color: var(--green);
-  font-style: normal;
-}
-
 .intro-surface {
   opacity: 0;
   pointer-events: none;
@@ -3207,7 +3201,6 @@ h2 {
   }
 
   .brand-intro span,
-  .brand-intro i,
   .question-composer,
   .composer-submit,
   .elicitation-card {

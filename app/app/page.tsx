@@ -519,7 +519,6 @@ export default function Home() {
         {brandCharacters.map((character, index) => (
           <span key={`${character}-${index}`} style={{ animationDelay: `${index * 110}ms` }} aria-hidden="true">{character}</span>
         ))}
-        <i aria-hidden="true">.</i>
       </div>
 
       <div className={`intro-surface ${introComplete ? "is-ready" : ""}`} aria-hidden={!introComplete}>

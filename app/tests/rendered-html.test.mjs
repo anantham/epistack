@@ -31,6 +31,7 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(frame, /animateStoryClusterFlight/);
   assert.match(frame, /flying-cue/);
   assert.match(frame, /brand-intro/);
+  assert.doesNotMatch(frame, /<i aria-hidden="true">\.<\/i>/);
   assert.match(frame, /brandCharacters/);
   assert.match(frame, /3300/);
   assert.match(frame, /placeholder="what is your question\?"/);
