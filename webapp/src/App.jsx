@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect, useEffect } from 'react'
+import { useState, useRef, useLayoutEffect, useEffect, useMemo } from 'react'
 
 const prefersReduced =
   typeof window !== 'undefined' &&
@@ -268,6 +268,462 @@ function PersonalizedMap({ data, pdata, onRedo }) {
   )
 }
 
+// Stage 3 · DEEP RESEARCH — dispatch one web-searching agent per still-open axis;
+// each returns findings tagged back to the axis's candidate resolutions (the "filtered graph" filling in).
+const norm = (s) => String(s || '').toLowerCase().trim()
+const matchRes = (a, b) => {
+  const x = norm(a), y = norm(b)
+  return !!x && !!y && (x === y || x.includes(y) || y.includes(x))
+}
+
+// evidence weight by confidence; drives the histogram + uncertainty (normalised entropy)
+const CONF_W = { high: 3, medium: 2, low: 1 }
+function axisStats(axis, findings) {
+  const res = axis.resolutions || []
+  const wOf = (arr) => arr.reduce((s, f) => s + (CONF_W[norm(f.confidence)] || 1), 0)
+  const buckets = res.map((r) => ({ r, w: wOf(findings.filter((f) => matchRes(f.supports, r))) }))
+  const unclearW = wOf(findings.filter((f) => !res.some((r) => matchRes(f.supports, r))))
+  const segs = unclearW > 0 ? [...buckets, { r: 'unclear', w: unclearW, unclear: true }] : buckets.length ? buckets : [{ r: '—', w: 0 }]
+  const total = segs.reduce((s, b) => s + b.w, 0)
+  const maxW = Math.max(1, ...segs.map((b) => b.w))
+  const k = Math.max(res.length, 2)
+  let u = 1 // no evidence → maximum uncertainty (uniform prior over resolutions)
+  if (total > 0) {
+    const ps = segs.map((b) => b.w / total).filter((p) => p > 0)
+    const H = -ps.reduce((s, p) => s + p * Math.log(p), 0)
+    u = Math.min(1, H / Math.log(k))
+  }
+  const top = [...segs].filter((b) => !b.unclear).sort((a, b) => b.w - a.w)[0]
+  return { segs, total, maxW, u, evidence: findings.length, top: top && top.w > 0 ? top.r : null }
+}
+function verdict(s) {
+  if (s.evidence === 0) return { key: 'unexamined', label: 'unexamined' }
+  if (s.u <= 0.35) return { key: 'converging', label: `converging → ${s.top || '—'}` }
+  if (s.u >= 0.72) return { key: 'contested', label: 'genuinely contested' }
+  return { key: 'leaning', label: `leaning → ${s.top || '—'}` }
+}
+
+// one segmented bar = the evidence distribution across an axis's resolutions (the "histogram")
+function EvidenceBar({ axis, stats }) {
+  const { segs, total, maxW } = stats
+  return (
+    <div className="ebar" style={{ '--c': axis.color || 'var(--accent)' }} aria-hidden="true">
+      {segs.map((s, i) => {
+        const pct = total > 0 ? (s.w / total) * 100 : 100 / segs.length
+        const op = total === 0 ? 0.14 : s.unclear ? 0.32 : 0.35 + 0.65 * (s.w / maxW)
+        return (
+          <span
+            key={i}
+            className={`eseg${s.unclear ? ' unclear' : ''}${total === 0 ? ' empty' : ''}`}
+            style={{ width: pct + '%', opacity: op }}
+            title={`${s.r}: ${s.w || 0}`}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+// the deep-dive subagent's output — a full provenance card for ONE study
+function ProvenanceCard({ p }) {
+  const tier = norm(p.journal_tier)
+  const tierClass = /top|reputable|high|q1/.test(tier) ? 'good' : /predator|preprint|low|q3|q4|unknown/.test(tier) ? 'warn' : ''
+  const tierShort = String(p.journal_tier || '').split(/[—,.;(]/)[0].trim().slice(0, 46)
+  const openGood = /yes|public|open|available|github|osf|zenodo|dryad/i.test(String(p.open_data || '')) && !/no\b|not |unclear/i.test(String(p.open_data || ''))
+  const critiqued = p.critiques && !/^(none|no known|not )/i.test(String(p.critiques).trim())
+  const rows = [
+    ['design', p.design],
+    ['sample', p.n],
+    ['effect size', p.effect],
+    ['p-value', p.pvalue],
+    ['exposure', p.exposure],
+    ['population', p.population],
+    ['year', p.year],
+    ['journal', p.journal && `${p.journal}${p.journal_tier ? ` — ${p.journal_tier}` : ''}`],
+    ['peer-reviewed', typeof p.peer_reviewed === 'boolean' ? (p.peer_reviewed ? 'yes' : 'no') : p.peer_reviewed],
+    ['investigators', p.investigators],
+    ['funding', p.funding],
+    ['conflicts', p.coi],
+    ['open data', p.open_data],
+    ['critiques / replications', p.critiques],
+    ['limitations', p.limitations],
+  ].filter(([, v]) => v)
+  return (
+    <div className="prov">
+      <div className="prov-chips">
+        {p.journal_tier && <span className={`pchip ${tierClass}`} title={p.journal_tier}>{tierClass === 'good' ? '◆ ' : tierClass === 'warn' ? '△ ' : ''}{tierShort}</span>}
+        <span className={`pchip ${openGood ? 'good' : 'warn'}`}>{openGood ? '◆ open data' : '△ data not open'}</span>
+        {critiqued && <span className="pchip warn">△ critiqued</span>}
+        {p.pvalue && <span className="pchip">p {p.pvalue}</span>}
+      </div>
+      <div className="prov-grid">
+        {rows.map(([k, v]) => (
+          <div className={`prov-row${k === 'critiques / replications' && critiqued ? ' hot' : ''}`} key={k}>
+            <span className="prov-k">{k}</span>
+            <span className="prov-v">{String(v)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FindingCard({ f, question, axisName }) {
+  const coi = f.coi && !/^none/i.test(String(f.coi))
+  const conf = norm(f.confidence)
+  const [dd, setDd] = useState(null) // null | 'loading' | result | {error}
+  async function deepdive() {
+    setDd('loading')
+    try {
+      const r = await fetch('/api/deepdive', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question, axis: axisName, claim: f.claim, source: f.source, url: f.url }),
+      })
+      const j = await r.json()
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+      setDd(j)
+    } catch (e) {
+      setDd({ error: String(e.message || e) })
+    }
+  }
+  return (
+    <div className={`finding conf-${conf}`}>
+      <div className="finding-claim">{f.claim}</div>
+      {f.relevance && <div className="finding-rel">for you: {f.relevance}</div>}
+      <div className="finding-tags">
+        {f.supports && <span className="tag t-supports">→ {f.supports}</span>}
+        {f.kind && <span className="tag t-kind">{f.kind}</span>}
+        {f.n && <span className="tag t-n">n={f.n}</span>}
+        {f.confidence && <span className={`tag t-conf c-${conf}`}>{f.confidence}</span>}
+        {coi && <span className="tag t-coi">⚠ {f.coi}</span>}
+      </div>
+      <div className="finding-foot">
+        {f.url && (
+          <a className="finding-src" href={f.url} target="_blank" rel="noreferrer">
+            {f.source || f.url}
+            {f.year ? ` · ${f.year}` : ''} ↗
+          </a>
+        )}
+        <button className="dd-btn" onClick={deepdive} disabled={dd === 'loading'}>
+          {dd === 'loading' ? '🔬 subagent digging…' : dd && !dd.error ? '↻ re-dig' : '🔬 deep-dive'}
+        </button>
+      </div>
+      {dd === 'loading' && (
+        <div className="dd-working">
+          <span className="scan" />
+          <span>a subagent is verifying methodology, sample, journal, funding, open-data & critiques…</span>
+        </div>
+      )}
+      {dd && dd !== 'loading' && dd.error && <div className="dd-err">deep-dive failed: {dd.error}</div>}
+      {dd && dd !== 'loading' && !dd.error && <ProvenanceCard p={dd} />}
+    </div>
+  )
+}
+
+function ResearchLane({ axis, lane, stats, brief, now, onRun, question }) {
+  const status = lane?.status || 'idle'
+  const elapsed = lane?.t0 ? ((now - lane.t0) / 1000).toFixed(1) : null
+  const findings = lane?.findings || []
+  const buckets = (axis.resolutions || []).map((r) => ({ r, n: findings.filter((f) => matchRes(f.supports, r)).length }))
+  const other = findings.filter((f) => !(axis.resolutions || []).some((r) => matchRes(f.supports, r))).length
+  const v = verdict(stats)
+  return (
+    <div className={`lane st-${status}`} style={{ '--c': axis.color || 'var(--accent)' }}>
+      <div className="lane-head">
+        <span className="lane-dot" />
+        <span className="lane-name">{axis.name}</span>
+        {brief?.role && <span className="lane-role">{brief.role}</span>}
+        <span className={`agent-badge ab-${status}`}>
+          {status === 'idle' && 'agent idle'}
+          {status === 'searching' && <>◍ scouring the web · {elapsed}s</>}
+          {status === 'done' && <>✓ {findings.length} findings · {(lane.ms / 1000).toFixed(0)}s</>}
+          {status === 'error' && '× failed'}
+        </span>
+        {status !== 'searching' && (
+          <button className="lane-run" onClick={onRun}>
+            {status === 'idle' ? 'research →' : '↻ redo'}
+          </button>
+        )}
+      </div>
+      {axis.prompt && <div className="lane-prompt">{axis.prompt}</div>}
+
+      {status === 'searching' && (
+        <div className="lane-working">
+          <span className="scan" />
+          <span>searching, reading sources, tagging evidence to “{axis.name}”…</span>
+        </div>
+      )}
+      {status === 'error' && <div className="lane-err">{lane.err}</div>}
+
+      {findings.length > 0 && (
+        <>
+          <EvidenceBar axis={axis} stats={stats} />
+          <div className="lane-buckets">
+            <span className={`lane-verdict v-${v.key}`}>{v.label}</span>
+            <span className="lane-u">uncertainty {Math.round(stats.u * 100)}%</span>
+            {buckets.map((b, i) => (
+              <span key={i} className={`bucket${b.n ? ' hit' : ''}`}>
+                {b.r} <b>{b.n}</b>
+              </span>
+            ))}
+            {other > 0 && (
+              <span className="bucket other">
+                unclear <b>{other}</b>
+              </span>
+            )}
+          </div>
+          <div className="findings">
+            {findings.map((f, i) => (
+              <FindingCard key={i} f={f} question={question} axisName={axis.name} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Stage 3 top: the caring graph — every axis's evidence histogram + uncertainty, dropping live
+function GraphState({ axes, statsById }) {
+  const us = axes.map((a) => statsById[a.id].u)
+  const agg = us.length ? Math.round((us.reduce((x, y) => x + y, 0) / us.length) * 100) : 100
+  const examined = axes.filter((a) => statsById[a.id].evidence > 0).length
+  const contested = axes.filter((a) => statsById[a.id].evidence > 0 && statsById[a.id].u >= 0.72).length
+  return (
+    <div className="graphstate">
+      <div className="gs-head">
+        <div className="gs-title-wrap">
+          <span className="rlabel">the caring graph</span>
+          <div className="gs-title">uncertainty across {axes.length} {axes.length === 1 ? 'axis' : 'axes'}</div>
+          <div className="gs-note">
+            {examined}/{axes.length} examined{contested ? ` · ${contested} genuinely contested` : ''}
+          </div>
+        </div>
+        <div className="gs-meter">
+          <div className="gs-pct">
+            <b>{agg}</b>%
+          </div>
+          <div className="gs-track">
+            <span className="gs-fill" style={{ width: agg + '%' }} />
+          </div>
+        </div>
+      </div>
+      <div className="gs-rows">
+        {axes.map((a) => {
+          const s = statsById[a.id]
+          const v = verdict(s)
+          return (
+            <div className="gs-row" key={a.id} style={{ '--c': a.color || 'var(--accent)' }}>
+              <span className="gs-name">{a.name}</span>
+              <EvidenceBar axis={a} stats={s} />
+              <span className={`gs-verdict v-${v.key}`}>{v.label}</span>
+              <span className="gs-u">{Math.round(s.u * 100)}%</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ResearchStage({ question, data, pdata, context }) {
+  const axes = useMemo(() => {
+    if (pdata) {
+      const byId = Object.fromEntries((pdata.clusters || []).map((c) => [c.id, c]))
+      const open = (data.clusters || []).filter((c) => (byId[c.id]?.status || 'open') === 'open')
+      const news = pdata.newClusters || []
+      const picked = [...open, ...news]
+      return picked.length ? picked : data.clusters || []
+    }
+    return data.clusters || []
+  }, [data, pdata])
+
+  const [lanes, setLanes] = useState({})
+  const [now, setNow] = useState(() => Date.now())
+  const [plan, setPlan] = useState(null) // null | 'planning' | result | {error}
+  const statsById = useMemo(
+    () => Object.fromEntries(axes.map((a) => [a.id, axisStats(a, lanes[a.id]?.findings || [])])),
+    [axes, lanes],
+  )
+  const briefFor = (id) => (plan && plan.agents ? plan.agents.find((a) => a.dimension === id) : null)
+  const briefText = (b) => (b ? `${b.focus || ''}${b.crux ? ` — crux: ${b.crux}` : ''}${b.sources ? `; prioritise: ${b.sources}` : ''}`.trim() : '')
+
+  async function planResearch() {
+    setPlan('planning')
+    try {
+      const r = await fetch('/api/plan', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          context: context || '',
+          axes: axes.map((a) => ({ id: a.id, name: a.name, prompt: a.prompt || '', resolutions: a.resolutions || [] })),
+        }),
+      })
+      const j = await r.json()
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+      setPlan(j)
+    } catch (e) {
+      setPlan({ error: String(e.message || e) })
+    }
+  }
+
+  useEffect(() => {
+    if (!Object.values(lanes).some((l) => l && l.status === 'searching')) return
+    const id = setInterval(() => setNow(Date.now()), 200)
+    return () => clearInterval(id)
+  }, [lanes])
+
+  async function research(axis) {
+    setLanes((l) => ({ ...l, [axis.id]: { status: 'searching', findings: [], t0: Date.now() } }))
+    try {
+      const r = await fetch('/api/research', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          dimensionName: axis.name,
+          dimensionPrompt: axis.prompt || '',
+          resolutions: axis.resolutions || [],
+          context: context || '',
+          brief: briefText(briefFor(axis.id)),
+        }),
+      })
+      const j = await r.json()
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+      setLanes((l) => ({
+        ...l,
+        [axis.id]: {
+          status: 'done',
+          findings: Array.isArray(j.findings) ? j.findings : [],
+          ms: Date.now() - (l[axis.id]?.t0 || Date.now()),
+        },
+      }))
+    } catch (e) {
+      setLanes((l) => ({ ...l, [axis.id]: { ...(l[axis.id] || {}), status: 'error', err: String(e.message || e) } }))
+    }
+  }
+
+  function researchAll() {
+    axes.forEach((a) => {
+      const st = lanes[a.id]?.status
+      if (st !== 'searching' && st !== 'done') research(a)
+    })
+  }
+
+  const anyRunning = axes.some((a) => lanes[a.id]?.status === 'searching')
+  const allFindings = axes.flatMap((a) => lanes[a.id]?.findings || [])
+  const doneCount = axes.filter((a) => lanes[a.id]?.status === 'done').length
+  const started = doneCount > 0 || anyRunning
+  const coiCount = allFindings.filter((f) => f.coi && !/^none/i.test(String(f.coi))).length
+  const strongCount = allFindings.filter((f) => norm(f.confidence) === 'high').length
+
+  return (
+    <div className="research">
+      <div className="research-top">
+        <div className="research-intro">
+          <h3>deep research</h3>
+          <p>
+            {axes.length} {axes.length === 1 ? 'axis' : 'axes'}
+            {pdata ? ' your context left open' : ''}. One agent per axis scours the web and tags every finding back to the
+            resolution it settles — the filtered graph filling in.
+          </p>
+        </div>
+        <button className="btn-decompose research-go" onClick={researchAll} disabled={anyRunning}>
+          {anyRunning
+            ? 'agents working…'
+            : `▶ dispatch ${axes.length} ${plan && plan.agents ? 'briefed ' : ''}${axes.length === 1 ? 'agent' : 'agents'}`}
+        </button>
+      </div>
+
+      <div className={`research-mode${context ? ' on' : ''}`}>
+        {context ? (
+          <>
+            <b>◆ personalized</b> — agents are biased to evidence about you: <span className="rm-ctx">{context.replace(/\n/g, ' · ')}</span>
+          </>
+        ) : (
+          <>
+            <b>△ generic</b> — no context yet. Do <b>2 · contextualize</b> first and the agents will filter to your open axes and prefer evidence about your subgroup.
+          </>
+        )}
+      </div>
+
+      <div className="orch">
+        {(!plan || plan === 'planning' || plan.error) && (
+          <button className="orch-btn" onClick={planResearch} disabled={plan === 'planning'}>
+            {plan === 'planning' ? '◆ orchestrator planning…' : '◆ plan the research with an orchestrator'}
+          </button>
+        )}
+        {plan === 'planning' && <span className="orch-hint">assigning a specialist to each axis…</span>}
+        {plan && plan.error && <div className="dd-err">plan failed: {plan.error}</div>}
+        {plan && plan !== 'planning' && !plan.error && (
+          <div className="plan">
+            <div className="plan-strategy">
+              <span className="rlabel">orchestrator strategy</span>
+              {plan.strategy}
+            </div>
+            <div className="plan-agents">
+              {(plan.agents || []).map((a, i) => {
+                const ax = axes.find((x) => x.id === a.dimension)
+                return (
+                  <div className="plan-agent" key={i} style={{ '--c': ax?.color || 'var(--accent)' }}>
+                    <div className="pa-head">
+                      <span className="lane-dot" />
+                      <b>{a.role}</b>
+                      <span className="pa-dim">{ax?.name || a.dimension}</span>
+                    </div>
+                    {a.focus && <div className="pa-focus">{a.focus}</div>}
+                    {a.crux && <div className="pa-crux">crux · {a.crux}</div>}
+                  </div>
+                )
+              })}
+            </div>
+            <button className="orch-btn re" onClick={planResearch}>↻ re-plan</button>
+          </div>
+        )}
+      </div>
+
+      <GraphState axes={axes} statsById={statsById} />
+
+      {started && (
+        <div className="research-summary">
+          <span>
+            <b>{allFindings.length}</b> findings
+          </span>
+          <span>
+            <b>{new Set(allFindings.map((f) => f.url)).size}</b> sources
+          </span>
+          <span>
+            <b>{strongCount}</b> high-confidence
+          </span>
+          <span className={coiCount ? 'coi-live' : ''}>
+            <b>{coiCount}</b> conflicts flagged
+          </span>
+          <span className="prog">
+            {doneCount}/{axes.length} agents done
+          </span>
+        </div>
+      )}
+
+      <div className="lanes">
+        {axes.map((a) => (
+          <ResearchLane
+            key={a.id}
+            axis={a}
+            lane={lanes[a.id]}
+            stats={statsById[a.id]}
+            brief={briefFor(a.id)}
+            now={now}
+            onRun={() => research(a)}
+            question={question}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [question, setQuestion] = useState('')
   const [phase, setPhase] = useState('landing') // landing | loading | clustered | error
@@ -288,6 +744,7 @@ export default function App() {
   const [pdata, setPdata] = useState(null)
   const [elicitAns, setElicitAns] = useState({})
   const [ctxText, setCtxText] = useState('')
+  const [ctxSummary, setCtxSummary] = useState('')
   const [step, setStep] = useState(1)
 
   const wordRefs = useRef({})
@@ -361,6 +818,7 @@ export default function App() {
     setPdata(null)
     setElicitAns({})
     setCtxText('')
+    setCtxSummary('')
     setStep(1)
     const cached = getCache()[q]
     if (cached) {
@@ -404,6 +862,7 @@ export default function App() {
       setPersonalizing(false)
       return
     }
+    setCtxSummary(context)
     try {
       const r = await fetch('/api/personalize', {
         method: 'POST',
@@ -437,6 +896,7 @@ export default function App() {
     setPdata(null)
     setElicitAns({})
     setCtxText('')
+    setCtxSummary('')
     wordRefs.current = {}
   }
 
@@ -617,19 +1077,7 @@ export default function App() {
                 </>
               ))}
 
-            {step === 3 && (
-              <div className="research-stub">
-                <h3>3 · deep research</h3>
-                <p>
-                  Point research agents at the axes still <b>open</b> for you, have them scour the web,{' '}
-                  <b>tag each finding against these dimensions</b>, and enrich the filtered graph — with the agents'
-                  progress visible as they work.
-                </p>
-                <p>
-                  <em>next build — the pipeline's third stage.</em>
-                </p>
-              </div>
-            )}
+            {step === 3 && <ResearchStage question={question} data={data} pdata={pdata} context={ctxSummary} />}
           </>
         )}
       </div>

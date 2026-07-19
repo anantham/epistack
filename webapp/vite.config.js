@@ -2,9 +2,11 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { spawn } from 'node:child_process'
 
-function runClaude(prompt) {
+function runClaude(prompt, tools) {
   return new Promise((resolve, reject) => {
-    const child = spawn('claude', ['-p'], { stdio: ['pipe', 'pipe', 'pipe'] })
+    const args = ['-p']
+    if (tools) args.push('--allowedTools', tools)
+    const child = spawn('claude', args, { stdio: ['pipe', 'pipe', 'pipe'] })
     let out = '', err = ''
     child.stdout.on('data', (d) => (out += d))
     child.stderr.on('data', (d) => (err += d))
@@ -112,11 +114,73 @@ EXISTING DIMENSIONS: ${JSON.stringify(p.existing || [])}`
   return null
 }
 
+// Stage 3 · DEEP RESEARCH — one agent per open axis, web-searching and tagging findings back to it
+function researchPrompt(p) {
+  const hasCtx = p.context && String(p.context).trim()
+  return `You are a research agent enriching a decision graph. Use web search to find REAL, current evidence for ONE axis of a decision, and tag each finding to the candidate resolution it best supports.
+
+QUESTION: ${JSON.stringify(p.question)}
+AXIS: ${JSON.stringify(p.dimensionName)} — ${JSON.stringify(p.dimensionPrompt || '')}
+CANDIDATE RESOLUTIONS (tag each finding to the closest one, verbatim): ${JSON.stringify(p.resolutions || [])}
+${hasCtx ? `THE ASKER — PERSONALIZE TO THEM. Prefer evidence about their specific subgroup/situation, prioritise studies whose population matches them, and for EACH finding say in one line how it applies to THEM:\n${JSON.stringify(p.context)}\n` : ''}
+${p.brief ? `ORCHESTRATOR BRIEF — prioritise exactly this: ${JSON.stringify(p.brief)}\n` : ''}Search the web now. Return 3-4 REAL findings — prefer meta-analyses, RCTs, and official guidelines; be quantitative; flag conflicts of interest honestly.${hasCtx ? ' Bias hard toward evidence that applies to THIS asker.' : ''} Return ONLY JSON, no prose, no fences:
+{"findings":[{"claim":"one specific, quantitative sentence","supports":"one of the candidate resolutions, verbatim (or 'unclear')","source":"publication or org","url":"a real, working URL","kind":"meta-analysis|RCT|cohort|guideline|observational|expert","n":"sample size or scale, if stated","year":"YYYY","confidence":"high|medium|low","coi":"funding/conflict note, or 'none noted'"${hasCtx ? ',"relevance":"one line: how this applies to THIS asker specifically"' : ''}}]}`
+}
+
+// The ORCHESTRATOR — plans the research: assigns each open axis its own specialised agent + brief
+function orchestratorPrompt(p) {
+  return `You are the research ORCHESTRATOR. Given a decision, the axes still open, and who is asking, produce a PLAN that gives EACH axis its own specialised research agent with a focused, personalised brief.
+
+QUESTION: ${JSON.stringify(p.question)}
+OPEN AXES: ${JSON.stringify(p.axes || [])}
+${p.context ? `THE ASKER (personalise every brief to them): ${JSON.stringify(p.context)}\n` : ''}
+Return ONLY JSON, no prose, no fences:
+{
+  "strategy": "2-3 sentences: the overall approach, what matters most for THIS asker, and what kind of evidence would actually change the decision",
+  "agents": [
+    { "dimension": "<the axis id, verbatim>", "role": "a short specialist title, e.g. 'CVD epidemiologist'", "focus": "what this agent should specifically hunt for", "sources": "which kinds of sources to prioritise", "crux": "the single finding that would most move this axis" }
+  ]
+}
+Rules: EXACTLY one agent per open axis; "dimension" must equal the given axis id verbatim. Make focus and crux concrete and personalised. Valid JSON only.`
+}
+
+// A deep-dive subagent: drill into ONE study and return a full provenance card
+function deepDivePrompt(p) {
+  return `You are a provenance subagent. Use web search to VERIFY and profile ONE study behind a claim, so a careful reader can judge how much to trust it. Read the source; find the underlying paper; check for critiques, letters, or replications.
+
+DECISION: ${JSON.stringify(p.question)}
+AXIS: ${JSON.stringify(p.axis || '')}
+CLAIM: ${JSON.stringify(p.claim)}
+SOURCE: ${JSON.stringify(p.source || '')}
+URL: ${JSON.stringify(p.url || '')}
+
+Return ONLY JSON, no prose, no fences. Be specific and quantitative; if a field is genuinely unknown after searching, use "unclear" (do NOT invent):
+{
+  "design": "study design / methodology (e.g. double-blind RCT, prospective cohort, meta-analysis of N trials)",
+  "n": "sample size / number of participants or studies pooled",
+  "effect": "effect size with 95% CI if reported (e.g. HR 1.06, 95% CI 1.03–1.10)",
+  "pvalue": "reported p-value or significance, if any",
+  "exposure": "the exact exposure/intervention (for eggs: what kind — whole vs whites, dose/day, duration)",
+  "population": "who was studied (age, health status, country)",
+  "year": "publication year",
+  "journal": "journal or venue name",
+  "journal_tier": "reputation in a few words: top-tier / reputable / low-impact / predatory / preprint (not peer-reviewed), and why",
+  "peer_reviewed": true,
+  "investigators": "principal investigators / lead authors + their institution",
+  "funding": "who funded it",
+  "coi": "declared conflicts of interest",
+  "open_data": "is the data/code publicly available? (yes + where, e.g. OSF/GitHub / no / unclear)",
+  "critiques": "known critiques, published letters, failed replications, or retraction status — or 'none found'",
+  "limitations": "the key limitations",
+  "confidence": "high|medium|low — how much weight this study deserves overall"
+}`
+}
+
 function apiPlugin() {
   return {
     name: 'epistack-api',
     configureServer(server) {
-      const handle = (buildPrompt) => (req, res) => {
+      const handle = (buildPrompt, tools) => (req, res) => {
         const json = (code, obj) => {
           res.statusCode = code
           res.setHeader('content-type', 'application/json')
@@ -135,7 +199,7 @@ function apiPlugin() {
           const prompt = buildPrompt(p)
           if (prompt == null) return json(400, { error: 'missing fields' })
           try {
-            json(200, await runClaude(prompt))
+            json(200, await runClaude(prompt, tools))
           } catch (e) {
             json(502, e)
           }
@@ -150,6 +214,15 @@ function apiPlugin() {
         handle((p) => (p.question && p.clusters ? personalizePrompt(String(p.question), p.clusters, String(p.context || '')) : null)),
       )
       server.middlewares.use('/api/suggest', handle((p) => (p.kind && p.question ? suggestPrompt(p) : null)))
+      server.middlewares.use(
+        '/api/research',
+        handle((p) => (p.question && p.dimensionName ? researchPrompt(p) : null), 'WebSearch,WebFetch'),
+      )
+      server.middlewares.use(
+        '/api/deepdive',
+        handle((p) => (p.claim ? deepDivePrompt(p) : null), 'WebSearch,WebFetch'),
+      )
+      server.middlewares.use('/api/plan', handle((p) => (p.question && p.axes ? orchestratorPrompt(p) : null)))
     },
   }
 }
