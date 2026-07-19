@@ -133,9 +133,9 @@ function decidePrompt(p) {
 
 QUESTION: ${JSON.stringify(p.question)}
 ${p.context ? `THE ASKER: ${JSON.stringify(p.context)}\n` : ''}
-EVIDENCE — dimensions, each with its findings (claim, the stance it supports, provenance, and a "dataset" hint naming the underlying cohort/data): ${JSON.stringify(p.dimensions || [])}
+EVIDENCE — dimensions, each with: its findings (claim + stance + provenance + a "dataset" hint); any RESULT-LEVEL records from deep-dived papers (each result has its own scope, estimate, typed relation, and a "verification" status: source-checked / abstract-only / review-extracted / unverified); and its INDEPENDENT EVIDENCE FAMILIES (sources grouped by shared cohort/data): ${JSON.stringify(p.dimensions || [])}
 
-Be decisive but honest. Explicitly account for: what the evidence genuinely SETTLED vs. merely performed settling; **INDEPENDENCE — group findings by their "dataset" field; sources sharing a cohort/dataset (e.g. several studies all pooling Framingham/ARIC) are ONE evidence family, not independent votes, so count families not sources and say so when apparent agreement is really one dataset counted repeatedly**; claims where rhetoric outweighs evidence; conflicts of interest; and the hard limit that population data cannot tell an individual their own response. Return ONLY JSON, no prose, no fences:
+Be decisive but honest. Explicitly account for: what the evidence genuinely SETTLED vs. merely performed settling; **REASON AT THE RESULT LEVEL where result records exist — a paper is not one vote; a single study can support one scoped claim and undercut another**; **VERIFICATION — prefer source-checked results; down-weight abstract-only and especially unverified ones**; **INDEPENDENCE — count independent evidence FAMILIES, not sources (studies sharing a cohort like Framingham/ARIC are ONE family); say so when apparent agreement is really one dataset counted repeatedly**; claims where rhetoric outweighs evidence; conflicts of interest; and the hard limit that population data cannot tell an individual their own response. Return ONLY JSON, no prose, no fences:
 {
   "answer": "the direct recommendation for THIS person, 1-2 plain sentences",
   "stance": "yes | lean-yes | it-depends | lean-no | no",
@@ -240,7 +240,8 @@ Use "unclear" for anything you cannot verify after searching (do NOT invent numb
       "status": "primary | secondary | subgroup | exploratory | post-hoc",
       "n": "sample size for THIS analysis",
       "relation": "supports | contradicts | qualifies | undercuts-method | bounds | mechanistically-explains | not-informative",
-      "relationNote": "one line: how THIS result bears on the claim under examination"
+      "relationNote": "one line: how THIS result bears on the claim under examination",
+      "verification": "how you obtained THIS result: 'source-checked' (you read the primary paper's full text / table / figure) | 'abstract-only' (only the abstract was available) | 'review-extracted' (from a secondary review or summary, not the primary paper) | 'unverified' (stated from prior knowledge, not confirmed this run). Be honest — do not claim source-checked unless you actually read the primary reporting."
     }
   ],
   "authorConclusion": {

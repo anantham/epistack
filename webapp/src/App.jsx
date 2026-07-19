@@ -331,6 +331,15 @@ const relClass = (r) => {
   if (/contradict|undercut|fails|dispute/.test(n)) return 'warn'
   return 'neutral' // qualifies · bounds · not-informative · transports
 }
+// verification status of an extracted result — how honestly we know it
+const verMeta = (v) => {
+  const n = norm(v)
+  if (/source.?check/.test(n)) return { cls: 'good', label: '✓ source-checked' }
+  if (/abstract/.test(n)) return { cls: 'warn', label: '~ abstract-only' }
+  if (/review/.test(n)) return { cls: 'warn', label: '~ review-extracted' }
+  if (/unverif/.test(n)) return { cls: 'bad', label: '⚠ unverified' }
+  return null
+}
 
 // the deep-dive subagent's output — a RESULT LEDGER (paper decomposed into its distinct results)
 function ResultLedger({ d }) {
@@ -372,6 +381,7 @@ function ResultLedger({ d }) {
             <div className="rs-top">
               {r.relation && <span className={`rs-rel rel-${relClass(r.relation)}`}>{r.relation}</span>}
               {r.status && <span className="rs-status">{r.status}</span>}
+              {verMeta(r.verification) && <span className={`rs-ver v-${verMeta(r.verification).cls}`}>{verMeta(r.verification).label}</span>}
               {r.estimate && <span className="rs-est">{r.estimate}</span>}
             </div>
             <div className="rs-statement">{r.statement}</div>
@@ -413,7 +423,7 @@ function ResultLedger({ d }) {
   )
 }
 
-function FindingCard({ f, question, axisName }) {
+function FindingCard({ f, question, axisName, rkey, onLedger }) {
   const coi = f.coi && !/^none/i.test(String(f.coi))
   const conf = norm(f.confidence)
   const [dd, setDd] = useState(null) // null | 'loading' | result | {error}
@@ -428,6 +438,7 @@ function FindingCard({ f, question, axisName }) {
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
       setDd(j)
+      onLedger?.(rkey, j) // lift the result records into the shared store for the matrix + decide
     } catch (e) {
       setDd({ error: String(e.message || e) })
     }
@@ -470,7 +481,7 @@ function FindingCard({ f, question, axisName }) {
 }
 
 // dependence grouping — cluster the axis's sources into independent evidence families
-function DependencePanel({ axis, findings, question }) {
+function DependencePanel({ axis, findings, question, onFamilies }) {
   const [dep, setDep] = useState(null) // null | 'loading' | result | {error}
   async function run() {
     setDep('loading')
@@ -487,6 +498,7 @@ function DependencePanel({ axis, findings, question }) {
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
       setDep(j)
+      onFamilies?.(axis.id, j) // lift the evidence families into the shared store for decide
     } catch (e) {
       setDep({ error: String(e.message || e) })
     }
@@ -542,7 +554,7 @@ function DependencePanel({ axis, findings, question }) {
   )
 }
 
-function ResearchLane({ axis, lane, stats, brief, now, onRun, question }) {
+function ResearchLane({ axis, lane, stats, brief, now, onRun, question, onLedger, onFamilies }) {
   const status = lane?.status || 'idle'
   const elapsed = lane?.t0 ? ((now - lane.t0) / 1000).toFixed(1) : null
   const findings = lane?.findings || []
@@ -596,10 +608,10 @@ function ResearchLane({ axis, lane, stats, brief, now, onRun, question }) {
           </div>
           <div className="findings">
             {findings.map((f, i) => (
-              <FindingCard key={i} f={f} question={question} axisName={axis.name} />
+              <FindingCard key={i} f={f} question={question} axisName={axis.name} rkey={`${axis.id}#${i}`} onLedger={onLedger} />
             ))}
           </div>
-          <DependencePanel axis={axis} findings={findings} question={question} />
+          <DependencePanel axis={axis} findings={findings} question={question} onFamilies={onFamilies} />
         </>
       )}
     </div>
@@ -781,6 +793,11 @@ function ResearchStage({ question, data, pdata, context }) {
   const [plan, setPlan] = useState(null) // null | 'planning' | result | {error}
   const [view, setView] = useState('lanes') // lanes | matrix
   const [decision, setDecision] = useState(null) // null | 'deciding' | result | {error}
+  // canonical result store, populated live by deep-dives + dependence passes; matrix & decide read from it
+  const [ledgers, setLedgers] = useState({}) // "axisId#idx" -> result ledger {study, results, authorConclusion}
+  const [families, setFamilies] = useState({}) // axisId -> dependence {families, independentCount, ...}
+  const onLedger = (k, l) => setLedgers((m) => ({ ...m, [k]: l }))
+  const onFamilies = (id, fam) => setFamilies((m) => ({ ...m, [id]: fam }))
   const statsById = useMemo(
     () => Object.fromEntries(axes.map((a) => [a.id, axisStats(a, lanes[a.id]?.findings || [])])),
     [axes, lanes],
@@ -858,18 +875,36 @@ function ResearchStage({ question, data, pdata, context }) {
         .filter((a) => (lanes[a.id]?.findings || []).length > 0)
         .map((a) => ({
           name: a.name,
-          uncertainty: Math.round((statsById[a.id]?.u ?? 1) * 100),
-          verdict: verdict(statsById[a.id]).label,
-          findings: (lanes[a.id].findings || []).map((f) => ({
-            claim: f.claim,
-            supports: f.supports,
-            source: f.source,
-            kind: f.kind,
-            confidence: f.confidence,
-            coi: f.coi,
-            year: f.year,
-            dataset: f.dataset,
-          })),
+          findings: (lanes[a.id].findings || []).map((f, i) => {
+            const led = ledgers[`${a.id}#${i}`]
+            const results = led && Array.isArray(led.results)
+              ? led.results.map((r) => ({
+                  statement: r.statement,
+                  relation: r.relation,
+                  status: r.status,
+                  estimate: r.estimate,
+                  population: r.population,
+                  verification: r.verification,
+                }))
+              : undefined
+            return {
+              claim: f.claim,
+              supports: f.supports,
+              source: f.source,
+              kind: f.kind,
+              confidence: f.confidence,
+              coi: f.coi,
+              year: f.year,
+              dataset: f.dataset,
+              ...(results ? { results, authorConclusion: led.authorConclusion?.assessment } : {}),
+            }
+          }),
+          ...(families[a.id]?.families
+            ? {
+                evidenceFamilies: families[a.id].families.map((fam) => ({ label: fam.label, members: fam.members })),
+                independentFamilyCount: families[a.id].independentCount,
+              }
+            : {}),
         }))
       const r = await fetch('/api/decide', {
         method: 'POST',
@@ -970,6 +1005,18 @@ function ResearchStage({ question, data, pdata, context }) {
             </button>
             {decision === 'deciding' && <span className="orch-hint">reading the graph, weighing conflicts, calibrating confidence…</span>}
             {decision && decision.error && <span className="dd-err">{decision.error}</span>}
+            {(() => {
+              const rc = Object.values(ledgers).reduce((s, l) => s + (Array.isArray(l?.results) ? l.results.length : 0), 0)
+              const fa = Object.keys(families).length
+              return rc > 0 || fa > 0 ? (
+                <span className="decide-src">
+                  reads {rc} result-level record{rc === 1 ? '' : 's'}
+                  {fa > 0 ? ` · ${fa} ${fa === 1 ? 'axis' : 'axes'} grouped into families` : ''}
+                </span>
+              ) : (
+                <span className="decide-src dim">tip: deep-dive & group first — decide will then reason at the result level, not shallow summaries</span>
+              )
+            })()}
           </div>
           {decision && decision !== 'deciding' && !decision.error && (
             <div className="decision-panel">
@@ -1059,6 +1106,8 @@ function ResearchStage({ question, data, pdata, context }) {
               now={now}
               onRun={() => research(a)}
               question={question}
+              onLedger={onLedger}
+              onFamilies={onFamilies}
             />
           ))}
         </div>
