@@ -21,10 +21,14 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(frame, /locateHighlights/);
   assert.match(frame, /AI is reading/);
   assert.match(frame, /Decomposition trace/);
-  assert.match(frame, /Exact language/);
+  assert.match(frame, /exact language/);
   assert.match(frame, /Hidden variable/);
   assert.match(frame, /Evidence contract/);
   assert.match(frame, /semantic clusters/);
+  assert.match(frame, /question-cue/);
+  assert.match(frame, /Inference chain/);
+  assert.match(frame, /Next inference/);
+  assert.match(frame, /activeTraceStep/);
   assert.match(frame, /window\.location\.assign\("\/map"\)/);
   assert.match(map, /Interpretation map/);
   assert.match(map, /decompositionTrace/);

@@ -870,25 +870,44 @@ h2 {
   width: 100%;
 }
 
-.annotated-question mark {
+.annotated-question .question-cue {
   --cluster-fill: var(--amber-soft);
   --cluster-ink: #6f4710;
   --cluster-wash: rgba(154, 104, 28, 0.18);
   background: transparent;
+  border: 0;
   border-radius: 5px;
   color: inherit;
+  display: inline;
+  font: inherit;
+  line-height: inherit;
+  margin: 0;
   padding: 1px 2px;
-  transition: background 350ms ease, box-shadow 350ms ease, color 350ms ease;
+  text-align: inherit;
+  transition: background 350ms ease, box-shadow 350ms ease, color 350ms ease, opacity 250ms ease;
 }
 
-.annotated-question mark.seen {
+.annotated-question .question-cue.seen {
   background: linear-gradient(180deg, transparent 18%, var(--cluster-wash) 18%);
 }
 
-.annotated-question mark.active {
+.annotated-question .question-cue.active,
+.annotated-question .question-cue.linked {
   background: var(--cluster-fill);
   box-shadow: 0 0 0 5px var(--cluster-wash);
   color: var(--cluster-ink);
+}
+
+.annotated-question .question-cue.seen:not(:disabled) {
+  cursor: pointer;
+}
+
+.annotated-question .question-cue.deemphasized {
+  opacity: 0.42;
+}
+
+.annotated-question .question-cue:disabled {
+  cursor: default;
 }
 
 .cluster-tone-0 { --cluster-fill: #dfece3; --cluster-ink: #235c43; --cluster-wash: rgba(35, 92, 67, 0.17); }
@@ -1084,7 +1103,7 @@ h2 {
 .trace-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
-  min-height: 650px;
+  min-height: 540px;
 }
 
 .cluster-list {
@@ -1152,6 +1171,84 @@ h2 {
   padding: clamp(24px, 4vw, 44px);
 }
 
+.inference-chain {
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 26px;
+}
+
+.chain-node-wrap {
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  min-width: 0;
+}
+
+.chain-node-wrap:first-child {
+  grid-template-columns: 1fr;
+}
+
+.chain-arrow {
+  align-self: center;
+  color: var(--line-dark);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 13px;
+  padding: 0 5px;
+}
+
+.inference-chain button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 11px;
+  text-align: left;
+}
+
+.inference-chain button b,
+.inference-chain button > span {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.inference-chain button > span {
+  margin-top: 5px;
+}
+
+.inference-chain button strong {
+  color: var(--ink);
+  display: -webkit-box;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 7px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.inference-chain button.passed {
+  background: var(--green-soft);
+  border-color: rgba(35, 92, 67, 0.14);
+}
+
+.inference-chain button.active {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(35, 92, 67, 0.1);
+  color: var(--green);
+}
+
+.trace-stage {
+  animation: trace-stage-enter 260ms ease-out both;
+  min-height: 270px;
+}
+
 .trace-step {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -1204,6 +1301,23 @@ h2 {
   font-family: Georgia, "Times New Roman", serif;
   font-size: 21px;
   padding: 7px 10px;
+}
+
+.cluster-equation > span {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+}
+
+.cluster-equation i {
+  color: var(--line-dark);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 14px;
+  font-style: normal;
+}
+
+.surface-step > p {
+  margin-top: 18px;
 }
 
 .trace-connector {
@@ -1260,6 +1374,34 @@ h2 {
   font-size: 10px;
   line-height: 1.45;
   margin-bottom: 5px;
+}
+
+.trace-stage-actions {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.trace-stage-actions button {
+  background: transparent;
+  border: 0;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 650;
+  padding: 8px 0;
+}
+
+.trace-stage-actions button:disabled {
+  color: var(--line-dark);
+  cursor: default;
+}
+
+.trace-stage-actions span {
+  color: var(--ink-soft);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  text-transform: uppercase;
 }
 
 .trace-actions {
@@ -1321,6 +1463,11 @@ h2 {
 @keyframes trace-enter {
   from { opacity: 0; transform: translateX(10px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes trace-stage-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .map-section {
@@ -1389,6 +1536,20 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .inference-chain {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .chain-node-wrap,
+  .chain-node-wrap:first-child {
+    grid-template-columns: 1fr;
+  }
+
+  .chain-arrow {
+    display: none;
+  }
+
   .cluster-list {
     border-bottom: 1px solid var(--line);
     border-right: 0;
@@ -1432,6 +1593,14 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .inference-chain {
+    grid-template-columns: 1fr;
+  }
+
+  .trace-stage-actions span {
+    display: none;
+  }
+
   .axis-trace ul {
     columns: 1;
   }
@@ -1439,14 +1608,15 @@ h2 {
 
 @media (prefers-reduced-motion: reduce) {
   .analysis-shell,
-  .annotated-question mark,
+  .annotated-question .question-cue,
   .analysis-progress span {
     transition-duration: 1ms;
   }
 
   .ai-orb.thinking,
   .axis-arrival,
-  .reading-caret {
+  .reading-caret,
+  .trace-stage {
     animation: none;
   }
 }

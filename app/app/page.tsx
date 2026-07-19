@@ -56,6 +56,7 @@ export default function Home() {
   const [result, setResult] = useState<DecompositionResponse | null>(null);
   const [activeHighlight, setActiveHighlight] = useState(-1);
   const [activeCluster, setActiveCluster] = useState(-1);
+  const [activeTraceStep, setActiveTraceStep] = useState(0);
   const [error, setError] = useState("");
 
   const segments = useMemo(
@@ -73,6 +74,7 @@ export default function Home() {
     setResult(null);
     setActiveHighlight(-1);
     setActiveCluster(-1);
+    setActiveTraceStep(0);
     setPhase("analyzing");
 
     try {
@@ -94,18 +96,35 @@ export default function Home() {
       }
 
       setPhase("clustering");
-      const clusterDelay = reducedMotion ? 90 : 720;
+      await wait(reducedMotion ? 10 : 180);
+      document.getElementById("trace-title")?.scrollIntoView({ block: "start", behavior: reducedMotion ? "auto" : "smooth" });
+      const traceStepDelay = reducedMotion ? 45 : 360;
       for (let index = 0; index < payload.decomposition.clusters.length; index += 1) {
         setActiveCluster(index);
-        await wait(clusterDelay);
+        for (let step = 0; step < 4; step += 1) {
+          setActiveTraceStep(step);
+          await wait(traceStepDelay);
+        }
       }
 
       window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
       setActiveCluster(0);
+      setActiveTraceStep(0);
       setPhase("review");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The decomposition could not be generated.");
       setPhase("error");
+    }
+  }
+
+  function inspectCluster(index: number, moveToTrace = false) {
+    if (!result || index < 0 || index >= result.decomposition.clusters.length) return;
+    setActiveCluster(index);
+    setActiveTraceStep(0);
+    if (moveToTrace) {
+      window.requestAnimationFrame(() => {
+        document.getElementById("trace-title")?.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
     }
   }
 
@@ -158,15 +177,22 @@ export default function Home() {
                   const clusterIndex = highlight
                     ? result?.decomposition.clusters.findIndex((cluster) => cluster.id === highlight.clusterId) ?? -1
                     : -1;
+                  const linked = clusterIndex === activeCluster && (phase === "clustering" || phase === "review");
+                  const deemphasized = activeCluster >= 0 && clusterIndex !== activeCluster && phase === "review";
                   return segment.highlightIndex === null ? (
                     <span key={index}>{segment.text}</span>
                   ) : (
-                    <mark
-                      className={`${active ? "active" : seen ? "seen" : ""} cluster-tone-${Math.max(0, clusterIndex) % 5}`}
+                    <button
+                      type="button"
+                      className={`question-cue ${active ? "active" : seen ? "seen" : ""} ${linked ? "linked" : ""} ${deemphasized ? "deemphasized" : ""} cluster-tone-${Math.max(0, clusterIndex) % 5}`}
                       key={index}
+                      disabled={!seen || clusterIndex < 0}
+                      aria-label={highlight ? `Inspect ${highlight.label}: ${segment.text}` : undefined}
+                      aria-pressed={linked}
+                      onClick={() => inspectCluster(clusterIndex, true)}
                     >
                       {segment.text}
-                    </mark>
+                    </button>
                   );
                 })}
                 {phase === "analyzing" && <span className="reading-caret" aria-hidden="true" />}
@@ -207,7 +233,9 @@ export default function Home() {
               <h2>
                 {phase === "analyzing" && "Finding words that change what evidence would count."}
                 {phase === "highlighting" && (currentHighlight?.label || "Making hidden choices visible.")}
-                {phase === "clustering" && (currentCluster?.label || "Grouping cues that imply the same variable.")}
+                {phase === "clustering" && (currentCluster
+                  ? `${currentCluster.label} · step ${activeTraceStep + 1} of 4`
+                  : "Grouping cues that imply the same variable.")}
                 {phase === "review" && "Audit the decomposition before accepting the map."}
                 {phase === "transitioning" && "The map is ready. Moving into the editing workspace."}
                 {(phase === "idle" || phase === "error") && "First inspect the wording. Then generate the map."}
@@ -216,7 +244,13 @@ export default function Home() {
                 {phase === "highlighting"
                   ? currentHighlight?.why
                   : phase === "clustering"
-                    ? currentCluster?.rationale
+                    ? activeTraceStep === 0
+                      ? "Start with the exact source language. Non-adjacent cues can belong to one semantic cluster."
+                      : activeTraceStep === 1
+                        ? currentCluster?.rationale
+                        : activeTraceStep === 2
+                          ? currentAxis?.question
+                          : "The interpretation now becomes a retrieval and extraction constraint, including explicit mismatch warnings."
                     : phase === "review"
                       ? "Each cluster below shows the exact language, inferred variable, resulting axis, candidate branches, and evidence fields this decision will require."
                   : phase === "analyzing"
@@ -233,7 +267,7 @@ export default function Home() {
                 : phase === "highlighting" && result
                   ? String(((activeHighlight + 1) / result.decomposition.highlights.length) * 42 + 18) + "%"
                   : phase === "clustering" && result
-                    ? String(((activeCluster + 1) / result.decomposition.clusters.length) * 35 + 60) + "%"
+                    ? String((((activeCluster * 4 + activeTraceStep + 1) / (result.decomposition.clusters.length * 4)) * 35) + 60) + "%"
                     : phase === "review" || phase === "transitioning" ? "100%" : "0%" }} />
             </div>
           </aside>
@@ -257,7 +291,8 @@ export default function Home() {
                     className={index === activeCluster ? `active cluster-tone-${index % 5}` : ""}
                     disabled={phase === "clustering" && index > activeCluster}
                     key={cluster.id}
-                    onClick={() => setActiveCluster(index)}
+                    onClick={() => inspectCluster(index)}
+                    aria-pressed={index === activeCluster}
                   >
                     <span>{String(index + 1).padStart(2, "0")}</span>
                     <strong>{cluster.label}</strong>
@@ -268,35 +303,74 @@ export default function Home() {
 
               {currentCluster && currentAxis && (
                 <article className="trace-detail" key={currentCluster.id}>
-                  <div className="trace-step surface-step">
-                    <span><b>01</b> Exact language</span>
-                    <div className="cue-chips">
-                      {currentCluster.highlightQuotes.map((quote) => <mark key={quote}>“{quote}”</mark>)}
-                    </div>
+                  <div className="inference-chain" aria-label="Inference chain">
+                    {[
+                      { label: "Exact cues", value: currentCluster.highlightQuotes.map((quote) => `“${quote}”`).join(" + ") },
+                      { label: "Hidden variable", value: currentCluster.latentVariable },
+                      { label: "Interpretation axis", value: currentAxis.label },
+                      { label: "Evidence contract", value: `${currentCluster.ingestionRequirements.requiredFields.length} required fields` },
+                    ].map((step, index) => (
+                      <div className="chain-node-wrap" key={step.label}>
+                        {index > 0 && <span className="chain-arrow" aria-hidden="true">→</span>}
+                        <button
+                          type="button"
+                          className={`${index === activeTraceStep ? "active" : ""} ${index < activeTraceStep ? "passed" : ""}`}
+                          onClick={() => setActiveTraceStep(index)}
+                          aria-pressed={index === activeTraceStep}
+                        >
+                          <b>{String(index + 1).padStart(2, "0")}</b>
+                          <span>{step.label}</span>
+                          <strong>{step.value}</strong>
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <div className="trace-connector" aria-hidden="true">↓ grouped because they imply</div>
-                  <div className="trace-step">
-                    <span><b>02</b> Hidden variable</span>
-                    <h3>{currentCluster.latentVariable}</h3>
-                    <p>{currentCluster.rationale}</p>
+
+                  <div className="trace-stage" key={`${currentCluster.id}-${activeTraceStep}`}>
+                    {activeTraceStep === 0 && (
+                      <div className="trace-step surface-step">
+                        <span><b>01</b> Start from exact language</span>
+                        <div className="cue-chips cluster-equation">
+                          {currentCluster.highlightQuotes.map((quote, index) => (
+                            <span key={quote}>{index > 0 && <i aria-hidden="true">+</i>}<mark>“{quote}”</mark></span>
+                          ))}
+                        </div>
+                        <p>These are the literal cues that license this interpretation. Click a highlighted word above to return to its cluster.</p>
+                      </div>
+                    )}
+                    {activeTraceStep === 1 && (
+                      <div className="trace-step">
+                        <span><b>02</b> Name the hidden variable</span>
+                        <h3>{currentCluster.latentVariable}</h3>
+                        <p>{currentCluster.rationale}</p>
+                      </div>
+                    )}
+                    {activeTraceStep === 2 && (
+                      <div className="trace-step axis-step">
+                        <span><b>03</b> Turn it into a reviewable axis</span>
+                        <h3>{currentAxis.label}</h3>
+                        <p>{currentAxis.question}</p>
+                        <div className="branch-preview">
+                          {currentAxis.branches.map((branch) => <em key={branch.id}>{branch.label}</em>)}
+                        </div>
+                      </div>
+                    )}
+                    {activeTraceStep === 3 && (
+                      <div className="trace-step ingestion-step">
+                        <span><b>04</b> Constrain evidence ingestion</span>
+                        <div className="ingestion-grid">
+                          <div><strong>Required fields</strong><ul>{currentCluster.ingestionRequirements.requiredFields.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                          <div><strong>Search concepts</strong><ul>{currentCluster.ingestionRequirements.searchConcepts.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                          <div><strong>Mismatch risk</strong><ul>{currentCluster.ingestionRequirements.mismatchRisks.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="trace-connector" aria-hidden="true">↓ becomes a reviewable axis</div>
-                  <div className="trace-step axis-step">
-                    <span><b>03</b> Interpretation axis</span>
-                    <h3>{currentAxis.label}</h3>
-                    <p>{currentAxis.question}</p>
-                    <div className="branch-preview">
-                      {currentAxis.branches.map((branch) => <em key={branch.id}>{branch.label}</em>)}
-                    </div>
-                  </div>
-                  <div className="trace-connector" aria-hidden="true">↓ constrains evidence ingestion</div>
-                  <div className="trace-step ingestion-step">
-                    <span><b>04</b> Evidence contract</span>
-                    <div className="ingestion-grid">
-                      <div><strong>Required fields</strong><ul>{currentCluster.ingestionRequirements.requiredFields.map((item) => <li key={item}>{item}</li>)}</ul></div>
-                      <div><strong>Search concepts</strong><ul>{currentCluster.ingestionRequirements.searchConcepts.map((item) => <li key={item}>{item}</li>)}</ul></div>
-                      <div><strong>Mismatch risk</strong><ul>{currentCluster.ingestionRequirements.mismatchRisks.map((item) => <li key={item}>{item}</li>)}</ul></div>
-                    </div>
+
+                  <div className="trace-stage-actions">
+                    <button type="button" onClick={() => setActiveTraceStep((step) => Math.max(0, step - 1))} disabled={activeTraceStep === 0}>← Previous</button>
+                    <span>{currentCluster.label} · {activeTraceStep + 1} / 4</span>
+                    <button type="button" onClick={() => setActiveTraceStep((step) => Math.min(3, step + 1))} disabled={activeTraceStep === 3}>Next inference →</button>
                   </div>
                 </article>
               )}
