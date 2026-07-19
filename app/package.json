@@ -15,10 +15,13 @@
     "evidence:discover": "node scripts/discover-pubmed.mjs"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.16",
+    "ai": "^7.0.31",
     "drizzle-orm": "0.45.2",
     "next": "16.2.6",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",

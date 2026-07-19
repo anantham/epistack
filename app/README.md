@@ -2,7 +2,7 @@
 
 A browser prototype of the first Epistack operator: collaborative decomposition of a vague question into a human-approved, probabilistically assessable claim.
 
-The included case uses the competition prompt about whether eggs are good to eat and narrows it to one question about weight loss.
+The included evidence case uses the competition prompt about whether eggs are good to eat, while the framing operator can now decompose arbitrary submitted questions.
 
 ## Run locally
 
@@ -15,28 +15,32 @@ npm run dev
 
 Open the local URL printed by the development server.
 
+For model-backed decomposition, copy `.env.example` to `.env.local` and set `OPENAI_API_KEY`. Without it, the app uses a clearly labeled domain-general local fallback so the interaction and artifact remain testable.
+
 ## What to try
 
-1. Decompose the starting eggs paragraph.
-2. Select any interpretation branch to inspect the model's rationale.
-3. Keep a different branch, park one, or edit its meaning.
-4. Add an interpretation the model missed.
-5. Watch the concrete question update from the selected path.
-6. Create an explicitly labeled probability placeholder.
-7. Continue to the dedicated Evidence page and filter deep source extractions by relationship to the claim.
-8. Expand a source to inspect funding, risk of bias, provenance, and limitations.
-9. Use the separate Assess page for the complete 32-study trial inventory.
-10. Screen the 164-record Discovery Queue without confusing search matches for assessed evidence.
-11. Open Synthesize to inspect the provisional read, load-bearing evidence, and cruxes.
-12. Save a revision or export the complete framing artifact as JSON.
+1. Enter any vague research question or paragraph.
+2. Watch the compiler highlight exact phrases and explain which hidden choice each phrase carries.
+3. Follow the paced transition to the separate Interpretation Map page.
+4. Select any interpretation branch to inspect the model's rationale.
+5. Keep a different branch, park one, or edit its meaning.
+6. Add an interpretation the model missed and watch the claim template recompile.
+7. Create an explicitly labeled probability placeholder.
+8. For the eggs fixture, continue to Evidence and inspect the existing claim-matched corpus.
+9. Use Assess for the 32-study inventory and the Discovery Queue for unassessed matches.
+10. Open Synthesize to inspect the provisional read, load-bearing evidence, and cruxes.
+11. Save a revision or export the complete framing artifact as JSON.
 
 ## Current boundary
 
-This is a UX and data-model slice with a real evidence corpus. Question decomposition remains a deterministic offline fixture. The evidence section uses a 2023 systematic review as its study spine, adds claim-matched deep extractions, and records a reproducible PubMed discovery search.
+This is a UX and data-model slice with an AI SDK decomposition endpoint and a real eggs evidence corpus. The endpoint uses schema-validated structured output and falls back transparently when no model key is configured. The evidence pages use a 2023 systematic review as their study spine, add claim-matched deep extractions, and record a reproducible PubMed discovery search.
 
 It currently implements:
 
 - visible AI-proposed branches;
+- exact-phrase highlighting before map generation;
+- arbitrary-question decomposition through the AI SDK;
+- a domain-general local fallback with an explicit warning;
 - human selection, editing, addition, and reversible parking;
 - authorship and rationale;
 - question compilation;
@@ -50,7 +54,8 @@ It currently implements:
 
 The interface is organized as a case workspace rather than one long report:
 
-- `/` — frame and compile the question;
+- `/` — submit the question and inspect its ambiguous wording;
+- `/map` — edit the generated interpretation map and compile the claim;
 - `/evidence` — inspect claim-matched deep source extractions;
 - `/inventory` — search and assess the controlled-trial inventory;
 - `/discoveries` — screen the unassessed PubMed intake queue; and
@@ -70,7 +75,10 @@ npm run evidence:discover
 
 ## Main files
 
-- `app/page.tsx` — framing interaction and eggs fixture
+- `app/page.tsx` — animated phrase-highlighting and transition flow
+- `app/map/page.tsx` — editable interpretation map and claim compilation
+- `app/api/decompose/route.ts` — AI SDK structured decomposition endpoint
+- `lib/decomposition-server.ts` — schema, method prompt, sanitization, and transparent fallback
 - `app/components/case-navigation.tsx` — persistent stage and evidence-view navigation
 - `app/evidence/` — deep source review
 - `app/inventory/` — controlled-trial assessment

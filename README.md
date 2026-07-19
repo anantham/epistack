@@ -10,7 +10,7 @@ The central idea is simple:
 
 The project is currently in the methodology and prototype-design phase.
 
-The current eggs vertical slice is organized as a small case workspace rather than one long report. Frame, Evidence, Assess, and Synthesize are separate routes, with dedicated Trial Inventory and Discovery Queue views. This keeps source inspection, unassessed intake, and conclusions from collapsing into an overwhelming scroll.
+The current vertical slice is organized as a small case workspace rather than one long report. A submitted paragraph is first annotated phrase by phrase, then moved into a separate editable Interpretation Map. Evidence, Assess, and Synthesize remain separate routes, with dedicated Trial Inventory and Discovery Queue views. This keeps wording analysis, source inspection, unassessed intake, and conclusions from collapsing into an overwhelming scroll.
 
 ## The problem
 

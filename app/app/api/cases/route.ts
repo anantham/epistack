@@ -25,6 +25,8 @@ export async function POST(request: Request) {
     const caseId = artifact.caseId?.trim() || crypto.randomUUID();
     const snapshotId = crypto.randomUUID();
     const activeQuestion = artifact.compiledClaim?.statement?.trim() || null;
+    const title = originalPrompt.replace(/\s+/g, " ").slice(0, 120);
+    const slug = `case-${caseId.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
 
     await d1.batch([
       d1
@@ -37,8 +39,8 @@ export async function POST(request: Request) {
           updated_at = excluded.updated_at`)
         .bind(
           caseId,
-          "eggs-weight-loss",
-          "Are eggs good for weight loss?",
+          slug,
+          title,
           originalPrompt,
           activeQuestion,
           activeQuestion ? "claim-created" : "framing",

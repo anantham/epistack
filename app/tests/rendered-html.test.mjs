@@ -9,18 +9,30 @@ test("build emits the Epistack application", async () => {
   await access(new URL("dist/client", root));
 });
 
-test("question compiler preserves the human review interactions", async () => {
-  const page = await readFile(new URL("app/page.tsx", root), "utf8");
+test("question compiler stages AI reading before the editable map", async () => {
+  const [frame, map, api, packageJson] = await Promise.all([
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/map/page.tsx", root), "utf8"),
+    readFile(new URL("app/api/decompose/route.ts", root), "utf8"),
+    readFile(new URL("package.json", root), "utf8"),
+  ]);
 
-  assert.match(page, /Turn a vague question into something evidence can answer\./);
-  assert.match(page, /Decompose question/);
-  assert.match(page, /Interpretation map/);
-  assert.match(page, /Keep as active/);
-  assert.match(page, /Park branch/);
-  assert.match(page, /Add a missing interpretation/);
-  assert.match(page, /Create probabilistic claim/);
-  assert.match(page, /analysis-neutral placeholder/);
-  assert.match(page, /interpretation branches above do not share this probability mass/i);
+  assert.match(frame, /Let the AI show you what your question is hiding\./);
+  assert.match(frame, /locateHighlights/);
+  assert.match(frame, /AI is reading/);
+  assert.match(frame, /window\.location\.assign\("\/map"\)/);
+  assert.match(map, /Interpretation map/);
+  assert.match(map, /Keep as active/);
+  assert.match(map, /Park branch/);
+  assert.match(map, /Add a missing interpretation/);
+  assert.match(map, /Create probabilistic claim/);
+  assert.match(map, /analysis-neutral placeholder/);
+  assert.match(map, /interpretation branches above do not share this probability mass/i);
+  assert.match(api, /generateText/);
+  assert.match(api, /Output\.object/);
+  assert.match(api, /gpt-5\.6-terra/);
+  assert.match(packageJson, /"ai"/);
+  assert.match(packageJson, /"@ai-sdk\/openai"/);
 });
 
 test("starter preview has been removed", async () => {
@@ -59,8 +71,9 @@ test("evidence corpus keeps discovery separate from assessed evidence", async ()
 });
 
 test("the investigation is split into focused navigable routes", async () => {
-  const [frame, navigation, inventory, discoveries, synthesis] = await Promise.all([
+  const [frame, map, navigation, inventory, discoveries, synthesis] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/map/page.tsx", root), "utf8"),
     readFile(new URL("app/components/case-navigation.tsx", root), "utf8"),
     readFile(new URL("app/inventory/page.tsx", root), "utf8"),
     readFile(new URL("app/discoveries/page.tsx", root), "utf8"),
@@ -68,10 +81,28 @@ test("the investigation is split into focused navigable routes", async () => {
   ]);
 
   assert.doesNotMatch(frame, /className="evidence-section"/);
+  assert.doesNotMatch(frame, /className="map-section"/);
+  assert.match(map, /decompositionSessionKey/);
+  assert.match(map, /claimTemplate/);
   assert.match(navigation, /href: "\/evidence"/);
   assert.match(navigation, /href: "\/inventory"/);
   assert.match(navigation, /href: "\/synthesis"/);
   assert.match(inventory, /controlled-trial records/);
   assert.match(discoveries, /Evidence intake/);
   assert.match(synthesis, /Provisional synthesis/);
+});
+
+test("arbitrary questions have a transparent domain-general fallback", async () => {
+  const [server, api, envExample] = await Promise.all([
+    readFile(new URL("lib/decomposition-server.ts", root), "utf8"),
+    readFile(new URL("app/api/decompose/route.ts", root), "utf8"),
+    readFile(new URL(".env.example", root), "utf8"),
+  ]);
+
+  assert.match(server, /createFallbackDecomposition/);
+  assert.match(server, /Branches are alternative scopes/);
+  assert.match(server, /exact, case-sensitive substring/);
+  assert.match(api, /mode: "local-fallback"/);
+  assert.match(api, /OPENAI_API_KEY/);
+  assert.match(envExample, /EPISTACK_DECOMPOSITION_MODEL=gpt-5\.6-terra/);
 });

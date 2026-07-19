@@ -18,13 +18,14 @@ Concrete claim with explicit scope
 Versioned evidence and belief state
 ```
 
-The decomposition map is the primary work surface. A side inspector shows why the model proposed a branch, how it will affect the compiled question, who last edited it, and whether it is active or parked.
+The entry screen is a staged reading surface: the AI SDK returns schema-validated highlights, axes, branches, unknowns, and a claim template. Exact phrases in the submitted paragraph light up one by one with a short explanation before the interface transitions to the decomposition map. The map is the primary editing surface. A side inspector shows why the model proposed a branch, how it will affect the compiled question, who last edited it, and whether it is active or parked.
 
 ## Route architecture
 
 The eggs case is split by epistemic task rather than rendered as one scrolling document:
 
-- Frame (`/`) owns question decomposition and claim compilation.
+- Frame (`/`) owns question submission, phrase-level annotation, and the paced handoff.
+- Interpretation Map (`/map`) owns branch review, editing, and claim compilation.
 - Evidence (`/evidence`) owns claim-matched source extraction and provenance inspection.
 - Assess (`/inventory`) owns the systematic-review trial inventory.
 - Discovery Queue (`/discoveries`) owns unassessed search results.
@@ -151,9 +152,11 @@ The scalable unit is not a single giant graph. It is a set of small, versioned s
 
 ## First prototype boundary
 
-The current browser prototype implements a framing operator and a claim-matched evidence workspace:
+The current browser prototype implements an AI-assisted framing operator and a claim-matched evidence workspace:
 
-- enter the competition's vague eggs prompt;
+- enter an arbitrary vague question or paragraph;
+- generate typed highlights and an interpretation map through the AI SDK, with a transparent local fallback;
+- watch exact submitted phrases receive staged explanations before navigation;
 - inspect seven proposed axes and their candidate branches;
 - edit, add, keep, or park interpretations;
 - preserve the model's rationale and branch origin;
