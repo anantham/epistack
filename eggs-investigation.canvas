@@ -1,0 +1,390 @@
+{
+  "nodes": [
+    {
+      "id": "title",
+      "type": "text",
+      "x": 0,
+      "y": -260,
+      "width": 1860,
+      "height": 120,
+      "text": "# 🥚 The eggs investigation — where **human** and **AI** meet\n**Are eggs good to eat?** → *should I buy 12 from the Muttichur farmer and eat 2/day?*\nAn **exoskeleton for investigation**: the human is in the loop at every handoff; the AI amplifies. Not passive button-clicking."
+    },
+    {
+      "id": "legend",
+      "type": "text",
+      "x": 0,
+      "y": -125,
+      "width": 1860,
+      "height": 95,
+      "text": "**LEGEND**  🟦 human affordance · 🟪 AI / agent action · 🟩 enrichment agent *(built)* · 🟨 🔶 *designed, not built yet* · 🟥 note / loop\n**BUILT** = live in the webapp today  ·  **🔶 DESIGNED** = in `GRAPH-MODEL.md`, not yet coded"
+    },
+    {
+      "id": "g1",
+      "type": "group",
+      "x": -40,
+      "y": 40,
+      "width": 1020,
+      "height": 520,
+      "label": "STAGE 1 · EXPAND — map what we care about (dimensions)"
+    },
+    {
+      "id": "h1",
+      "type": "text",
+      "x": 20,
+      "y": 120,
+      "width": 420,
+      "height": 150,
+      "text": "**1 · Human** types the open-ended phrase\n\n> *Are eggs good to eat?*",
+      "color": "5"
+    },
+    {
+      "id": "ai1",
+      "type": "text",
+      "x": 520,
+      "y": 120,
+      "width": 440,
+      "height": 190,
+      "text": "**2 · AI** decomposes it\n\nGrammar-grounded dimensions (subject / verb / object / frame) + candidate resolutions, each with an *“at what amount does it flip?”* threshold.",
+      "color": "6"
+    },
+    {
+      "id": "h2",
+      "type": "text",
+      "x": 20,
+      "y": 330,
+      "width": 420,
+      "height": 200,
+      "text": "**3 · Human** shapes the decomposition\n\nPrunes irrelevant directions · edits wording · **adds fine-grained categories** (AI suggests more on request). The human owns the frame.",
+      "color": "5"
+    },
+    {
+      "id": "g2",
+      "type": "group",
+      "x": -40,
+      "y": 600,
+      "width": 1020,
+      "height": 540,
+      "label": "STAGE 2 · CONTEXTUALIZE — map context + action space as constraints"
+    },
+    {
+      "id": "ai2",
+      "type": "text",
+      "x": 520,
+      "y": 660,
+      "width": 440,
+      "height": 200,
+      "text": "**4 · AI** elicits context\n\nVOI-ranked questions about the asker **and their action space** — which options are actually available (buy local? which dose? the counterfactual?).",
+      "color": "6"
+    },
+    {
+      "id": "h3",
+      "type": "text",
+      "x": 20,
+      "y": 660,
+      "width": 420,
+      "height": 250,
+      "text": "**5 · Human** writes a natural-language rant\n\n> *34, type-2 diabetic, high LDL, vegetarian-leaning, I lift 4×/wk. On the table: buy 12 from the Muttichur farmer, eat 2/day.*\n\nSets clarity on context + every dimension.",
+      "color": "5"
+    },
+    {
+      "id": "ai3",
+      "type": "text",
+      "x": 520,
+      "y": 890,
+      "width": 440,
+      "height": 200,
+      "text": "**6 · AI** integrates the context\n\nPins settled axes · keeps genuinely-open ones · **spawns new personal axes** (hyper-responder? whole-vs-white? what eggs replace?) = the *filtered graph*.",
+      "color": "6"
+    },
+    {
+      "id": "g3",
+      "type": "group",
+      "x": -40,
+      "y": 1180,
+      "width": 1920,
+      "height": 1010,
+      "label": "STAGE 3 · RESEARCH + ENRICH — the exoskeleton dashboard: human steers, AI excavates"
+    },
+    {
+      "id": "orch",
+      "type": "text",
+      "x": 520,
+      "y": 1240,
+      "width": 440,
+      "height": 160,
+      "text": "**7 · AI orchestrator** plans the investigation\n\nOne **specialist agent per open axis** + a personalized brief (focus · sources · the crux that would move it).",
+      "color": "6"
+    },
+    {
+      "id": "agents",
+      "type": "text",
+      "x": 520,
+      "y": 1430,
+      "width": 440,
+      "height": 220,
+      "text": "**8 · AI research agents** excavate the web\n\n**LIVE dashboard**: per-agent status · elapsed timer · findings streaming in, each tagged to a resolution.\n\n*BUILT with Claude subagents (`claude -p` + WebSearch/WebFetch).*",
+      "color": "6"
+    },
+    {
+      "id": "h4",
+      "type": "text",
+      "x": 20,
+      "y": 1430,
+      "width": 420,
+      "height": 220,
+      "text": "**Human watches & steers** the dashboard\n\n🔶 *DESIGNED*: tune which **query types** are used · redirect **where to excavate** · pause / kill / relaunch agents. Today steering is indirect (via dims + context + briefs).",
+      "color": "5"
+    },
+    {
+      "id": "h5",
+      "type": "text",
+      "x": 20,
+      "y": 1690,
+      "width": 420,
+      "height": 200,
+      "text": "**Human spot-checks & contests**\n\nOpens any result via its **passage pointer**; can **overturn an AI stance** — every extraction is *attributed and contestable*, never ground truth.",
+      "color": "5"
+    },
+    {
+      "id": "ehead",
+      "type": "text",
+      "x": 1000,
+      "y": 1240,
+      "width": 460,
+      "height": 60,
+      "text": "**SPECIALIZED ENRICHMENT AGENTS** — structure & assess each source →",
+      "color": "4"
+    },
+    {
+      "id": "e1",
+      "type": "text",
+      "x": 1000,
+      "y": 1320,
+      "width": 460,
+      "height": 165,
+      "text": "**Result-level extraction** *(BUILT)*\nOne paper → *N* scoped results: typed relation (supports / qualifies / undercuts-method / bounds) · effect+CI · status · **exact passage pointer**. Author's conclusion flagged when *broader than the results support*.",
+      "color": "4"
+    },
+    {
+      "id": "e2",
+      "type": "text",
+      "x": 1000,
+      "y": 1505,
+      "width": 460,
+      "height": 130,
+      "text": "**Journal quality** *(BUILT)*\ntier · peer-reviewed? · retraction / critique status · impact.",
+      "color": "4"
+    },
+    {
+      "id": "e3",
+      "type": "text",
+      "x": 1000,
+      "y": 1655,
+      "width": 460,
+      "height": 140,
+      "text": "**Authorship & money** *(BUILT)*\nprincipal investigators · institution · funding source · declared conflicts of interest.",
+      "color": "4"
+    },
+    {
+      "id": "e4",
+      "type": "text",
+      "x": 1000,
+      "y": 1815,
+      "width": 460,
+      "height": 180,
+      "text": "🔶 **Provenance of the author** *(DESIGNED)*\nWas it **AI-written**? · is the author a **real, identity-proven human**? · past institutional affiliations · resume · integrity events (misconduct, p-hacking).",
+      "color": "3"
+    },
+    {
+      "id": "e5",
+      "type": "text",
+      "x": 1000,
+      "y": 2015,
+      "width": 460,
+      "height": 140,
+      "text": "🔶 **Dependence grouping** *(DESIGNED)*\nStudies sharing a cohort (Framingham / ARIC / Nurses' Health) are **not independent votes** — discount correlated evidence before counting.",
+      "color": "3"
+    },
+    {
+      "id": "qprov",
+      "type": "text",
+      "x": 1500,
+      "y": 1320,
+      "width": 360,
+      "height": 250,
+      "text": "**Q: Exa / Grok / Gemini / Claude subagents?**\n\n**Today → 100% Claude subagents** (`claude -p` + Claude WebSearch/WebFetch). **Not** Exa, Grok, or Gemini.\n\nMulti-provider fan-out (Exa for semantic retrieval, Grok/Gemini for diversity & cross-checking) is 🔶 **designed, not built**.",
+      "color": "1"
+    },
+    {
+      "id": "qquery",
+      "type": "text",
+      "x": 1500,
+      "y": 1600,
+      "width": 360,
+      "height": 250,
+      "text": "**Q: controls to tune queries / focus?**\n\n**Today → only indirect**: editing dimensions, context, and the orchestrator briefs shapes what agents search.\n\nDirect **query-tuning** & **where-to-excavate** controls are 🔶 **designed, not built**.",
+      "color": "1"
+    },
+    {
+      "id": "g4",
+      "type": "group",
+      "x": -40,
+      "y": 2230,
+      "width": 1020,
+      "height": 560,
+      "label": "STAGE 4 · DECIDE + LEARN — artifact → action → (later) commons"
+    },
+    {
+      "id": "ai4",
+      "type": "text",
+      "x": 520,
+      "y": 2290,
+      "width": 440,
+      "height": 220,
+      "text": "**9 · AI** synthesizes the answer\n\nRecommendation + for/against (grounded in findings) + **the crux** + calibrated confidence + what's missing + an **n=1 test** *(informs; may not fully resolve)*.",
+      "color": "6"
+    },
+    {
+      "id": "h6",
+      "type": "text",
+      "x": 20,
+      "y": 2290,
+      "width": 420,
+      "height": 240,
+      "text": "**10 · Human** decides & learns\n\nDecides · **logs it** (versioned) · runs the **n=1** — measures own LDL/ApoB, body-fat, sleep, RHR.\n🔶 *DESIGNED*: contribute the outcome to the commons.",
+      "color": "5"
+    },
+    {
+      "id": "loop",
+      "type": "text",
+      "x": 20,
+      "y": 2570,
+      "width": 940,
+      "height": 160,
+      "text": "**♻ ONGOING — an exoskeleton, not a passive feed.** The human is enhanced at every step, never just watching buttons. Updates — a **retraction**, a **new result**, **your own n=1** — re-open the graph, and the investigation **compounds over time**.",
+      "color": "1"
+    }
+  ],
+  "edges": [
+    {
+      "id": "x1",
+      "fromNode": "h1",
+      "fromSide": "right",
+      "toNode": "ai1",
+      "toSide": "left",
+      "label": "the phrase"
+    },
+    {
+      "id": "x2",
+      "fromNode": "ai1",
+      "fromSide": "bottom",
+      "toNode": "h2",
+      "toSide": "top",
+      "label": "dimensions + thresholds"
+    },
+    {
+      "id": "x3",
+      "fromNode": "h2",
+      "fromSide": "bottom",
+      "toNode": "ai2",
+      "toSide": "top",
+      "label": "pruned + finer dimensions"
+    },
+    {
+      "id": "x4",
+      "fromNode": "ai2",
+      "fromSide": "left",
+      "toNode": "h3",
+      "toSide": "right",
+      "label": "asks: context + action space"
+    },
+    {
+      "id": "x5",
+      "fromNode": "h3",
+      "fromSide": "bottom",
+      "toNode": "ai3",
+      "toSide": "left",
+      "label": "the rant + details"
+    },
+    {
+      "id": "x6",
+      "fromNode": "ai3",
+      "fromSide": "bottom",
+      "toNode": "orch",
+      "toSide": "top",
+      "label": "filtered graph — open axes"
+    },
+    {
+      "id": "x7",
+      "fromNode": "orch",
+      "fromSide": "bottom",
+      "toNode": "agents",
+      "toSide": "top",
+      "label": "specialist briefs + crux"
+    },
+    {
+      "id": "x8",
+      "fromNode": "agents",
+      "fromSide": "left",
+      "toNode": "h4",
+      "toSide": "right",
+      "label": "live view →"
+    },
+    {
+      "id": "x9",
+      "fromNode": "h4",
+      "fromSide": "top",
+      "toNode": "agents",
+      "toSide": "bottom",
+      "label": "🔶 steer / tune"
+    },
+    {
+      "id": "x10",
+      "fromNode": "agents",
+      "fromSide": "right",
+      "toNode": "ehead",
+      "toSide": "left",
+      "label": "sources & findings → enrich"
+    },
+    {
+      "id": "x11",
+      "fromNode": "e1",
+      "fromSide": "left",
+      "toNode": "h5",
+      "toSide": "right",
+      "label": "passage pointers → spot-check & contest"
+    },
+    {
+      "id": "x12",
+      "fromNode": "agents",
+      "fromSide": "bottom",
+      "toNode": "ai4",
+      "toSide": "top",
+      "label": "enriched result-level graph"
+    },
+    {
+      "id": "x13",
+      "fromNode": "ai4",
+      "fromSide": "left",
+      "toNode": "h6",
+      "toSide": "right",
+      "label": "answer · crux · n=1"
+    },
+    {
+      "id": "x14",
+      "fromNode": "h6",
+      "fromSide": "bottom",
+      "toNode": "loop",
+      "toSide": "top",
+      "label": "decide · log · measure body"
+    },
+    {
+      "id": "x15",
+      "fromNode": "loop",
+      "fromSide": "left",
+      "toNode": "g1",
+      "toSide": "left",
+      "label": "updates re-open it → compounds"
+    }
+  ]
+}
