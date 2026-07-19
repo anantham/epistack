@@ -17,7 +17,8 @@ test("question compiler stages AI reading before the editable map", async () => 
     readFile(new URL("package.json", root), "utf8"),
   ]);
 
-  assert.match(frame, /Let the AI show you what your question is hiding\./);
+  assert.doesNotMatch(frame, /Let the AI show you what your question is hiding\./);
+  assert.doesNotMatch(frame, /Question compiler · AI-assisted framing/);
   assert.match(frame, /locateHighlights/);
   assert.match(frame, /AI is reading/);
   assert.match(frame, /Decomposition trace/);
@@ -103,6 +104,10 @@ test("the investigation is split into focused navigable routes", async () => {
   assert.match(navigation, /href: "\/evidence"/);
   assert.match(navigation, /href: "\/inventory"/);
   assert.match(navigation, /href: "\/synthesis"/);
+  assert.match(navigation, /stage-tooltip/);
+  assert.match(navigation, /aria-label={`Stage \${index \+ 1}: \${stage\.label}`}/);
+  assert.doesNotMatch(navigation, /className="wordmark"/);
+  assert.doesNotMatch(navigation, /Discovery queue<\/Link>/);
   assert.match(inventory, /controlled-trial records/);
   assert.match(discoveries, /Evidence intake/);
   assert.match(synthesis, /Provisional synthesis/);

@@ -594,7 +594,7 @@ export default function InterpretationMapPage() {
 
   return (
     <main>
-      <CaseHeader active="frame" onExport={exportArtifact} />
+      <CaseHeader active="frame" />
 
       {!ready ? (
         <section className="map-arrival" aria-live="polite">

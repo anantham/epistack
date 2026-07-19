@@ -216,14 +216,6 @@ export default function Home() {
     <main>
       <CaseHeader active="frame" />
       <section className={"analysis-shell " + (phase === "transitioning" ? "leaving" : "")}>
-        <div className="analysis-intro">
-          <div className="eyebrow">Question compiler · AI-assisted framing</div>
-          <h1>Let the AI show you what your question is hiding.</h1>
-          <p className="lede">
-            Submit any research question or paragraph. Epistack marks the phrases carrying hidden choices before it builds an editable interpretation map.
-          </p>
-        </div>
-
         <div className={"analysis-workbench " + (busy ? "is-reading" : "")}>
           <div className={`analysis-main ${result ? "has-result" : ""}`}>
             <div className="analysis-label-row">

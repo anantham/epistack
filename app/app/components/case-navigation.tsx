@@ -11,19 +11,9 @@ const stages: Array<{ id: InvestigationStage; label: string; href: string }> = [
   { id: "synthesize", label: "Synthesize", href: "/synthesis" },
 ];
 
-export function CaseHeader({
-  active,
-  onExport,
-}: {
-  active: InvestigationStage;
-  onExport?: () => void;
-}) {
+export function CaseHeader({ active }: { active: InvestigationStage }) {
   return (
     <header className="topbar">
-      <Link className="wordmark" href="/" aria-label="Epistack home">
-        <span className="wordmark-mark">E</span>
-        <span>Epistack</span>
-      </Link>
       <nav className="stage-nav" aria-label="Investigation stages">
         {stages.map((stage, index) => (
           <Link
@@ -31,16 +21,13 @@ export function CaseHeader({
             href={stage.href}
             key={stage.id}
             aria-current={stage.id === active ? "page" : undefined}
+            aria-label={`Stage ${index + 1}: ${stage.label}`}
           >
-            <b>{index + 1}</b> {stage.label}
+            <b>{index + 1}</b>
+            <span className="stage-tooltip" aria-hidden="true">{stage.label}</span>
           </Link>
         ))}
       </nav>
-      {onExport ? (
-        <button className="quiet-button" onClick={onExport}>Export JSON</button>
-      ) : (
-        <Link className="quiet-button" href="/discoveries">Discovery queue</Link>
-      )}
     </header>
   );
 }
