@@ -1,0 +1,91 @@
+{
+  "question": {
+    "raw": "Are eggs good to eat? How many should I eat? I keep hearing they're full of cholesterol but also that they're the perfect protein. Should I just have eggs for breakfast every day?",
+    "priorPolicy": "uniform"
+  },
+  "axes": [
+    { "code": "A", "name": "what counts as “an egg”", "options": [
+      { "id": "A1", "label": "whole · standard" },
+      { "id": "A2", "label": "whole · pasture-raised", "flag": "production usually unrecorded" },
+      { "id": "A3", "label": "whites only" },
+      { "id": "A4", "label": "omega-3 fortified" }
+    ] },
+    { "code": "B", "name": "what “eating” means", "options": [
+      { "id": "B1", "label": "~1/day · replacing refined carbs" },
+      { "id": "B2", "label": "~1/day · added on top" },
+      { "id": "B3", "label": "2+ /day" },
+      { "id": "B4", "label": "a few / week" }
+    ] },
+    { "code": "C", "name": "“good” for what", "options": [
+      { "id": "C1", "label": "heart / CVD risk" },
+      { "id": "C2", "label": "weight / satiety" },
+      { "id": "C3", "label": "muscle / protein" },
+      { "id": "C4", "label": "energy / micronutrients" }
+    ] },
+    { "code": "D", "name": "for whom", "options": [
+      { "id": "D1", "label": "healthy adults" },
+      { "id": "D2", "label": "people with diabetes" },
+      { "id": "D3", "label": "hyper-responders / high LDL", "flag": "~15–25% of people" },
+      { "id": "D4", "label": "children / older adults" }
+    ] }
+  ],
+  "framings": [
+    { "id": "F1", "req": ["A1", "B1", "C1", "D1"], "star": true, "slice": true, "text": "In healthy adults, does ~1 standard egg/day <b>replacing a refined-carb breakfast</b> raise heart risk?" },
+    { "id": "F2", "req": ["A1", "B3", "C2", "D1"], "star": true, "text": "Do <b>2+ eggs/day</b> help a healthy adult feel full and lose weight?" },
+    { "id": "F3", "req": ["A1", "B1", "C3", "D1"], "text": "Is one egg a day meaningful protein for <b>building muscle</b>?" },
+    { "id": "F4", "req": ["A1", "B2", "C1", "D2"], "text": "For someone <b>with diabetes</b>, does adding a daily egg raise heart risk?" },
+    { "id": "F5", "req": ["A2", "B1", "C1", "D1"], "text": "Do <b>pasture-raised</b> eggs change the heart-risk answer vs standard?" },
+    { "id": "F6", "req": ["A1", "B1", "C1", "D3"], "text": "For a cholesterol <b>hyper-responder</b>, does a daily egg raise heart risk?" }
+  ],
+  "evidence": {
+    "F1": {
+      "summary": {
+        "verdict": "No reliable link to cardiovascular events for a healthy, non-diabetic adult at ~1 egg/day. It raises LDL ~8 mg/dL — what matters is what the egg replaces.",
+        "confidence": "low–moderate",
+        "scope": "healthy · non-diabetic · normolipidemic · ~1/day · hard CVD events (not LDL alone)",
+        "cruxes": [
+          "Comparator — “eggs vs what?” Swapping ½ egg/day for nuts/legumes ≈ −13% mortality; for processed meat, eggs look better.",
+          "Do you trust observational adjustment? US egg-eaters eat 5× more bacon; the association’s sign flips US (harm) vs China (protective)."
+        ]
+      },
+      "nodes": [
+        { "id": "zhong-2019", "cite": "Zhong 2019 · JAMA", "url": "https://pubmed.ncbi.nlm.nih.gov/30874756/", "rel": "risk", "coi": "", "conf": "H", "lb": true, "verified": true,
+          "find": "+½ egg/day → CVD HR 1.06 (1.03–1.10).",
+          "note": "But the egg signal went NON-significant after adjusting for dietary cholesterol — it’s the cholesterol, not the egg. Self-verified against JAMA." },
+        { "id": "drouin-chartier-2020", "cite": "Drouin-Chartier 2020 · BMJ", "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7190072/", "rel": "null", "coi": "", "conf": "H", "lb": false,
+          "find": "≥1/day → CVD HR 0.93 (0.82–1.05); meta of 1.72M → RR 0.98.",
+          "note": "The main null, and the substitution engine: egg→red/processed meat = worse; egg→fish/legumes = better." },
+        { "id": "pure-2020", "cite": "PURE / Dehghan 2020 · AJCN", "url": "https://pubmed.ncbi.nlm.nih.gov/31965140/", "rel": "null", "coi": "💊", "conf": "H", "lb": false,
+          "find": "≥7/wk → CVD HR 0.92 (0.83–1.01).",
+          "note": "Global null across 50 countries. Rides on heavy pharma-platform funding — flagged, not disqualifying." },
+        { "id": "china-kadoorie-2018", "cite": "China Kadoorie 2018 · Heart", "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6241631/", "rel": "null", "coi": "", "conf": "H", "lb": false,
+          "find": "Daily eggs → CVD HR 0.89 (0.87–0.92) — inverse.",
+          "note": "Sign is OPPOSITE the US cohorts, because egg intake tracks higher SES/health in China. This is the confounding fingerprint." },
+        { "id": "godos-2021", "cite": "Godos 2021 · Eur J Nutr", "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8137614/", "rel": "null", "coi": "", "conf": "H", "lb": false,
+          "find": "≤1/day → CVD SRR 0.94 (mildly protective).",
+          "note": "Hides a heart-failure signal: 1.15 (1.02–1.30) at 1/day. The graph keeps what the headline drops." },
+        { "id": "mousavi-2022", "cite": "Mousavi 2022 · Adv Nutr", "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9526855/", "rel": "null", "coi": "", "conf": "H", "lb": false,
+          "find": "CVD mortality RR 1.04 (0.87–1.23) — null.",
+          "note": "Hides a cancer-mortality signal: 1.20 (1.04–1.39)." },
+        { "id": "umbrella-2025", "cite": "Umbrella review 2025 · NMCD", "url": "https://pubmed.ncbi.nlm.nih.gov/39934049/", "rel": "null", "coi": "", "conf": "H", "lb": false,
+          "find": "“No association” for CVD/mortality; LDL +7.39 mg/dL.",
+          "note": "Rates its own inputs “critically low” quality (AMSTAR-2). Convergence on null ≠ a strong null — this is why confidence stays capped." },
+        { "id": "zhuang-2021", "cite": "Zhuang 2021 · PLOS Med", "url": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.1003508", "rel": "risk", "coi": "", "conf": "H", "lb": false,
+          "find": "+½ egg/day → mortality HR 1.07; 63% mediated by cholesterol.",
+          "note": "Names the comparator crux with numbers: ½ egg → nuts/legumes = −13% mortality." },
+        { "id": "li-kang-2020", "cite": "Li 2020 · Nutrients (RCT meta)", "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7400894/", "rel": "ctx", "coi": "", "conf": "H", "lb": false,
+          "find": "Eggs raise LDL +8.14 mg/dL; LDL:HDL +0.14.",
+          "note": "INDEPENDENT (non-industry) — settles the physiology. Survives a COI-cluster ablation, so the LDL rise isn’t industry spin." },
+        { "id": "kolb-2023", "cite": "Kolb/Fernandez 2023 · Curr Athero Rep", "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10285014/", "rel": "ctx", "coi": "🥚", "conf": "H", "lb": false,
+          "find": "Only ~7% of studies adjusted for saturated fat.",
+          "note": "The confounding argument is REAL — but the review is egg-industry-funded. Carry the point AND the conflict." },
+        { "id": "barnard-2021", "cite": "Barnard 2021 · Am J Lifestyle Med", "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7958219/", "rel": "ctx", "coi": "🌱", "conf": "H", "lb": false,
+          "find": "Industry-funded studies: 49% discordant conclusions vs 13%.",
+          "note": "Quantifies the funding bias — but authored by anti-egg advocates (PCRM). Symmetric COI: neither pole gets a free pass." },
+        { "id": "ioannidis-2018", "cite": "Ioannidis 2018 · JAMA", "url": "https://jamanetwork.com/journals/jama/fullarticle/2698337", "rel": "ctx", "coi": "", "conf": "H", "lb": false,
+          "find": "“The noise is much stronger than the signal.”",
+          "note": "Undercuts confident causal claims on BOTH sides — a calibration anchor for how much any single cohort can carry." }
+      ]
+    }
+  }
+}

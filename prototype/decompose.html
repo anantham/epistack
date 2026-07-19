@@ -1,0 +1,503 @@
+<style>
+  :root{
+    --paper:#F5F6F8; --surface:#FFFFFF; --surface-2:#FBFCFD;
+    --ink:#14181F; --ink-2:#576070; --ink-3:#858E9C;
+    --line:#E3E6EC; --line-2:#EEF0F4;
+    --accent:#0E7C86; --accent-strong:#0A5A62; --accent-wash:#E1F0F0; --accent-line:#BFE0DF;
+    --flag:#9A5B0B; --flag-wash:#F6ECD9; --flag-line:#E7D3AC;
+    --slice:#0E7C86;
+    --shadow:0 1px 2px rgba(20,24,31,.04),0 8px 24px rgba(20,24,31,.06);
+    --font-serif:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,sans-serif;
+    --font-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --r:9px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#0E1116; --surface:#161B22; --surface-2:#12161C;
+      --ink:#E6E9EF; --ink-2:#98A2B1; --ink-3:#6A7382;
+      --line:#262D38; --line-2:#1E242E;
+      --accent:#2DD4BF; --accent-strong:#5EEAD4; --accent-wash:#0F2A2A; --accent-line:#1C4744;
+      --flag:#D9A441; --flag-wash:#241E12; --flag-line:#413513;
+      --slice:#2DD4BF;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#F5F6F8; --surface:#FFFFFF; --surface-2:#FBFCFD;
+    --ink:#14181F; --ink-2:#576070; --ink-3:#858E9C;
+    --line:#E3E6EC; --line-2:#EEF0F4;
+    --accent:#0E7C86; --accent-strong:#0A5A62; --accent-wash:#E1F0F0; --accent-line:#BFE0DF;
+    --flag:#9A5B0B; --flag-wash:#F6ECD9; --flag-line:#E7D3AC; --slice:#0E7C86;
+    --shadow:0 1px 2px rgba(20,24,31,.04),0 8px 24px rgba(20,24,31,.06);
+  }
+  :root[data-theme="dark"]{
+    --paper:#0E1116; --surface:#161B22; --surface-2:#12161C;
+    --ink:#E6E9EF; --ink-2:#98A2B1; --ink-3:#6A7382;
+    --line:#262D38; --line-2:#1E242E;
+    --accent:#2DD4BF; --accent-strong:#5EEAD4; --accent-wash:#0F2A2A; --accent-line:#1C4744;
+    --flag:#D9A441; --flag-wash:#241E12; --flag-line:#413513; --slice:#2DD4BF;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0}
+  .app{
+    font-family:var(--font-sans); background:var(--paper); color:var(--ink);
+    min-height:100vh; line-height:1.5;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    padding:clamp(16px,4vw,40px);
+  }
+  .wrap{max-width:960px; margin:0 auto}
+
+  .topbar{display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:clamp(20px,4vw,36px)}
+  .brand{font-family:var(--font-mono); font-size:13px; letter-spacing:.04em; color:var(--ink-2)}
+  .brand b{color:var(--ink); font-weight:600}
+  .brand span{color:var(--accent)}
+  .step{font-family:var(--font-mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3)}
+
+  .eyebrow{font-family:var(--font-mono); font-size:11px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3); display:block; margin-bottom:10px}
+
+  /* ---- question (human voice) ---- */
+  .ask{margin-bottom:28px}
+  .question{
+    width:100%; border:1px solid var(--line); border-radius:var(--r); background:var(--surface);
+    color:var(--ink); font-family:var(--font-serif); font-size:clamp(18px,2.4vw,21px); line-height:1.55;
+    padding:18px 20px; resize:vertical; min-height:118px; box-shadow:var(--shadow);
+    transition:border-color .15s ease;
+  }
+  .question:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash)}
+  .ask-actions{display:flex; align-items:center; gap:16px; margin-top:14px; flex-wrap:wrap}
+  .hint{font-size:13px; color:var(--ink-2); max-width:46ch}
+
+  .btn-primary{
+    font-family:var(--font-sans); font-size:14px; font-weight:600; color:#fff; background:var(--accent);
+    border:1px solid var(--accent); border-radius:8px; padding:10px 18px; cursor:pointer;
+    transition:background .15s ease, transform .05s ease;
+  }
+  :root[data-theme="dark"] .btn-primary, @media (prefers-color-scheme:dark){}
+  .btn-primary:hover{background:var(--accent-strong); border-color:var(--accent-strong)}
+  .btn-primary:active{transform:translateY(1px)}
+  .btn-primary:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .btn-ghost{font-family:var(--font-mono); font-size:12px; color:var(--ink-2); background:transparent; border:1px solid var(--line); border-radius:7px; padding:7px 12px; cursor:pointer}
+  .btn-ghost:hover{border-color:var(--ink-3); color:var(--ink)}
+  .btn-ghost:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+  /* dark accent button text stays dark on bright teal */
+  @media (prefers-color-scheme:dark){ .btn-primary{color:#04211E} }
+  :root[data-theme="dark"] .btn-primary{color:#04211E}
+  :root[data-theme="light"] .btn-primary{color:#fff}
+
+  /* ---- workspace ---- */
+  .work[hidden]{display:none}
+  .work{animation:none}
+
+  .summary{
+    display:flex; align-items:center; gap:22px; flex-wrap:wrap;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+    padding:16px 20px; box-shadow:var(--shadow); margin-bottom:22px;
+  }
+  .count{display:flex; align-items:baseline; gap:9px}
+  .count-num{font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:34px; font-weight:600; color:var(--accent); letter-spacing:-.01em; line-height:1}
+  .count-label{font-size:13px; color:var(--ink-2)}
+  .sm-div{width:1px; align-self:stretch; background:var(--line)}
+  .sm{font-size:12.5px; color:var(--ink-2)}
+  .sm b{color:var(--ink); font-weight:600}
+  .sm .mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums}
+  .summary .btn-ghost{margin-left:auto}
+
+  .axes{display:flex; flex-direction:column; gap:2px; background:var(--line-2); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; margin-bottom:26px}
+  .axis{background:var(--surface); padding:15px 18px; display:grid; grid-template-columns:200px 1fr; gap:16px; align-items:start}
+  .axis-head{display:flex; align-items:baseline; gap:9px; padding-top:5px}
+  .axis-code{font-family:var(--font-mono); font-size:12px; font-weight:600; color:#fff; background:var(--ink-2); border-radius:5px; padding:2px 7px; line-height:1.4}
+  .axis-name{font-size:14.5px; color:var(--ink); font-weight:500}
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+
+  .chip{
+    font-family:var(--font-sans); font-size:13.5px; color:var(--ink); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:7px; padding:7px 11px; cursor:pointer; position:relative;
+    display:inline-flex; align-items:center; gap:8px; transition:all .13s ease;
+  }
+  .chip:hover{border-color:var(--accent-line); background:var(--accent-wash)}
+  .chip:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .chip .flag{font-family:var(--font-mono); font-size:10px; letter-spacing:.02em; color:var(--flag); background:var(--flag-wash); border:1px solid var(--flag-line); border-radius:4px; padding:1px 5px; white-space:nowrap}
+  .chip.off{color:var(--ink-3); background:transparent; border-style:dashed; text-decoration:line-through; text-decoration-color:var(--ink-3)}
+  .chip.off .flag{opacity:.4}
+  .chip.trace{border-color:var(--accent); background:var(--accent-wash); box-shadow:0 0 0 2px var(--accent-wash)}
+  .chip.trace:not(.off){color:var(--accent-strong); font-weight:500}
+
+  /* ---- framings ---- */
+  .framings-head{display:flex; align-items:baseline; gap:10px; margin-bottom:14px}
+  .framings-head h2{font-size:15px; font-weight:600; margin:0; color:var(--ink)}
+  .framings-head span{font-size:12.5px; color:var(--ink-3)}
+  .framing-cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:12px}
+  .framing{
+    text-align:left; font-family:var(--font-sans); background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--r); padding:14px 15px; cursor:pointer; transition:all .15s ease; position:relative;
+    display:flex; flex-direction:column; gap:9px; color:var(--ink);
+  }
+  .framing:hover{border-color:var(--accent-line); box-shadow:var(--shadow)}
+  .framing:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .framing-top{display:flex; align-items:center; gap:7px}
+  .fid{font-family:var(--font-mono); font-size:11px; font-weight:600; color:var(--ink-2)}
+  .badge{font-family:var(--font-mono); font-size:10px; letter-spacing:.04em; text-transform:uppercase; border-radius:4px; padding:2px 6px; line-height:1.5}
+  .badge.star{color:var(--accent-strong); background:var(--accent-wash); border:1px solid var(--accent-line)}
+  .badge.slice{color:#fff; background:var(--slice); border:1px solid var(--slice)}
+  @media (prefers-color-scheme:dark){ .badge.slice{color:#04211E} }
+  :root[data-theme="dark"] .badge.slice{color:#04211E}
+  :root[data-theme="light"] .badge.slice{color:#fff}
+  .framing-text{font-size:14px; line-height:1.5; color:var(--ink)}
+  .framing-text b{font-weight:600; color:var(--accent-strong)}
+  .framing-path{font-family:var(--font-mono); font-size:11px; color:var(--ink-3); letter-spacing:.02em}
+  .framing.dim{opacity:.4; filter:saturate(.5)}
+  .framing.dim .framing-text b{color:var(--ink-3)}
+  .framing.traced{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-wash)}
+  .framing.pruned-note{}
+
+  .foot{margin-top:26px; padding-top:16px; border-top:1px solid var(--line); font-size:12.5px; color:var(--ink-3); display:flex; gap:8px; align-items:flex-start}
+  .foot .k{font-family:var(--font-mono); color:var(--flag); flex-shrink:0}
+
+  .reveal{opacity:0; transform:translateY(8px)}
+  .reveal.in{opacity:1; transform:none; transition:opacity .4s ease, transform .4s ease}
+  @media (prefers-reduced-motion:reduce){
+    .reveal,.reveal.in{opacity:1; transform:none; transition:none}
+    .chip,.framing,.btn-primary{transition:none}
+  }
+
+  /* ---- step 2: evidence detail ---- */
+  .detail[hidden]{display:none}
+  .detail{margin-top:28px; border-top:2px solid var(--accent-line); padding-top:24px}
+  .detail-stub{background:var(--surface-2); border:1px dashed var(--line); border-radius:var(--r); padding:20px; font-size:14px; color:var(--ink-2); line-height:1.55}
+  .detail-stub .fid{margin-right:8px}
+  .detail-stub b{color:var(--ink)}
+  .detail-head{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:18px 20px; margin-bottom:18px}
+  .dh-top{display:flex; align-items:center; gap:10px; margin-bottom:12px}
+  .conf-pill{font-family:var(--font-mono); font-size:11px; letter-spacing:.03em; color:var(--flag); background:var(--flag-wash); border:1px solid var(--flag-line); border-radius:5px; padding:3px 9px}
+  .dclose{margin-left:auto; background:transparent; border:1px solid var(--line); color:var(--ink-2); border-radius:6px; width:28px; height:28px; cursor:pointer; font-size:13px; line-height:1}
+  .dclose:hover{border-color:var(--ink-3); color:var(--ink)}
+  .dclose:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .verdict{font-family:var(--font-serif); font-size:clamp(17px,2.2vw,20px); line-height:1.5; color:var(--ink); margin-bottom:10px}
+  .scope{font-family:var(--font-mono); font-size:11.5px; color:var(--ink-3); margin-bottom:14px}
+  .cruxes{border-top:1px solid var(--line-2); padding-top:12px}
+  .rlabel{display:block; font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); margin-bottom:7px}
+  .cruxes ol{margin:0; padding-left:20px; display:flex; flex-direction:column; gap:6px}
+  .cruxes li{font-size:13.5px; color:var(--ink); line-height:1.45}
+  .ev-head-label{margin-bottom:10px}
+  .ev-list{display:flex; flex-direction:column; gap:8px}
+  .ev{display:block; width:100%; text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:12px 14px; cursor:pointer; transition:border-color .13s ease}
+  .ev:hover{border-color:var(--accent-line)}
+  .ev:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .ev-head{display:flex; align-items:center; gap:7px; flex-wrap:wrap}
+  .ev-cite{font-size:13.5px; font-weight:600; color:var(--ink); margin-right:auto}
+  .tag{font-family:var(--font-mono); font-size:10px; letter-spacing:.02em; border-radius:4px; padding:2px 6px; line-height:1.5; white-space:nowrap; border:1px solid transparent}
+  .tag.rel.null{color:var(--accent-strong); background:var(--accent-wash); border-color:var(--accent-line)}
+  .tag.rel.risk{color:var(--flag); background:var(--flag-wash); border-color:var(--flag-line)}
+  .tag.rel.ctx{color:var(--ink-2); background:var(--surface-2); border-color:var(--line)}
+  .tag.coi{color:var(--ink-2); background:var(--surface-2); border-color:var(--line)}
+  .tag.lb{color:var(--accent-strong); background:var(--accent-wash); border-color:var(--accent-line); font-weight:600}
+  .tag.conf{color:var(--ink-3); background:transparent; border-color:var(--line)}
+  .ev-find{font-size:13.5px; color:var(--ink); margin-top:8px; line-height:1.45}
+  .receipt{display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--line-2); font-size:13px; color:var(--ink-2); line-height:1.55}
+  .ev.open .receipt{display:block}
+  .receipt a{display:inline-block; margin-top:9px; font-family:var(--font-mono); font-size:11.5px; color:var(--accent); text-decoration:none}
+  .receipt a:hover{text-decoration:underline}
+
+  @media (max-width:640px){
+    .axis{grid-template-columns:1fr; gap:10px}
+    .axis-head{padding-top:0}
+    .count-num{font-size:28px}
+  }
+</style>
+
+<div class="app">
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand"><b>epistack</b> · <span>decompose</span></div>
+      <div class="step">Step 1 of 3 — shape the question</div>
+    </div>
+
+    <section class="ask">
+      <label class="eyebrow" for="q">The question, as asked</label>
+      <textarea id="q" class="question" spellcheck="false">Are eggs good to eat? How many should I eat? I keep hearing they're full of cholesterol but also that they're the perfect protein. Should I just have eggs for breakfast every day?</textarea>
+      <div class="ask-actions">
+        <button id="decompose" class="btn-primary">Decompose &nbsp;▸</button>
+        <span class="hint">The AI proposes the breakdown. You prune whatever you don't care about — the space concentrates on what you actually mean.</span>
+      </div>
+    </section>
+
+    <section id="work" class="work" hidden aria-live="polite">
+      <div class="summary reveal">
+        <div class="count">
+          <span id="countNum" class="count-num">256</span>
+          <span class="count-label">possible interpretations</span>
+        </div>
+        <div class="sm-div"></div>
+        <div class="sm">Prior: <b>uniform</b><br>max uncertainty until evidence flows</div>
+        <div class="sm">Named framings live: <b class="mono" id="liveNum">6</b> / 6<br>investigating <b>F1</b> first (this slice)</div>
+        <button id="reset" class="btn-ghost" type="button">Reset</button>
+      </div>
+
+      <div class="eyebrow reveal" style="margin-bottom:12px">The AI's breakdown — four axes of ambiguity</div>
+      <div id="axes" class="axes reveal"></div>
+
+      <div class="reveal">
+        <div class="framings-head">
+          <h2>Concrete framings</h2>
+          <span>★ = what people usually mean · click one to open its evidence</span>
+        </div>
+        <div id="framings" class="framing-cards"></div>
+      </div>
+
+      <div id="detail" class="detail" hidden></div>
+
+      <div class="foot reveal">
+        <span class="k">note</span>
+        <span>Prototype: the decomposition is <b style="color:var(--ink-2)">precomputed</b> for the eggs question so it stays instant — compile offline, inspect live. Every chip and framing here is a proposal you'd reshape; edits would propagate to what gets investigated.</span>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  var AXES=[
+    {code:'A',name:'what counts as “an egg”',opts:[
+      {id:'A1',label:'whole · standard'},
+      {id:'A2',label:'whole · pasture-raised',flag:'production usually unrecorded'},
+      {id:'A3',label:'whites only'},
+      {id:'A4',label:'omega-3 fortified'}
+    ]},
+    {code:'B',name:'what “eating” means',opts:[
+      {id:'B1',label:'~1/day · replacing refined carbs'},
+      {id:'B2',label:'~1/day · added on top'},
+      {id:'B3',label:'2+ /day'},
+      {id:'B4',label:'a few / week'}
+    ]},
+    {code:'C',name:'“good” for what',opts:[
+      {id:'C1',label:'heart / CVD risk'},
+      {id:'C2',label:'weight / satiety'},
+      {id:'C3',label:'muscle / protein'},
+      {id:'C4',label:'energy / micronutrients'}
+    ]},
+    {code:'D',name:'for whom',opts:[
+      {id:'D1',label:'healthy adults'},
+      {id:'D2',label:'people with diabetes'},
+      {id:'D3',label:'hyper-responders / high LDL',flag:'~15–25% of people'},
+      {id:'D4',label:'children / older adults'}
+    ]}
+  ];
+  var FRAMINGS=[
+    {id:'F1',req:['A1','B1','C1','D1'],star:true,slice:true,text:'In healthy adults, does ~1 standard egg/day <b>replacing a refined-carb breakfast</b> raise heart risk?'},
+    {id:'F2',req:['A1','B3','C2','D1'],star:true,text:'Do <b>2+ eggs/day</b> help a healthy adult feel full and lose weight?'},
+    {id:'F3',req:['A1','B1','C3','D1'],text:'Is one egg a day meaningful protein for <b>building muscle</b>?'},
+    {id:'F4',req:['A1','B2','C1','D2'],text:'For someone <b>with diabetes</b>, does adding a daily egg raise heart risk?'},
+    {id:'F5',req:['A2','B1','C1','D1'],text:'Do <b>pasture-raised</b> eggs change the heart-risk answer vs standard?'},
+    {id:'F6',req:['A1','B1','C1','D3'],text:'For a cholesterol <b>hyper-responder</b>, does a daily egg raise heart risk?'}
+  ];
+
+  var dropped={};            // option id -> true if pruned
+  var tracedFraming=null;    // framing id currently traced
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  var axesEl=document.getElementById('axes');
+  var framesEl=document.getElementById('framings');
+  var countEl=document.getElementById('countNum');
+  var liveEl=document.getElementById('liveNum');
+
+  function label(id){for(var i=0;i<AXES.length;i++){for(var j=0;j<AXES[i].opts.length;j++){if(AXES[i].opts[j].id===id)return AXES[i].opts[j].label;}}return id;}
+
+  // build axes
+  AXES.forEach(function(ax){
+    var row=document.createElement('div'); row.className='axis';
+    var head=document.createElement('div'); head.className='axis-head';
+    head.innerHTML='<span class="axis-code">'+ax.code+'</span><span class="axis-name">'+ax.name+'</span>';
+    var chips=document.createElement('div'); chips.className='chips';
+    ax.opts.forEach(function(o){
+      var c=document.createElement('button'); c.type='button'; c.className='chip'; c.dataset.id=o.id;
+      c.setAttribute('aria-pressed','true');
+      c.innerHTML=o.label+(o.flag?'<span class="flag">'+o.flag+'</span>':'');
+      c.addEventListener('click',function(){ toggle(o.id,c); });
+      chips.appendChild(c);
+    });
+    row.appendChild(head); row.appendChild(chips); axesEl.appendChild(row);
+  });
+
+  // build framings
+  FRAMINGS.forEach(function(f){
+    var card=document.createElement('button'); card.type='button'; card.className='framing'+(f.slice?' traced':''); card.dataset.id=f.id;
+    var badges='<span class="fid">'+f.id+'</span>';
+    if(f.slice) badges+='<span class="badge slice">this slice</span>';
+    else if(f.star) badges+='<span class="badge star">★ common</span>';
+    card.innerHTML='<div class="framing-top">'+badges+'</div>'+
+      '<div class="framing-text">'+f.text+'</div>'+
+      '<div class="framing-path">'+f.req.join('  ·  ')+'</div>';
+    card.addEventListener('click',function(){ traceFraming(f.id); openDetail(f.id); });
+    framesEl.appendChild(card);
+  });
+
+  function activeCount(ax){var n=0; ax.opts.forEach(function(o){if(!dropped[o.id])n++;}); return n;}
+  function totalInterps(){var p=1; for(var i=0;i<AXES.length;i++){p*=activeCount(AXES[i]);} return p;}
+  function framingLive(f){return f.req.every(function(id){return !dropped[id];});}
+
+  function toggle(id,chip){
+    dropped[id]=!dropped[id];
+    chip.classList.toggle('off',!!dropped[id]);
+    chip.setAttribute('aria-pressed',dropped[id]?'false':'true');
+    render();
+  }
+
+  function traceFraming(id){
+    tracedFraming = (tracedFraming===id)? null : id;
+    render();
+  }
+
+  var animating=false;
+  function tweenCount(to){
+    var from=parseInt(countEl.textContent,10)||0;
+    if(reduce||from===to){countEl.textContent=to; return;}
+    var start=null, dur=380;
+    animating=true;
+    function step(ts){
+      if(start===null)start=ts;
+      var t=Math.min(1,(ts-start)/dur);
+      var e=1-Math.pow(1-t,3);
+      countEl.textContent=Math.round(from+(to-from)*e);
+      if(t<1){requestAnimationFrame(step);} else {countEl.textContent=to; animating=false;}
+    }
+    requestAnimationFrame(step);
+  }
+
+  function render(){
+    // count
+    var total=totalInterps();
+    tweenCount(total);
+    countEl.style.color = total===0 ? 'var(--flag)' : 'var(--accent)';
+    // framings live + trace
+    var live=0;
+    var traceIds = tracedFraming ? (FRAMINGS.filter(function(f){return f.id===tracedFraming;})[0]||{}).req : null;
+    Array.prototype.forEach.call(framesEl.children,function(card){
+      var f=FRAMINGS.filter(function(x){return x.id===card.dataset.id;})[0];
+      var isLive=framingLive(f); if(isLive)live++;
+      card.classList.toggle('dim',!isLive);
+      card.classList.toggle('traced', tracedFraming===f.id);
+    });
+    liveEl.textContent=live;
+    // chip trace highlight
+    Array.prototype.forEach.call(axesEl.querySelectorAll('.chip'),function(chip){
+      chip.classList.toggle('trace', !!(traceIds && traceIds.indexOf(chip.dataset.id)>=0));
+    });
+  }
+
+  // ---- step 2: evidence for a framing (precomputed; F1 only — crux-directed expansion) ----
+  var F1_SUMMARY={
+    verdict:'No reliable link to cardiovascular events for a healthy, non-diabetic adult at ~1 egg/day. It raises LDL ~8 mg/dL — what matters is what the egg replaces.',
+    confidence:'low–moderate',
+    scope:'healthy · non-diabetic · normolipidemic · ~1/day · hard CVD events (not LDL alone)',
+    cruxes:[
+      'Comparator — “eggs vs what?” Swapping ½ egg/day for nuts/legumes ≈ −13% mortality; for processed meat, eggs look better.',
+      'Do you trust observational adjustment? US egg-eaters eat 5× more bacon; the association’s sign flips US (harm) vs China (protective).'
+    ]
+  };
+  var F1_EV=[
+    {id:'zhong-2019',cite:'Zhong 2019 · JAMA',url:'https://pubmed.ncbi.nlm.nih.gov/30874756/',rel:'risk',coi:'',conf:'H',lb:true,verified:true,
+     find:'+½ egg/day → CVD HR 1.06 (1.03–1.10).',note:'But the egg signal went NON-significant after adjusting for dietary cholesterol — it’s the cholesterol, not the egg. Self-verified against JAMA.'},
+    {id:'drouin-chartier-2020',cite:'Drouin-Chartier 2020 · BMJ',url:'https://pmc.ncbi.nlm.nih.gov/articles/PMC7190072/',rel:'null',coi:'',conf:'H',lb:false,
+     find:'≥1/day → CVD HR 0.93 (0.82–1.05); meta of 1.72M → RR 0.98.',note:'The main null, and the substitution engine: egg→red/processed meat = worse; egg→fish/legumes = better.'},
+    {id:'pure-2020',cite:'PURE / Dehghan 2020 · AJCN',url:'https://pubmed.ncbi.nlm.nih.gov/31965140/',rel:'null',coi:'💊',conf:'H',lb:false,
+     find:'≥7/wk → CVD HR 0.92 (0.83–1.01).',note:'Global null across 50 countries. Rides on heavy pharma-platform funding — flagged, not disqualifying.'},
+    {id:'china-kadoorie-2018',cite:'China Kadoorie 2018 · Heart',url:'https://pmc.ncbi.nlm.nih.gov/articles/PMC6241631/',rel:'null',coi:'',conf:'H',lb:false,
+     find:'Daily eggs → CVD HR 0.89 (0.87–0.92) — inverse.',note:'Sign is OPPOSITE the US cohorts, because egg intake tracks higher SES/health in China. This is the confounding fingerprint.'},
+    {id:'godos-2021',cite:'Godos 2021 · Eur J Nutr',url:'https://pmc.ncbi.nlm.nih.gov/articles/PMC8137614/',rel:'null',coi:'',conf:'H',lb:false,
+     find:'≤1/day → CVD SRR 0.94 (mildly protective).',note:'Hides a heart-failure signal: 1.15 (1.02–1.30) at 1/day. The graph keeps what the headline drops.'},
+    {id:'mousavi-2022',cite:'Mousavi 2022 · Adv Nutr',url:'https://pmc.ncbi.nlm.nih.gov/articles/PMC9526855/',rel:'null',coi:'',conf:'H',lb:false,
+     find:'CVD mortality RR 1.04 (0.87–1.23) — null.',note:'Hides a cancer-mortality signal: 1.20 (1.04–1.39).'},
+    {id:'umbrella-2025',cite:'Umbrella review 2025 · NMCD',url:'https://pubmed.ncbi.nlm.nih.gov/39934049/',rel:'null',coi:'',conf:'H',lb:false,
+     find:'“No association” for CVD/mortality; LDL +7.39 mg/dL.',note:'Rates its own inputs “critically low” quality (AMSTAR-2). Convergence on null ≠ a strong null — this is why confidence stays capped.'},
+    {id:'zhuang-2021',cite:'Zhuang 2021 · PLOS Med',url:'https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.1003508',rel:'risk',coi:'',conf:'H',lb:false,
+     find:'+½ egg/day → mortality HR 1.07; 63% mediated by cholesterol.',note:'Names the comparator crux with numbers: ½ egg → nuts/legumes = −13% mortality.'},
+    {id:'li-kang-2020',cite:'Li 2020 · Nutrients (RCT meta)',url:'https://pmc.ncbi.nlm.nih.gov/articles/PMC7400894/',rel:'ctx',coi:'',conf:'H',lb:false,
+     find:'Eggs raise LDL +8.14 mg/dL; LDL:HDL +0.14.',note:'INDEPENDENT (non-industry) — settles the physiology. Survives a COI-cluster ablation, so the LDL rise isn’t industry spin.'},
+    {id:'kolb-2023',cite:'Kolb/Fernandez 2023 · Curr Athero Rep',url:'https://pmc.ncbi.nlm.nih.gov/articles/PMC10285014/',rel:'ctx',coi:'🥚',conf:'H',lb:false,
+     find:'Only ~7% of studies adjusted for saturated fat.',note:'The confounding argument is REAL — but the review is egg-industry-funded. Carry the point AND the conflict.'},
+    {id:'barnard-2021',cite:'Barnard 2021 · Am J Lifestyle Med',url:'https://pmc.ncbi.nlm.nih.gov/articles/PMC7958219/',rel:'ctx',coi:'🌱',conf:'H',lb:false,
+     find:'Industry-funded studies: 49% discordant conclusions vs 13%.',note:'Quantifies the funding bias — but authored by anti-egg advocates (PCRM). Symmetric COI: neither pole gets a free pass.'},
+    {id:'ioannidis-2018',cite:'Ioannidis 2018 · JAMA',url:'https://jamanetwork.com/journals/jama/fullarticle/2698337',rel:'ctx',coi:'',conf:'H',lb:false,
+     find:'“The noise is much stronger than the signal.”',note:'Undercuts confident causal claims on BOTH sides — a calibration anchor for how much any single cohort can carry.'}
+  ];
+  var detailEl=document.getElementById('detail');
+  function relLabel(r){return r==='risk'?'suggests risk':(r==='null'?'no clear link':'context');}
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+  function openDetail(fid){
+    var f=FRAMINGS.filter(function(x){return x.id===fid;})[0];
+    detailEl.hidden=false;
+    if(fid!=='F1'){
+      detailEl.innerHTML='<div class="detail-stub"><span class="fid">'+fid+'</span> not investigated yet.<br><br>'+
+        '<span>Effort went to <b>F1</b> first — the attractive state with a live disagreement (crux-directed expansion). '+
+        'Investigating this framing would spawn its own evidence graph; nothing is precomputed for it.</span></div>';
+    } else {
+      var s=F1_SUMMARY;
+      var cruxes=s.cruxes.map(function(c){return '<li>'+c+'</li>';}).join('');
+      var cards=F1_EV.map(function(e,i){
+        return '<div class="ev" role="button" tabindex="0" data-i="'+i+'">'+
+          '<div class="ev-head"><span class="ev-cite">'+e.cite+'</span>'+
+          (e.lb?'<span class="tag lb">◆ load-bearing</span>':'')+
+          '<span class="tag rel '+e.rel+'">'+relLabel(e.rel)+'</span>'+
+          (e.coi?'<span class="tag coi">'+e.coi+' COI</span>':'')+
+          '<span class="tag conf">'+(e.verified?'✓ ':'')+e.conf+'</span></div>'+
+          '<div class="ev-find">'+e.find+'</div>'+
+          '<div class="receipt"><span class="rlabel">why it does / doesn’t count</span>'+e.note+
+          '<br><a href="'+e.url+'" target="_blank" rel="noopener">open source ↗</a></div>'+
+          '</div>';
+      }).join('');
+      detailEl.innerHTML=
+        '<div class="detail-head">'+
+          '<div class="dh-top"><span class="fid">F1 · investigating</span>'+
+          '<span class="conf-pill">confidence: '+s.confidence+'</span>'+
+          '<button class="dclose" type="button" aria-label="Close evidence">✕</button></div>'+
+          '<div class="verdict">'+s.verdict+'</div>'+
+          '<div class="scope">scope · '+s.scope+'</div>'+
+          '<div class="cruxes"><span class="rlabel">the disagreement turns on</span><ol>'+cruxes+'</ol></div>'+
+        '</div>'+
+        '<div class="ev-head-label"><span class="rlabel">evidence ('+F1_EV.length+') — click any card for its receipt</span></div>'+
+        '<div class="ev-list">'+cards+'</div>';
+      Array.prototype.forEach.call(detailEl.querySelectorAll('.ev'),function(b){
+        function tog(){ b.classList.toggle('open'); }
+        b.addEventListener('click',tog);
+        b.addEventListener('keydown',function(ev){ if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); tog(); }});
+      });
+      Array.prototype.forEach.call(detailEl.querySelectorAll('.receipt a'),function(a){
+        a.addEventListener('click',function(ev){ ev.stopPropagation(); });
+      });
+      var dc=detailEl.querySelector('.dclose');
+      if(dc) dc.addEventListener('click',function(){ detailEl.hidden=true; });
+    }
+    if(!reduce) detailEl.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+
+  // decompose reveal
+  var work=document.getElementById('work');
+  document.getElementById('decompose').addEventListener('click',function(){
+    if(!work.hidden){ work.scrollIntoView({behavior:reduce?'auto':'smooth'}); return; }
+    work.hidden=false;
+    render();
+    var reveals=work.querySelectorAll('.reveal');
+    if(reduce){ reveals.forEach(function(r){r.classList.add('in');}); }
+    else{
+      // stagger
+      var i=0;
+      reveals.forEach(function(r){
+        setTimeout(function(){ r.classList.add('in'); }, 60*i); i++;
+      });
+      // count rises from 0 for a beat of drama
+      countEl.textContent='0'; setTimeout(function(){ tweenCount(totalInterps()); }, 180);
+    }
+    setTimeout(function(){ work.scrollIntoView({behavior:reduce?'auto':'smooth',block:'nearest'}); }, 40);
+  });
+
+  document.getElementById('reset').addEventListener('click',function(){
+    dropped={}; tracedFraming=null;
+    Array.prototype.forEach.call(axesEl.querySelectorAll('.chip'),function(chip){chip.classList.remove('off'); chip.setAttribute('aria-pressed','true');});
+    render();
+  });
+})();
+</script>
