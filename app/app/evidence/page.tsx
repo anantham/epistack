@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { corpusMeta, evidenceSources, studyInventory } from "../../data/eggs-weight-corpus";
+import { corpusMeta, studyInventory } from "../../data/eggs-weight-corpus";
+import { atomicResults, evidenceFamilies, sourcesWithResults } from "../../data/eggs-result-ledger";
 import pubmedDiscovery from "../../data/pubmed-discovery.json";
 import { CaseHeader, EvidenceSubnav } from "../components/case-navigation";
 import { EvidenceBrowser } from "./evidence-browser";
@@ -12,14 +13,15 @@ export default function EvidencePage() {
         <EvidenceSubnav active="sources" />
         <header className="page-hero">
           <div>
-            <div className="eyebrow">Claim-matched corpus · Human review required</div>
-            <h1>Inspect the evidence, one source at a time.</h1>
+            <div className="eyebrow">Result ledger · Human review required</div>
+            <h1>A paper can disagree with itself.</h1>
             <p className="lede">
-              These records have been extracted deeply enough to inspect relevance, provenance, funding, and limitations. Direction is not confidence.
+              Inspect the individual analyses, estimates, and interpretations inside each source. Relationships belong to results—not to publications as a whole.
             </p>
           </div>
           <div className="corpus-counts" aria-label="Evidence corpus status">
-            <Link href="/evidence"><b>{evidenceSources.length}</b><span>deep sources</span></Link>
+            <Link href="/evidence"><b>{atomicResults.length}</b><span>atomic results</span></Link>
+            <Link href="/matrix"><b>{evidenceFamilies.length}</b><span>evidence families</span></Link>
             <Link href="/inventory"><b>{studyInventory.length}</b><span>trial records</span></Link>
             <Link href="/discoveries"><b>{pubmedDiscovery.recordsFetched}</b><span>discoveries</span></Link>
           </div>
@@ -31,7 +33,7 @@ export default function EvidencePage() {
             <strong>{corpusMeta.reviewCoverage}</strong>
             <small>{corpusMeta.updateCoverage}</small>
           </div>
-          <p>{corpusMeta.caveat}</p>
+          <p>{corpusMeta.caveat} {sourcesWithResults.length} source containers currently have result-level decomposition; other records remain visible in the broader trial inventory.</p>
         </div>
 
         <EvidenceBrowser />

@@ -8,7 +8,7 @@ const stages: Array<{ id: InvestigationStage; label: string; href: string }> = [
   { id: "frame", label: "Frame", href: "/" },
   { id: "evidence", label: "Evidence", href: "/evidence" },
   { id: "assess", label: "Assess", href: "/inventory" },
-  { id: "synthesize", label: "Synthesize", href: "/synthesis" },
+  { id: "synthesize", label: "Decide", href: "/synthesis" },
 ];
 
 export function CaseHeader({ active }: { active: InvestigationStage }) {
@@ -33,7 +33,8 @@ export function CaseHeader({ active }: { active: InvestigationStage }) {
 }
 
 const evidenceViews = [
-  { id: "sources", label: "Deep sources", href: "/evidence" },
+  { id: "sources", label: "Result ledger", href: "/evidence" },
+  { id: "matrix", label: "Claim matrix", href: "/matrix" },
   { id: "inventory", label: "Trial inventory", href: "/inventory" },
   { id: "discoveries", label: "Discovery queue", href: "/discoveries" },
 ] as const;

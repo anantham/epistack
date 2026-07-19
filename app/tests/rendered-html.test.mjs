@@ -89,13 +89,15 @@ test("starter preview has been removed", async () => {
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
 
-test("evidence corpus keeps discovery separate from assessed evidence", async () => {
-  const [evidencePage, evidenceBrowser, synthesisPage, discoveryPage, corpus, discovery] = await Promise.all([
+test("evidence corpus keeps discovery separate and decomposes sources into results", async () => {
+  const [evidencePage, evidenceBrowser, matrixPage, synthesisPage, discoveryPage, corpus, ledger, discovery] = await Promise.all([
     readFile(new URL("app/evidence/page.tsx", root), "utf8"),
     readFile(new URL("app/evidence/evidence-browser.tsx", root), "utf8"),
+    readFile(new URL("app/matrix/page.tsx", root), "utf8"),
     readFile(new URL("app/synthesis/page.tsx", root), "utf8"),
     readFile(new URL("app/discoveries/page.tsx", root), "utf8"),
     readFile(new URL("data/eggs-weight-corpus.ts", root), "utf8"),
+    readFile(new URL("data/eggs-result-ledger.ts", root), "utf8"),
     readFile(new URL("data/pubmed-discovery.json", root), "utf8"),
   ]);
   const discoveryArtifact = JSON.parse(discovery);
@@ -105,18 +107,27 @@ test("evidence corpus keeps discovery separate from assessed evidence", async ()
   assert.equal(discoveryArtifact.recordsFetched, 164);
   assert.equal(discoveryArtifact.records.length, discoveryArtifact.recordsFetched);
   assert.match(discoveryArtifact.evidencePolicy, /Discovery is not evidence/);
-  assert.match(evidencePage, /Inspect the evidence, one source at a time/);
-  assert.match(evidenceBrowser, /Inspect quality and provenance/);
-  assert.match(synthesisPage, /Load-bearing evidence/);
-  assert.match(synthesisPage, /What would change the answer\?/);
+  assert.match(evidencePage, /A paper can disagree with itself/);
+  assert.match(evidenceBrowser, /Source → study → analysis → result → claim relationship/);
+  assert.match(evidenceBrowser, /Grouped, not another vote/);
+  assert.match(matrixPage, /Do not count marks as votes/);
+  assert.match(matrixPage, /Independence register/);
+  assert.match(ledger, /sourceRelationshipSummary/);
+  assert.match(ledger, /vander-wal-free-living-weight/);
+  assert.match(ledger, /keogh-within-arm-loss/);
+  assert.match(ledger, /emrani-heterogeneity/);
+  assert.match(synthesisPage, /Decision under consideration/);
+  assert.match(synthesisPage, /Highest-value next information/);
+  assert.match(synthesisPage, /Six breakfasts can test usability, not universal health/);
   assert.match(discoveryPage, /Keep discovery separate from evidence/);
 });
 
 test("the investigation is split into focused navigable routes", async () => {
-  const [frame, map, navigation, inventory, discoveries, synthesis] = await Promise.all([
+  const [frame, map, navigation, matrix, inventory, discoveries, synthesis] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/map/page.tsx", root), "utf8"),
     readFile(new URL("app/components/case-navigation.tsx", root), "utf8"),
+    readFile(new URL("app/matrix/page.tsx", root), "utf8"),
     readFile(new URL("app/inventory/page.tsx", root), "utf8"),
     readFile(new URL("app/discoveries/page.tsx", root), "utf8"),
     readFile(new URL("app/synthesis/page.tsx", root), "utf8"),
@@ -127,6 +138,7 @@ test("the investigation is split into focused navigable routes", async () => {
   assert.match(map, /decompositionSessionKey/);
   assert.match(map, /claimTemplate/);
   assert.match(navigation, /href: "\/evidence"/);
+  assert.match(navigation, /href: "\/matrix"/);
   assert.match(navigation, /href: "\/inventory"/);
   assert.match(navigation, /href: "\/synthesis"/);
   assert.match(navigation, /stage-tooltip/);
@@ -134,8 +146,23 @@ test("the investigation is split into focused navigable routes", async () => {
   assert.doesNotMatch(navigation, /className="wordmark"/);
   assert.doesNotMatch(navigation, /Discovery queue<\/Link>/);
   assert.match(inventory, /controlled-trial records/);
+  assert.match(matrix, /Claim matrix|Cross-examine claims/);
   assert.match(discoveries, /Evidence intake/);
-  assert.match(synthesis, /Provisional synthesis/);
+  assert.match(synthesis, /Decision episode/);
+});
+
+test("persistent schema separates documents, studies, analyses, results, and decisions", async () => {
+  const schema = await readFile(new URL("db/schema.ts", root), "utf8");
+  assert.match(schema, /export const claimFrames/);
+  assert.match(schema, /export const studies/);
+  assert.match(schema, /export const analyses/);
+  assert.match(schema, /export const resultRecords/);
+  assert.match(schema, /export const evidenceRelations/);
+  assert.match(schema, /export const dependenceGroups/);
+  assert.match(schema, /export const decisionEpisodes/);
+  assert.match(schema, /export const protocols/);
+  assert.match(schema, /export const observations/);
+  assert.match(schema, /export const updateEvents/);
 });
 
 test("arbitrary questions use a key-gated elicitation and refinement path", async () => {

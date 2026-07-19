@@ -29,10 +29,11 @@ For decomposition, open the settings icon and paste an OpenRouter API key. It is
 8. Keep a different branch, park one, or edit its meaning.
 9. Add an interpretation the model missed and watch the claim template recompile.
 10. Create an explicitly labeled probability placeholder.
-11. For the eggs fixture, continue to Evidence and inspect the existing claim-matched corpus.
-12. Use Assess for the 32-study inventory and the Discovery Queue for unassessed matches.
-13. Open Synthesize to inspect the provisional read, load-bearing evidence, and cruxes.
-14. Save a revision or export the complete framing artifact as JSON.
+11. For the eggs fixture, continue to Evidence and inspect atomic results inside each source.
+12. Open the Claim Matrix to cross-examine scoped claims without treating multiple endpoints as independent votes.
+13. Use Assess for the 32-study inventory and the Discovery Queue for unassessed matches.
+14. Open Decide to inspect the conditional policy, outcome coverage, next information, and draft observation protocol.
+15. Save a revision or export the complete framing artifact as JSON.
 
 ## Current boundary
 
@@ -61,7 +62,11 @@ It currently implements:
 - JSON export;
 - D1-backed artifact snapshots;
 - a 32-publication controlled-trial inventory;
-- 11 claim-matched source extractions with funding, provenance, limitations, and risk-of-bias fields;
+- result-level decomposition of key sources into studies, analyses, estimates, author interpretations, and typed claim relationships;
+- explicit evidence families that prevent multiple endpoints and meta-analyses from masquerading as independent votes;
+- a claim × source matrix implemented as a projection over the result ledger rather than the canonical record;
+- decision episodes, options, outcomes, protocols, observations, and update events in the persistent schema;
+- 11 broader claim-matched source extractions with funding, provenance, limitations, and risk-of-bias fields;
 - 164 PubMed discovery records; and
 - normalized schema for sources, evidence, assessments, and beliefs.
 
@@ -69,12 +74,13 @@ The interface is organized as a case workspace rather than one long report:
 
 - `/` — submit the question and inspect its ambiguous wording;
 - `/map` — edit the generated interpretation map and compile the claim;
-- `/evidence` — inspect claim-matched deep source extractions;
+- `/evidence` — inspect result-level relationships, locators, scope, and dependence inside each source;
+- `/matrix` — cross-examine scoped claims against source containers without vote-counting;
 - `/inventory` — search and assess the controlled-trial inventory;
 - `/discoveries` — screen the unassessed PubMed intake queue; and
-- `/synthesis` — audit the provisional conclusion and its cruxes.
+- `/synthesis` — use the evidence graph for a concrete, reversible decision and measurement plan.
 
-Discovery is intentionally not treated as evidence. The app does not yet automatically verify full text, extract passages, perform entailment checks, independently reproduce the meta-analysis, or update the claim probability. Those steps require model assistance plus human review.
+Discovery is intentionally not treated as evidence. Result relationships are attributed and carry verification status; abstract-only records remain visibly incomplete. The app does not yet automatically verify every full text, perform scope-entailment checks, independently reproduce the meta-analysis, subscribe to retractions, or aggregate contributed personal observations. Those steps require model assistance plus human review.
 
 ## Commands
 
@@ -94,12 +100,14 @@ npm run evidence:discover
 - `lib/decomposition-server.ts` — schema, elicitation method prompt, sanitization, and test fixture fallback
 - `app/components/case-navigation.tsx` — persistent stage and evidence-view navigation
 - `app/evidence/` — deep source review
+- `app/matrix/` — result-level claim × source projection
 - `app/inventory/` — controlled-trial assessment
 - `app/discoveries/` — unassessed search intake
 - `app/synthesis/` — provisional synthesis and cruxes
 - `app/globals.css` — responsive interface
 - `app/api/cases/route.ts` — save and retrieve snapshots
 - `data/eggs-weight-corpus.ts` — assessed sources and 32-study review inventory
+- `data/eggs-result-ledger.ts` — scoped claims, atomic results, typed relations, and evidence families
 - `data/pubmed-discovery.json` — reproducible discovery output
 - `scripts/discover-pubmed.mjs` — PubMed discovery collector
 - `db/schema.ts` — relational epistemic artifact model
