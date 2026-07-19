@@ -91,3 +91,54 @@ Not yet built (the roadmap this doc defines):
 - The **temporal layer**: versioning, source-status subscriptions (Retraction Watch / PubPeer), and
   propagation of updates along edges.
 - Persistence + a merge/import path (canonical ids exist; the store + union-merge do not).
+
+## Assessment layer — what to actually *believe*, and what to look at next
+
+Structure (above) makes the argument navigable. This layer judges it. Six moves, each a computation
+over the graph — not a vibe:
+
+- **Rhetoric vs. evidence gap** — flag claims whose *persuasive* weight exceeds their *evidential*
+  weight: authority/guideline tone, "the science is settled" language, causal framing laid over
+  observational data. Signal = stated-confidence − provenance-strength (small n, observational,
+  COI → the gap is the rhetoric).
+- **Correlated evidence masquerading as independent** — dedupe (done) is only step one. Three
+  "independent" meta-analyses that all pool the *same* ARIC/Framingham cohorts are **one** datum, not
+  three. Use the `cites`/shared-dataset graph to **discount** correlated agreement before counting votes.
+- **Cruxes** — the matrix already surfaces them (a row with both ✚ and ✕). Rank by
+  **decision-leverage × contestedness**: the eggs crux is *"is the diabetic CVD signal causal or
+  confounded by the foods eggs are eaten with?"* — resolve it and the buy/don't-buy flips.
+- **What's missing** — the graph knows its own holes: no RCT of *hard events* in diabetics; no data on
+  *pastured/local* eggs (the Muttichur farmer's ≠ industrial cage eggs the cohorts measured); no n=1.
+  Absent-node detection → the next collection targets.
+- **Calibration with out-of-model error** — in-model uncertainty (the entropy meter) is not enough.
+  Apply a haircut for out-of-model risk: adversarial information environment (industry-funding density),
+  publication bias (funnel asymmetry), and the limits of any single analyst/model. Report a **band**,
+  not a point — and widen it honestly.
+- **Settled vs. performed-settling** — distinguish genuine *independent convergence* from a guideline
+  *declaring* it settled or everyone echoing one influential paper. The deference graph exposes
+  echo-consensus; the matrix exposes whether "agreement" is independent or correlated.
+
+## The decision loop — artifact → action → commons (community science)
+
+The point is **not a fixed theory of eggs to worship**. It is: *should I buy 12 eggs from the Muttichur
+farmer next week and eat two a day, and what are the tradeoffs?* — a cheap, local, **reversible**,
+**self-testable** decision. The whole apparatus is scaffolding for that bet.
+
+1. **Decision node** — the graph rolls up to a recommendation *for this person* + the tradeoffs + the
+   single decisive test. (Here: local-farmer 2/day; real protein/choline value for a vegetarian lifter
+   **vs.** a contested diabetic CVD signal; the decisive move is *measure your own LDL/ApoB on vs. off*
+   — which an agent already surfaced.)
+2. **Decision log** — record what you chose, why, and the **graph version at decision time**. When the
+   temporal layer fires (a load-bearing source is retracted, a PI is discredited), you get notified that
+   *your* decision's basis moved.
+3. **n=1 self-experiment** — turn "measure your own response" into a protocol: eat 2/day for N weeks,
+   track body fat, weight, sleep, resting heart rate, LDL. Your body resolves *your* crux where the
+   population literature can't.
+4. **Contribute outcomes to the commons** — your n=1 result is **new primary evidence**, a Source others'
+   graphs can ingest. Consumer of evidence → **producer**. The commons compounds with *bodies*, not just
+   papers. This is community science.
+
+**Faithful + scalable** is the constraint on all of it: the AI does the scouring and structuring at
+scale; every claim, stance, and assessment stays **inspectable and attributed**; the human keeps the
+judgment and owns the decision. Provenance is what makes contributed outcomes *trustable* enough to
+compound instead of poisoning the well.
