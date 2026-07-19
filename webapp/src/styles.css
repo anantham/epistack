@@ -284,6 +284,30 @@ body{margin:0}
 .pa-crux{ font-family:var(--font-mono); font-size:11px; color:var(--accent-strong); margin-top:7px; line-height:1.4 }
 .lane-role{ font-family:var(--font-mono); font-size:10.5px; color:var(--accent-strong); background:var(--accent-wash); border:1px solid var(--accent-line); border-radius:5px; padding:2px 8px }
 
+/* decide capstone — the single-player payoff */
+.decide{ display:flex; flex-direction:column; gap:16px }
+.decide-bar{ display:flex; align-items:center; gap:14px; flex-wrap:wrap }
+.decision-panel{ background:var(--surface); border:1px solid var(--accent-line); border-radius:var(--r); box-shadow:var(--shadow); padding:22px 24px; display:flex; flex-direction:column; gap:18px }
+.dp-head{ display:flex; align-items:flex-start; gap:14px }
+.dp-stance{ flex-shrink:0; font-family:var(--font-mono); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; padding:6px 12px; border-radius:7px; color:var(--accent-strong); background:var(--accent-wash); border:1px solid var(--accent-line); white-space:nowrap }
+.dp-stance.st-no, .dp-stance.st-leanno{ color:var(--flag); background:var(--flag-wash); border-color:var(--flag-line) }
+.dp-stance.st-itdepends{ color:var(--ink-2); background:var(--surface-2); border-color:var(--line) }
+.dp-answer{ font-family:var(--font-serif); font-size:clamp(19px,2.3vw,25px); line-height:1.4; color:var(--ink) }
+.dp-cols{ display:grid; grid-template-columns:1fr 1fr; gap:20px }
+.dp-for ul, .dp-against ul, .dp-missing ul{ margin:8px 0 0; padding-left:18px; display:flex; flex-direction:column; gap:7px }
+.dp-for li, .dp-against li, .dp-missing li{ font-size:14px; line-height:1.5; color:var(--ink) }
+.dp-for li::marker{ color:var(--accent) }
+.dp-against li::marker{ color:var(--flag) }
+.dp-crux, .dp-test{ border-left:3px solid var(--accent); padding-left:16px }
+.dp-crux{ font-size:15.5px; line-height:1.5; color:var(--ink) }
+.dp-test{ border-left-color:var(--flag); font-size:15px; line-height:1.5; color:var(--ink) }
+.dp-conf{ display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; padding-top:14px; border-top:1px solid var(--line-2) }
+.dp-conf-chip{ flex-shrink:0; font-family:var(--font-mono); font-size:11px; padding:4px 10px; border-radius:6px; text-transform:uppercase; letter-spacing:.02em; border:1px solid var(--line) }
+.dp-conf-chip.c-high{ color:var(--accent-strong); background:var(--accent-wash); border-color:var(--accent-line) }
+.dp-conf-chip.c-medium{ color:var(--ink-2); background:var(--surface-2) }
+.dp-conf-chip.c-low{ color:var(--flag); background:var(--flag-wash); border-color:var(--flag-line) }
+.dp-conf-note{ font-size:13.5px; color:var(--ink-2); line-height:1.5 }
+
 /* lanes ⇄ matrix toggle */
 .view-toggle{ display:inline-flex; gap:2px; background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:3px; align-self:flex-start }
 .view-toggle button{ font-family:var(--font-mono); font-size:12px; color:var(--ink-3); background:transparent; border:none; border-radius:6px; padding:6px 13px; cursor:pointer }

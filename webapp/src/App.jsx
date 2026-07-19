@@ -657,6 +657,7 @@ function ResearchStage({ question, data, pdata, context }) {
   const [now, setNow] = useState(() => Date.now())
   const [plan, setPlan] = useState(null) // null | 'planning' | result | {error}
   const [view, setView] = useState('lanes') // lanes | matrix
+  const [decision, setDecision] = useState(null) // null | 'deciding' | result | {error}
   const statsById = useMemo(
     () => Object.fromEntries(axes.map((a) => [a.id, axisStats(a, lanes[a.id]?.findings || [])])),
     [axes, lanes],
@@ -725,6 +726,38 @@ function ResearchStage({ question, data, pdata, context }) {
       const st = lanes[a.id]?.status
       if (st !== 'searching' && st !== 'done') research(a)
     })
+  }
+
+  async function decide() {
+    setDecision('deciding')
+    try {
+      const dimensions = axes
+        .filter((a) => (lanes[a.id]?.findings || []).length > 0)
+        .map((a) => ({
+          name: a.name,
+          uncertainty: Math.round((statsById[a.id]?.u ?? 1) * 100),
+          verdict: verdict(statsById[a.id]).label,
+          findings: (lanes[a.id].findings || []).map((f) => ({
+            claim: f.claim,
+            supports: f.supports,
+            source: f.source,
+            kind: f.kind,
+            confidence: f.confidence,
+            coi: f.coi,
+            year: f.year,
+          })),
+        }))
+      const r = await fetch('/api/decide', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question, context: context || '', dimensions }),
+      })
+      const j = await r.json()
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+      setDecision(j)
+    } catch (e) {
+      setDecision({ error: String(e.message || e) })
+    }
   }
 
   const anyRunning = axes.some((a) => lanes[a.id]?.status === 'searching')
@@ -800,6 +833,62 @@ function ResearchStage({ question, data, pdata, context }) {
       </div>
 
       <GraphState axes={axes} statsById={statsById} />
+
+      {started && (
+        <div className="decide">
+          <div className="decide-bar">
+            <button className="btn-decompose" onClick={decide} disabled={decision === 'deciding'}>
+              {decision === 'deciding'
+                ? 'synthesizing your answer…'
+                : decision && !decision.error
+                  ? '↻ re-synthesize'
+                  : '▶ synthesize the answer'}
+            </button>
+            {decision === 'deciding' && <span className="orch-hint">reading the graph, weighing conflicts, calibrating confidence…</span>}
+            {decision && decision.error && <span className="dd-err">{decision.error}</span>}
+          </div>
+          {decision && decision !== 'deciding' && !decision.error && (
+            <div className="decision-panel">
+              <div className="dp-head">
+                <span className={`dp-stance st-${norm(decision.stance).replace(/[^a-z]/g, '')}`}>{decision.stance}</span>
+                <div className="dp-answer">{decision.answer}</div>
+              </div>
+              <div className="dp-cols">
+                <div className="dp-for">
+                  <span className="rlabel">for</span>
+                  <ul>{(decision.for || []).map((x, i) => <li key={i}>{x}</li>)}</ul>
+                </div>
+                <div className="dp-against">
+                  <span className="rlabel">against</span>
+                  <ul>{(decision.against || []).map((x, i) => <li key={i}>{x}</li>)}</ul>
+                </div>
+              </div>
+              {decision.crux && (
+                <div className="dp-crux">
+                  <span className="rlabel">the crux</span>
+                  {decision.crux}
+                </div>
+              )}
+              {decision.decisiveTest && (
+                <div className="dp-test">
+                  <span className="rlabel">the test that settles it for you (n=1)</span>
+                  {decision.decisiveTest}
+                </div>
+              )}
+              <div className="dp-conf">
+                <span className={`dp-conf-chip c-${norm(decision.confidence)}`}>{decision.confidence} confidence</span>
+                <span className="dp-conf-note">{decision.confidenceNote}</span>
+              </div>
+              {(decision.missing || []).length > 0 && (
+                <div className="dp-missing">
+                  <span className="rlabel">not yet represented — worth collecting</span>
+                  <ul>{decision.missing.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {started && (
         <div className="research-summary">

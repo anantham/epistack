@@ -127,6 +127,28 @@ ${p.brief ? `ORCHESTRATOR BRIEF — prioritise exactly this: ${JSON.stringify(p.
 {"findings":[{"claim":"one specific, quantitative sentence","supports":"one of the candidate resolutions, verbatim (or 'unclear')","source":"publication or org","url":"a real, working URL","kind":"meta-analysis|RCT|cohort|guideline|observational|expert","n":"sample size or scale, if stated","year":"YYYY","confidence":"high|medium|low","coi":"funding/conflict note, or 'none noted'"${hasCtx ? ',"relevance":"one line: how this applies to THIS asker specifically"' : ''}}]}`
 }
 
+// DECIDE — synthesize the whole graph into ONE person's actionable answer (no web; reasons over the evidence)
+function decidePrompt(p) {
+  return `You are helping ONE person reach an actionable, honest decision from a structured evidence graph. This is a concrete, reversible choice — NOT a theory to settle. Give them: the answer, the real tradeoffs, the single crux it hinges on, an honestly-calibrated confidence, what's missing, and the one test that would resolve it for THEM.
+
+QUESTION: ${JSON.stringify(p.question)}
+${p.context ? `THE ASKER: ${JSON.stringify(p.context)}\n` : ''}
+EVIDENCE — dimensions, each with its uncertainty and its findings (claim, the stance it supports, and the source's provenance): ${JSON.stringify(p.dimensions || [])}
+
+Be decisive but honest. Explicitly account for: what the evidence genuinely SETTLED vs. merely performed settling; correlated evidence (studies sharing cohorts are not independent votes); claims where rhetoric outweighs evidence; conflicts of interest; and the hard limit that population data cannot tell an individual their own response. Return ONLY JSON, no prose, no fences:
+{
+  "answer": "the direct recommendation for THIS person, 1-2 plain sentences",
+  "stance": "yes | lean-yes | it-depends | lean-no | no",
+  "for": ["a concrete reason to do it, grounded in a specific finding"],
+  "against": ["a concrete reason not to / a real risk, grounded in a specific finding"],
+  "crux": "the single unresolved question the decision most hinges on",
+  "decisiveTest": "the n=1 experiment that would resolve the crux for THEM — exactly what to measure, and for how long",
+  "confidence": "low | medium | high",
+  "confidenceNote": "honest calibration: what's genuinely contested, out-of-model risk (funding environment, single-analyst limits), and what population data can't tell this individual",
+  "missing": ["an important source, perspective, or data NOT represented in the evidence above"]
+}`
+}
+
 // CROSS-EXAMINE — structure disparate findings into a CLAIM × SOURCE matrix (agreement/contradiction)
 function matrixPrompt(p) {
   return `You are structuring disparate research findings into a CLAIM × SOURCE matrix so a human can see at a glance where the sources AGREE and where they CONTRADICT. First MERGE findings that assert the SAME claim in different forms into one claim. Then, for EACH source, decide its stance on EACH claim: "supports", "disputes", or "silent" (the source did not address that claim).
@@ -241,6 +263,7 @@ function apiPlugin() {
       )
       server.middlewares.use('/api/plan', handle((p) => (p.question && p.axes ? orchestratorPrompt(p) : null)))
       server.middlewares.use('/api/matrix', handle((p) => (p.dimensionName && p.findings ? matrixPrompt(p) : null)))
+      server.middlewares.use('/api/decide', handle((p) => (p.question && p.dimensions ? decidePrompt(p) : null)))
     },
   }
 }
