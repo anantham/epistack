@@ -1,0 +1,3915 @@
+{
+  "schemaVersion": "0.1.0",
+  "database": "PubMed",
+  "query": "(egg[Title/Abstract] OR eggs[Title/Abstract] OR \"Eggs\"[MeSH Terms]) AND (breakfast[Title/Abstract] OR \"weight loss\"[Title/Abstract] OR \"body weight\"[MeSH Terms] OR satiety[Title/Abstract]) AND (randomized controlled trial[Publication Type] OR controlled clinical trial[Publication Type] OR systematic review[Publication Type] OR meta-analysis[Publication Type]) AND humans[MeSH Terms]",
+  "countReportedByPubMed": 164,
+  "recordsFetched": 164,
+  "fetchedAt": "2026-07-19T07:31:03.352Z",
+  "evidencePolicy": "Discovery is not evidence. Records require source verification, claim matching, extraction, and assessment before they affect a belief.",
+  "records": [
+    {
+      "pmid": "42235640",
+      "title": "Effects of crackers enriched with polyunsaturated fatty acids with benefits for improving metabolic parameters: A double-blind randomized controlled trial in subjects with overweight.",
+      "authors": [
+        "Dénos C",
+        "Nain CW",
+        "Pachikian B",
+        "Hdidou S",
+        "Rasse C",
+        "Dierge E",
+        "Debier C",
+        "Trefois P",
+        "Larondelle Y",
+        "Lanthier N"
+      ],
+      "journal": "Clinical nutrition ESPEN",
+      "published": "2026 Aug",
+      "doi": "10.1016/j.clnesp.2026.103370",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/42235640/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "40933253",
+      "title": "Randomised crossover controlled trial of dietary interventions for glycaemic control when body weight is kept stable.",
+      "authors": [
+        "Fontes-Villalba M",
+        "Fika-Hernando ML",
+        "Picazo Ó",
+        "Frassetto LA",
+        "Carrera-Bastos P",
+        "Memon AA",
+        "Lippi G",
+        "Montagnana M",
+        "Granfeldt Y",
+        "Sundquist K",
+        "Sundquist J",
+        "Jönsson T"
+      ],
+      "journal": "Journal of nutritional science",
+      "published": "2025",
+      "doi": "10.1017/jns.2025.10028",
+      "pmcid": "PMC12418275",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/40933253/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "40004990",
+      "title": "Umbrella Review of Systematic Reviews and Meta-Analyses on the Consumption of Different Food Groups and the Risk of Overweight and Obesity.",
+      "authors": [
+        "Kristoffersen E",
+        "Hjort SL",
+        "Thomassen LM",
+        "Arjmand EJ",
+        "Perillo M",
+        "Balakrishna R",
+        "Onni AT",
+        "Sletten ISK",
+        "Lorenzini A",
+        "Fadnes LT"
+      ],
+      "journal": "Nutrients",
+      "published": "2025 Feb 13",
+      "doi": "10.3390/nu17040662",
+      "pmcid": "PMC11857968",
+      "publicationTypes": [
+        "Journal Article",
+        "Systematic Review",
+        "Meta-Analysis"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/40004990/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "39718599",
+      "title": "Long-term egg-protein hydrolysate consumption improves endothelial function: a randomized, double-blind, placebo-controlled trial in older adults with overweight or obesity.",
+      "authors": [
+        "Adams MS",
+        "Mensink RP",
+        "Plat J",
+        "Winkens B",
+        "Joris PJ"
+      ],
+      "journal": "European journal of nutrition",
+      "published": "2024 Dec 24",
+      "doi": "10.1007/s00394-024-03566-w",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/39718599/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "39267647",
+      "title": "Management of undernutrition during preconception and pregnancy in an urban setting in North India.",
+      "authors": [
+        "Dhabhai N",
+        "Chowdhury R",
+        "Taneja S",
+        "Shekhar M",
+        "Kaur J",
+        "Mittal P",
+        "Dewan R",
+        "Bhandari N"
+      ],
+      "journal": "Frontiers in public health",
+      "published": "2024",
+      "doi": "10.3389/fpubh.2024.1405247",
+      "pmcid": "PMC11390395",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/39267647/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "39245182",
+      "title": "Asian Low-Carbohydrate Diet with Increased Whole Egg Consumption Improves Metabolic Outcomes in Metabolic Syndrome: A 52-Week Intervention Study.",
+      "authors": [
+        "Pinsawas B",
+        "Surawit A",
+        "Mongkolsucharitkul P",
+        "Pongkunakorn T",
+        "Suta S",
+        "Manosan T",
+        "Ophakas S",
+        "Pumeiam S",
+        "Sranacharoenpong K",
+        "Mayurasakorn K"
+      ],
+      "journal": "The Journal of nutrition",
+      "published": "2024 Nov",
+      "doi": "10.1016/j.tjnut.2024.08.027",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/39245182/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "38759886",
+      "title": "An Egg Intervention Improves Ponderal But Not Linear Growth Among Infants 6-12 mo of Age in Rural Bangladesh.",
+      "authors": [
+        "Pasqualino MM",
+        "Shaikh S",
+        "Hossain MI",
+        "Islam MT",
+        "Ali H",
+        "Haque R",
+        "Ayesha K",
+        "Wu LS",
+        "Dyer B",
+        "Hasan K",
+        "Alland K",
+        "Schulze KJ",
+        "Johura FT",
+        "Alam M",
+        "West KP Jr",
+        "Ahmed T",
+        "Labrique AB",
+        "Palmer AC"
+      ],
+      "journal": "The Journal of nutrition",
+      "published": "2024 Jul",
+      "doi": "10.1016/j.tjnut.2024.05.006",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/38759886/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "38703228",
+      "title": "Long-term effects of an egg-protein hydrolysate on cognitive performance and brain vascular function: a double-blind randomized controlled trial in adults with elevated subjective cognitive failures.",
+      "authors": [
+        "Adams MS",
+        "Mensink RP",
+        "Plat J",
+        "Joris PJ"
+      ],
+      "journal": "European journal of nutrition",
+      "published": "2024 Sep",
+      "doi": "10.1007/s00394-024-03394-y",
+      "pmcid": "PMC11377360",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/38703228/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "38533552",
+      "title": "TAAR1 agonist ulotaront delays gastric emptying of solids in patients with schizophrenia and concurrent metabolic syndrome with prediabetes.",
+      "authors": [
+        "Milanović S",
+        "Dedic N",
+        "Lew R",
+        "Burton D",
+        "Koblan KS",
+        "Camilleri M",
+        "Hopkins SC"
+      ],
+      "journal": "Diabetes, obesity & metabolism",
+      "published": "2024 Jun",
+      "doi": "10.1111/dom.15569",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/38533552/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "38494692",
+      "title": "Effects of coffee and tea on postprandial cardiometabolic risk factors in healthy individuals: a randomized crossover trial.",
+      "authors": [
+        "Zhang C",
+        "Zhang J",
+        "Li D",
+        "Hu X"
+      ],
+      "journal": "Asia Pacific journal of clinical nutrition",
+      "published": "2024 Mar",
+      "doi": "10.6133/apjcn.202403_33(1).0011",
+      "pmcid": "PMC11170016",
+      "publicationTypes": [
+        "Randomized Controlled Trial",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/38494692/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "38408731",
+      "title": "Dietary Changes of Youth during the COVID-19 Pandemic: A Systematic Review.",
+      "authors": [
+        "Woods N",
+        "Seabrook JA",
+        "Schaafsma H",
+        "Burke S",
+        "Tucker T",
+        "Gilliland J"
+      ],
+      "journal": "The Journal of nutrition",
+      "published": "2024 Apr",
+      "doi": "10.1016/j.tjnut.2024.02.022",
+      "pmcid": "PMC11007747",
+      "publicationTypes": [
+        "Systematic Review",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/38408731/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "38141736",
+      "title": "Strategic food vehicles for vitamin D fortification and effects on vitamin D status: A systematic review and meta-analysis of randomised controlled trials.",
+      "authors": [
+        "Cashman KD",
+        "O'Neill CM"
+      ],
+      "journal": "The Journal of steroid biochemistry and molecular biology",
+      "published": "2024 Apr",
+      "doi": "10.1016/j.jsbmb.2023.106448",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Systematic Review",
+        "Meta-Analysis"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/38141736/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "38018158",
+      "title": "Effects of egg as an early complementary food on growth of 6- to 9-month-old infants: a randomised controlled trial.",
+      "authors": [
+        "Ricci H",
+        "Faber M",
+        "Ricci C",
+        "Kruger HS",
+        "Malan L",
+        "Nakiranda R",
+        "Visser M",
+        "Smuts CM"
+      ],
+      "journal": "Public health nutrition",
+      "published": "2023 Nov 29",
+      "doi": "10.1017/S1368980023002604",
+      "pmcid": "PMC10830362",
+      "publicationTypes": [
+        "Randomized Controlled Trial",
+        "Journal Article",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/38018158/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "37461099",
+      "title": "The effect of whole egg consumption on weight and body composition in adults: a systematic review and meta-analysis of clinical trials.",
+      "authors": [
+        "Emrani AS",
+        "Beigrezaei S",
+        "Zademohammadi F",
+        "Salehi-Abargouei A"
+      ],
+      "journal": "Systematic reviews",
+      "published": "2023 Jul 17",
+      "doi": "10.1186/s13643-023-02277-3",
+      "pmcid": "PMC10353215",
+      "publicationTypes": [
+        "Meta-Analysis",
+        "Systematic Review",
+        "Journal Article",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/37461099/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "37029213",
+      "title": "Association between maternal postpartum depressive symptoms, socioeconomic factors, and birth outcomes with infant growth in South Africa.",
+      "authors": [
+        "Ricci H",
+        "Nakiranda R",
+        "Malan L",
+        "Kruger HS",
+        "Visser M",
+        "Ricci C",
+        "Faber M",
+        "Smuts CM"
+      ],
+      "journal": "Scientific reports",
+      "published": "2023 Apr 7",
+      "doi": "10.1038/s41598-023-32653-x",
+      "pmcid": "PMC10080513",
+      "publicationTypes": [
+        "Randomized Controlled Trial",
+        "Journal Article",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/37029213/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "36904143",
+      "title": "Prolonged Egg Supplement Advances Growing Child's Growth and Gut Microbiota.",
+      "authors": [
+        "Suta S",
+        "Surawit A",
+        "Mongkolsucharitkul P",
+        "Pinsawas B",
+        "Manosan T",
+        "Ophakas S",
+        "Pongkunakorn T",
+        "Pumeiam S",
+        "Sranacharoenpong K",
+        "Sutheeworapong S",
+        "Poungsombat P",
+        "Khoomrung S",
+        "Akarasereenont P",
+        "Thaipisuttikul I",
+        "Suktitipat B",
+        "Mayurasakorn K"
+      ],
+      "journal": "Nutrients",
+      "published": "2023 Feb 24",
+      "doi": "10.3390/nu15051143",
+      "pmcid": "PMC10005095",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/36904143/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "36790827",
+      "title": "Establishing causal relationships between sleep and adiposity traits using Mendelian randomization.",
+      "authors": [
+        "Hayes BL",
+        "Vabistsevits M",
+        "Martin RM",
+        "Lawlor DA",
+        "Richmond RC",
+        "Robinson T"
+      ],
+      "journal": "Obesity (Silver Spring, Md.)",
+      "published": "2023 Mar",
+      "doi": "10.1002/oby.23668",
+      "pmcid": "PMC10946465",
+      "publicationTypes": [
+        "Journal Article",
+        "Meta-Analysis",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/36790827/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "36774104",
+      "title": "Raw Eggs To Support Postexercise Recovery in Healthy Young Men: Did Rocky Get It Right or Wrong?",
+      "authors": [
+        "Fuchs CJ",
+        "Hermans WJ",
+        "Smeets JS",
+        "Senden JM",
+        "van Kranenburg J",
+        "Gorissen SH",
+        "Burd NA",
+        "Verdijk LB",
+        "van Loon LJ"
+      ],
+      "journal": "The Journal of nutrition",
+      "published": "2022 Nov",
+      "doi": "10.1093/jn/nxac174",
+      "pmcid": "PMC9644172",
+      "publicationTypes": [
+        "Randomized Controlled Trial",
+        "Journal Article",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/36774104/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "36704902",
+      "title": "Complementary and Allergenic Food Introduction in Infants: An Umbrella Review.",
+      "authors": [
+        "Soriano VX",
+        "Ciciulla D",
+        "Gell G",
+        "Wang Y",
+        "Peters RL",
+        "McWilliam V",
+        "Dharmage SC",
+        "Koplin JJ"
+      ],
+      "journal": "Pediatrics",
+      "published": "2023 Feb 1",
+      "doi": "10.1542/peds.2022-058380",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Systematic Review"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/36704902/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "36430025",
+      "title": "Effect of a Child-Owned Poultry Intervention Providing Eggs on Nutrition Status and Motor Skills of Young Children in Southern Ethiopia: A Cluster Randomized and Controlled Community Trial.",
+      "authors": [
+        "Omer A",
+        "Hailu D",
+        "Whiting SJ"
+      ],
+      "journal": "International journal of environmental research and public health",
+      "published": "2022 Nov 19",
+      "doi": "10.3390/ijerph192215305",
+      "pmcid": "PMC9690635",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/36430025/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "36237122",
+      "title": "Greater protein quality of an egg breakfast may be inadequate to induce satiety during weight loss, compared with a cereal breakfast of equal protein quantity.",
+      "authors": [
+        "Zhu Y",
+        "Bailey D",
+        "Childress A",
+        "Dawson JA",
+        "Binks M",
+        "Dhurandhar NV"
+      ],
+      "journal": "International journal of food sciences and nutrition",
+      "published": "2022 Dec",
+      "doi": "10.1080/09637486.2022.2133097",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/36237122/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "35745278",
+      "title": "The Effects of Eggs in a Plant-Based Diet on Oxidative Stress and Inflammation in Metabolic Syndrome.",
+      "authors": [
+        "Thomas MS",
+        "Huang L",
+        "Garcia C",
+        "Sakaki JR",
+        "Blesso CN",
+        "Chun OK",
+        "Fernandez ML"
+      ],
+      "journal": "Nutrients",
+      "published": "2022 Jun 19",
+      "doi": "10.3390/nu14122548",
+      "pmcid": "PMC9228303",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/35745278/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "35631279",
+      "title": "Eggs Improve Plasma Biomarkers in Patients with Metabolic Syndrome Following a Plant-Based Diet-A Randomized Crossover Study.",
+      "authors": [
+        "Thomas MS",
+        "Puglisi M",
+        "Malysheva O",
+        "Caudill MA",
+        "Sholola M",
+        "Cooperstone JL",
+        "Fernandez ML"
+      ],
+      "journal": "Nutrients",
+      "published": "2022 May 20",
+      "doi": "10.3390/nu14102138",
+      "pmcid": "PMC9147178",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/35631279/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "35452873",
+      "title": "Changes in Food and Nutrient Intake and Diet Quality on a Low-Fat Vegan Diet Are Associated with Changes in Body Weight, Body Composition, and Insulin Sensitivity in Overweight Adults: A Randomized Clinical Trial.",
+      "authors": [
+        "Crosby L",
+        "Rembert E",
+        "Levin S",
+        "Green A",
+        "Ali Z",
+        "Jardine M",
+        "Nguyen M",
+        "Elliott P",
+        "Goldstein D",
+        "Freeman A",
+        "Bradshaw M",
+        "Holtz DN",
+        "Holubkov R",
+        "Barnard ND",
+        "Kahleova H"
+      ],
+      "journal": "Journal of the Academy of Nutrition and Dietetics",
+      "published": "2022 Oct",
+      "doi": "10.1016/j.jand.2022.04.008",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/35452873/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "35263691",
+      "title": "Animal-based food choice and associations with long-term weight maintenance and metabolic health after a large and rapid weight loss: The PREVIEW study.",
+      "authors": [
+        "Zhu R",
+        "Fogelholm M",
+        "Jalo E",
+        "Poppitt SD",
+        "Silvestre MP",
+        "Møller G",
+        "Huttunen-Lenz M",
+        "Stratton G",
+        "Sundvall J",
+        "Macdonald IA",
+        "Handjieva-Darlenska T",
+        "Handjiev S",
+        "Navas-Carretero S",
+        "Martinez JA",
+        "Muirhead R",
+        "Brand-Miller J",
+        "Raben A"
+      ],
+      "journal": "Clinical nutrition (Edinburgh, Scotland)",
+      "published": "2022 Apr",
+      "doi": "10.1016/j.clnu.2022.02.002",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Multicenter Study",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/35263691/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "34758846",
+      "title": "Investigation on factors associated with ovarian cancer: an umbrella review of systematic review and meta-analyses.",
+      "authors": [
+        "Tanha K",
+        "Mottaghi A",
+        "Nojomi M",
+        "Moradi M",
+        "Rajabzadeh R",
+        "Lotfi S",
+        "Janani L"
+      ],
+      "journal": "Journal of ovarian research",
+      "published": "2021 Nov 11",
+      "doi": "10.1186/s13048-021-00911-z",
+      "pmcid": "PMC8582179",
+      "publicationTypes": [
+        "Journal Article",
+        "Systematic Review"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/34758846/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "34753900",
+      "title": "Egg and saturated fat containing breakfasts have no acute effect on acute glycemic control in healthy adults: a randomized partial crossover trial.",
+      "authors": [
+        "Dhanasekara CS",
+        "Dawson JA",
+        "Binks M",
+        "Childress A",
+        "Dhurandhar NV"
+      ],
+      "journal": "Nutrition & diabetes",
+      "published": "2021 Nov 9",
+      "doi": "10.1038/s41387-021-00176-x",
+      "pmcid": "PMC8578538",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/34753900/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "34734262",
+      "title": "Egg Consumption and Blood Lipid Parameters According to the Presence of Chronic Metabolic Disorders: The EVIDENT II Study.",
+      "authors": [
+        "Mesas AE",
+        "Garrido-Miguel M",
+        "Fernández-Rodríguez R",
+        "Fernández Franco S",
+        "Lugones-Sánchez C",
+        "García-Ortiz L",
+        "Martínez-Vizcaíno V"
+      ],
+      "journal": "The Journal of clinical endocrinology and metabolism",
+      "published": "2022 Feb 17",
+      "doi": "10.1210/clinem/dgab802",
+      "pmcid": "PMC8851934",
+      "publicationTypes": [
+        "Journal Article",
+        "Multicenter Study",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/34734262/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "34200027",
+      "title": "Associations of Changes in Blood Lipid Concentrations with Changes in Dietary Cholesterol Intake in the Context of a Healthy Low-Carbohydrate Weight Loss Diet: A Secondary Analysis of the DIETFITS Trial.",
+      "authors": [
+        "Vergara M",
+        "Hauser ME",
+        "Aronica L",
+        "Rigdon J",
+        "Fielding-Singh P",
+        "Shih CW",
+        "Gardner CD"
+      ],
+      "journal": "Nutrients",
+      "published": "2021 Jun 4",
+      "doi": "10.3390/nu13061935",
+      "pmcid": "PMC8227338",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/34200027/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "33772217",
+      "title": "Homocysteine and female fertility, pregnancy loss and offspring birthweight: a two-sample Mendelian randomization study.",
+      "authors": [
+        "Kjaergaard AD",
+        "Wu Y",
+        "Ming WK",
+        "Wang Z",
+        "Kjaergaard MN",
+        "Ellervik C"
+      ],
+      "journal": "European journal of clinical nutrition",
+      "published": "2022 Jan",
+      "doi": "10.1038/s41430-021-00898-2",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Meta-Analysis",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/33772217/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "33689525",
+      "title": "Effects of lacto-ovo-vegetarian diet vs. standard-weight-loss diet on obese and overweight adults with non-alcoholic fatty liver disease: a randomised clinical trial.",
+      "authors": [
+        "Garousi N",
+        "Tamizifar B",
+        "Pourmasoumi M",
+        "Feizi A",
+        "Askari G",
+        "Clark CCT",
+        "Entezari MH"
+      ],
+      "journal": "Archives of physiology and biochemistry",
+      "published": "2023 Dec",
+      "doi": "10.1080/13813455.2021.1890128",
+      "pmcid": null,
+      "publicationTypes": [
+        "Randomized Controlled Trial",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/33689525/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "33670720",
+      "title": "A Three-Month Consumption of Eggs Enriched with ω-3, ω-5 and ω-7 Polyunsaturated Fatty Acids Significantly Decreases the Waist Circumference of Subjects at Risk of Developing Metabolic Syndrome: A Double-Blind Randomized Controlled Trial.",
+      "authors": [
+        "Ngo Njembe MT",
+        "Pachikian B",
+        "Lobysheva I",
+        "Van Overstraeten N",
+        "Dejonghe L",
+        "Verstraelen E",
+        "Buchet M",
+        "Rasse C",
+        "Gardin C",
+        "Mignolet E",
+        "Balligand JL",
+        "Larondelle Y"
+      ],
+      "journal": "Nutrients",
+      "published": "2021 Feb 18",
+      "doi": "10.3390/nu13020663",
+      "pmcid": "PMC7923083",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/33670720/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "33261155",
+      "title": "No Difference in Weight Loss, Glucose, Lipids and Vitamin D of Eggs for Breakfast Compared with Cereal for Breakfast during Energy Restriction.",
+      "authors": [
+        "Keogh JB",
+        "Clifton PM"
+      ],
+      "journal": "International journal of environmental research and public health",
+      "published": "2020 Nov 27",
+      "doi": "10.3390/ijerph17238827",
+      "pmcid": "PMC7730050",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/33261155/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "32678852",
+      "title": "The effect of comprehensive intervention for childhood obesity on dietary diversity among younger children: Evidence from a school-based randomized controlled trial in China.",
+      "authors": [
+        "Xu H",
+        "Ecker O",
+        "Zhang Q",
+        "Du S",
+        "Liu A",
+        "Li Y",
+        "Hu X",
+        "Li T",
+        "Guo H",
+        "Li Y",
+        "Xu G",
+        "Liu W",
+        "Ma J",
+        "Sun J",
+        "Chen K",
+        "Ma G"
+      ],
+      "journal": "PloS one",
+      "published": "2020",
+      "doi": "10.1371/journal.pone.0235951",
+      "pmcid": "PMC7367455",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/32678852/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "32464420",
+      "title": "Whole egg consumption increases plasma choline and betaine without affecting TMAO levels or gut microbiome in overweight postmenopausal women.",
+      "authors": [
+        "Zhu C",
+        "Sawrey-Kubicek L",
+        "Bardagjy AS",
+        "Houts H",
+        "Tang X",
+        "Sacchi R",
+        "Randolph JM",
+        "Steinberg FM",
+        "Zivkovic AM"
+      ],
+      "journal": "Nutrition research (New York, N.Y.)",
+      "published": "2020 Jun",
+      "doi": "10.1016/j.nutres.2020.04.002",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural",
+        "Research Support, Non-U.S. Gov't",
+        "Research Support, U.S. Gov't, Non-P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/32464420/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "32152513",
+      "title": "Effects of substituting eggs for high-carbohydrate breakfast foods on the cardiometabolic risk-factor profile in adults at risk for type 2 diabetes mellitus.",
+      "authors": [
+        "Maki KC",
+        "Palacios OM",
+        "Kramer MW",
+        "Trivedi R",
+        "Dicklin MR",
+        "Wilcox ML",
+        "Maki CE"
+      ],
+      "journal": "European journal of clinical nutrition",
+      "published": "2020 May",
+      "doi": "10.1038/s41430-020-0599-2",
+      "pmcid": "PMC7214271",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/32152513/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "31832636",
+      "title": "Determinants of Urogenital Schistosomiasis Among Pregnant Women and its Association With Pregnancy Outcomes, Neonatal Deaths, and Child Growth.",
+      "authors": [
+        "Murenjekwa W",
+        "Makasi R",
+        "Ntozini R",
+        "Chasekwa B",
+        "Mutasa K",
+        "Moulton LH",
+        "Tielsch JM",
+        "Humphrey JH",
+        "Smith LE",
+        "Prendergast AJ",
+        "Bourke CD"
+      ],
+      "journal": "The Journal of infectious diseases",
+      "published": "2021 Apr 23",
+      "doi": "10.1093/infdis/jiz664",
+      "pmcid": "PMC8064048",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31832636/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "31825075",
+      "title": "A Carbohydrate Beverage Reduces Monocytes Expressing TLR4 in Children with Overweight or Obesity.",
+      "authors": [
+        "Niemiro GM",
+        "Chiarlitti NA",
+        "Khan NA",
+        "De Lisio M"
+      ],
+      "journal": "The Journal of nutrition",
+      "published": "2020 Mar 1",
+      "doi": "10.1093/jn/nxz294",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31825075/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "31706311",
+      "title": "A randomized cross-over trial to determine the effect of a protein vs. carbohydrate preload on energy balance in ad libitum settings.",
+      "authors": [
+        "Gibson MJ",
+        "Dawson JA",
+        "Wijayatunga NN",
+        "Ironuma B",
+        "Chatindiara I",
+        "Ovalle F",
+        "Allison DB",
+        "Dhurandhar EJ"
+      ],
+      "journal": "Nutrition journal",
+      "published": "2019 Nov 9",
+      "doi": "10.1186/s12937-019-0497-4",
+      "pmcid": "PMC6842484",
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31706311/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "31617754",
+      "title": "Evidence for Bisphenol B Endocrine Properties: Scientific and Regulatory Perspectives.",
+      "authors": [
+        "Serra H",
+        "Beausoleil C",
+        "Habert R",
+        "Minier C",
+        "Picard-Hagen N",
+        "Michel C"
+      ],
+      "journal": "Environmental health perspectives",
+      "published": "2019 Oct",
+      "doi": "10.1289/EHP5200",
+      "pmcid": "PMC6867436",
+      "publicationTypes": [
+        "Journal Article",
+        "Research Support, Non-U.S. Gov't",
+        "Systematic Review"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31617754/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "31477157",
+      "title": "The study of metabolic improvement by nutritional intervention controlling endogenous GIP (Mini Egg study): a randomized, cross-over study.",
+      "authors": [
+        "Sakane N",
+        "Osaki N",
+        "Takase H",
+        "Suzuki J",
+        "Suzukamo C",
+        "Nirengi S",
+        "Suganuma A",
+        "Shimotoyodome A"
+      ],
+      "journal": "Nutrition journal",
+      "published": "2019 Sep 2",
+      "doi": "10.1186/s12937-019-0472-0",
+      "pmcid": "PMC6720405",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31477157/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "31436494",
+      "title": "Evaluating the Acceptability and Feasibility of Providing Egg or Cereal Breakfast during a Family-Based Treatment for Children with Overweight/Obesity: The Families and Breakfast Pilot Trial.",
+      "authors": [
+        "Boutelle KN",
+        "Manzano MA",
+        "Strong DR",
+        "Rhee KE"
+      ],
+      "journal": "Childhood obesity (Print)",
+      "published": "2019 Dec",
+      "doi": "10.1089/chi.2018.0331",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31436494/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "31172172",
+      "title": "Whole egg consumption compared with yolk-free egg increases the cholesterol efflux capacity of high-density lipoproteins in overweight, postmenopausal women.",
+      "authors": [
+        "Sawrey-Kubicek L",
+        "Zhu C",
+        "Bardagjy AS",
+        "Rhodes CH",
+        "Sacchi R",
+        "Randolph JM",
+        "Steinberg FM",
+        "Zivkovic AM"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "2019 Sep 1",
+      "doi": "10.1093/ajcn/nqz088",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31172172/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "31133127",
+      "title": "[Effect of nutrition intervention on Jinxiu Yao Autonomous County pupils' body composition in Guangxi Zhuang Autonomous Region].",
+      "authors": [
+        "Zhang M",
+        "Tang Q"
+      ],
+      "journal": "Wei sheng yan jiu = Journal of hygiene research",
+      "published": "2019 May",
+      "doi": null,
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31133127/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "31010430",
+      "title": "Minimal effective dose of lactic-fermented egg white on visceral fat in Japanese men: a double-blind parallel-armed pilot study.",
+      "authors": [
+        "Matsuoka R",
+        "Kamachi K",
+        "Usuda M",
+        "Masuda Y",
+        "Kunou M",
+        "Tanaka A",
+        "Utsunomiya K"
+      ],
+      "journal": "Lipids in health and disease",
+      "published": "2019 Apr 22",
+      "doi": "10.1186/s12944-019-1047-y",
+      "pmcid": "PMC6477745",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31010430/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "30801613",
+      "title": "Food Groups and Risk of Overweight, Obesity, and Weight Gain: A Systematic Review and Dose-Response Meta-Analysis of Prospective Studies.",
+      "authors": [
+        "Schlesinger S",
+        "Neuenschwander M",
+        "Schwedhelm C",
+        "Hoffmann G",
+        "Bechthold A",
+        "Boeing H",
+        "Schwingshackl L"
+      ],
+      "journal": "Advances in nutrition (Bethesda, Md.)",
+      "published": "2019 Mar 1",
+      "doi": "10.1093/advances/nmy092",
+      "pmcid": "PMC6416048",
+      "publicationTypes": [
+        "Journal Article",
+        "Meta-Analysis",
+        "Research Support, Non-U.S. Gov't",
+        "Systematic Review"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/30801613/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "30779870",
+      "title": "Effectiveness of provision of animal-source foods for supporting optimal growth and development in children 6 to 59 months of age.",
+      "authors": [
+        "Eaton JC",
+        "Rothpletz-Puglia P",
+        "Dreker MR",
+        "Iannotti L",
+        "Lutter C",
+        "Kaganda J",
+        "Rayco-Solon P"
+      ],
+      "journal": "The Cochrane database of systematic reviews",
+      "published": "2019 Feb 19",
+      "doi": "10.1002/14651858.CD012818.pub2",
+      "pmcid": "PMC6380771",
+      "publicationTypes": [
+        "Journal Article",
+        "Meta-Analysis",
+        "Research Support, Non-U.S. Gov't",
+        "Review"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/30779870/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "30298964",
+      "title": "Transcutaneous electrical acustimulation synchronized with inspiration improves gastric accommodation impaired by cold stress in healthy subjects.",
+      "authors": [
+        "Ma G",
+        "Hu P",
+        "Zhang B",
+        "Xu F",
+        "Yin J",
+        "Yang X",
+        "Lin L",
+        "Chen JDZ"
+      ],
+      "journal": "Neurogastroenterology and motility",
+      "published": "2019 Feb",
+      "doi": "10.1111/nmo.13491",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/30298964/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "30222113",
+      "title": "Obesity and Asthma: Key Clinical Questions.",
+      "authors": [
+        "Garcia-Rio F",
+        "Alvarez-Puebla MJ",
+        "Esteban-Gorgojo I",
+        "Barranco P",
+        "Olaguibel JM"
+      ],
+      "journal": "Journal of investigational allergology & clinical immunology",
+      "published": "2019",
+      "doi": "10.18176/jiaci.0316",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Systematic Review"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/30222113/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "30103400",
+      "title": "Nutritional Metabolomics: Postprandial Response of Meals Relating to Vegan, Lacto-Ovo Vegetarian, and Omnivore Diets.",
+      "authors": [
+        "Rådjursöga M",
+        "Lindqvist HM",
+        "Pedersen A",
+        "Karlsson BG",
+        "Malmodin D",
+        "Ellegård L",
+        "Winkvist A"
+      ],
+      "journal": "Nutrients",
+      "published": "2018 Aug 10",
+      "doi": "10.3390/nu10081063",
+      "pmcid": "PMC6115722",
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/30103400/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "30041437",
+      "title": "Effects of a High-Protein Diet Including Whole Eggs on Muscle Composition and Indices of Cardiometabolic Health and Systemic Inflammation in Older Adults with Overweight or Obesity: A Randomized Controlled Trial.",
+      "authors": [
+        "Wright CS",
+        "Zhou J",
+        "Sayer RD",
+        "Kim JE",
+        "Campbell WW"
+      ],
+      "journal": "Nutrients",
+      "published": "2018 Jul 23",
+      "doi": "10.3390/nu10070946",
+      "pmcid": "PMC6073477",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/30041437/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "29913230",
+      "title": "Subjective feelings of appetite of wholegrain breakfasts evaluated under controlled, laboratory and 'at home' conditions.",
+      "authors": [
+        "Pasman WJ",
+        "Hendriks HFJ",
+        "Minekus MM",
+        "de Ligt RAF",
+        "Scholtes-Timmerman MJ",
+        "Clabbers NDS",
+        "Leonards NM",
+        "Johnson J",
+        "Bellmann S"
+      ],
+      "journal": "Physiology & behavior",
+      "published": "2018 Oct 1",
+      "doi": "10.1016/j.physbeh.2018.06.024",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/29913230/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "29903274",
+      "title": "[Changes in body composition of primary school students from Tianyang County, Guangxi Zhuang Autonomous Region after two years' nutrition intervention].",
+      "authors": [
+        "Zhao R",
+        "Pan H",
+        "Gan Q",
+        "Xu P",
+        "Li L",
+        "Hu X",
+        "Lin S",
+        "Wang T",
+        "Zhang Q"
+      ],
+      "journal": "Wei sheng yan jiu = Journal of hygiene research",
+      "published": "2018 Mar",
+      "doi": null,
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/29903274/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "29741558",
+      "title": "Effect of a high-egg diet on cardiometabolic risk factors in people with type 2 diabetes: the Diabetes and Egg (DIABEGG) Study-randomized weight-loss and follow-up phase.",
+      "authors": [
+        "Fuller NR",
+        "Sainsbury A",
+        "Caterson ID",
+        "Denyer G",
+        "Fong M",
+        "Gerofi J",
+        "Leung C",
+        "Lau NS",
+        "Williams KH",
+        "Januszewski AS",
+        "Jenkins AJ",
+        "Markovic TP"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "2018 Jun 1",
+      "doi": "10.1093/ajcn/nqy048",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/29741558/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "29337861",
+      "title": "Protein from Meat or Vegetable Sources in Meals Matched for Fiber Content has Similar Effects on Subjective Appetite Sensations and Energy Intake-A Randomized Acute Cross-Over Meal Test Study.",
+      "authors": [
+        "Nielsen LV",
+        "Kristensen MD",
+        "Klingenberg L",
+        "Ritz C",
+        "Belza A",
+        "Astrup A",
+        "Raben A"
+      ],
+      "journal": "Nutrients",
+      "published": "2018 Jan 16",
+      "doi": "10.3390/nu10010096",
+      "pmcid": "PMC5793324",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/29337861/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "29313753",
+      "title": "Compared to an Oatmeal Breakfast, Two Eggs/Day Increased Plasma Carotenoids and Choline without Increasing Trimethyl Amine N-Oxide Concentrations.",
+      "authors": [
+        "Missimer A",
+        "Fernandez ML",
+        "DiMarco DM",
+        "Norris GH",
+        "Blesso CN",
+        "Murillo AG",
+        "Vergara-Jimenez M",
+        "Lemos BS",
+        "Medina-Vera I",
+        "Malysheva OV",
+        "Caudill MA"
+      ],
+      "journal": "Journal of the American College of Nutrition",
+      "published": "2018 Feb",
+      "doi": "10.1080/07315724.2017.1365026",
+      "pmcid": null,
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/29313753/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "29216922",
+      "title": "Lactic-fermented egg white improves visceral fat obesity in Japanese subjects-double-blind, placebo-controlled study.",
+      "authors": [
+        "Matsuoka R",
+        "Kamachi K",
+        "Usuda M",
+        "Wang W",
+        "Masuda Y",
+        "Kunou M",
+        "Tanaka A",
+        "Utsunomiya K"
+      ],
+      "journal": "Lipids in health and disease",
+      "published": "2017 Dec 8",
+      "doi": "10.1186/s12944-017-0631-2",
+      "pmcid": "PMC5721610",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/29216922/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "28805177",
+      "title": "Evaluation of the efficacy, safety and acceptability of a fish protein isolate in the nutrition of children under 36 months of age.",
+      "authors": [
+        "Ochoa TJ",
+        "Baiocchi N",
+        "Valdiviezo G",
+        "Bullon V",
+        "Campos M",
+        "Llanos-Cuentas A"
+      ],
+      "journal": "Public health nutrition",
+      "published": "2017 Oct",
+      "doi": "10.1017/S136898001700163X",
+      "pmcid": "PMC10261284",
+      "publicationTypes": [
+        "Clinical Trial, Phase II",
+        "Journal Article",
+        "Multicenter Study",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/28805177/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "28757533",
+      "title": "Oral Carbonation Attenuates Feeling of Hunger and Gastric Myoelectrical Activity in Young Women.",
+      "authors": [
+        "Suzuki M",
+        "Mura E",
+        "Taniguchi A",
+        "Moritani T",
+        "Nagai N"
+      ],
+      "journal": "Journal of nutritional science and vitaminology",
+      "published": "2017",
+      "doi": "10.3177/jnsv.63.186",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/28757533/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "28515160",
+      "title": "Replacement of Refined Starches and Added Sugars with Egg Protein and Unsaturated Fats Increases Insulin Sensitivity and Lowers Triglycerides in Overweight or Obese Adults with Elevated Triglycerides.",
+      "authors": [
+        "Maki KC",
+        "Palacios OM",
+        "Lindner E",
+        "Nieman KM",
+        "Bell M",
+        "Sorce J"
+      ],
+      "journal": "The Journal of nutrition",
+      "published": "2017 Jul",
+      "doi": "10.3945/jn.117.248641",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/28515160/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "28424091",
+      "title": "Investigations into the association between soil-transmitted helminth infections, haemoglobin and child development indices in Manufahi District, Timor-Leste.",
+      "authors": [
+        "Campbell SJ",
+        "Nery SV",
+        "D'Este CA",
+        "Gray DJ",
+        "McCarthy JS",
+        "Traub RJ",
+        "Andrews RM",
+        "Llewellyn S",
+        "Vallely AJ",
+        "Williams GM",
+        "Clements ACA"
+      ],
+      "journal": "Parasites & vectors",
+      "published": "2017 Apr 19",
+      "doi": "10.1186/s13071-017-2084-x",
+      "pmcid": "PMC5395746",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/28424091/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "28179065",
+      "title": "Women's dietary changes before and during pregnancy: A systematic review.",
+      "authors": [
+        "Hillier SE",
+        "Olander EK"
+      ],
+      "journal": "Midwifery",
+      "published": "2017 Jun",
+      "doi": "10.1016/j.midw.2017.01.014",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Systematic Review"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/28179065/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "28146063",
+      "title": "Consuming Two Eggs per Day, as Compared to an Oatmeal Breakfast, Decreases Plasma Ghrelin while Maintaining the LDL/HDL Ratio.",
+      "authors": [
+        "Missimer A",
+        "DiMarco DM",
+        "Andersen CJ",
+        "Murillo AG",
+        "Vergara-Jimenez M",
+        "Fernandez ML"
+      ],
+      "journal": "Nutrients",
+      "published": "2017 Jan 29",
+      "doi": "10.3390/nu9020089",
+      "pmcid": "PMC5331520",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/28146063/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "27958255",
+      "title": "Evaluation of serum Vitamin B12 level and related nutritional status among apparently healthy obese female individuals.",
+      "authors": [
+        "Baltaci D",
+        "Deler MH",
+        "Turker Y",
+        "Ermis F",
+        "Iliev D",
+        "Velioglu U"
+      ],
+      "journal": "Nigerian journal of clinical practice",
+      "published": "2017 Jan",
+      "doi": "10.4103/1119-3077.181401",
+      "pmcid": null,
+      "publicationTypes": [
+        "Equivalence Trial",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/27958255/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "27666380",
+      "title": "Associations between Dietary Patterns and Blood Pressure in a Clinical Sample of Overweight Adults.",
+      "authors": [
+        "Ndanuko RN",
+        "Tapsell LC",
+        "Charlton KE",
+        "Neale EP",
+        "Batterham MJ"
+      ],
+      "journal": "Journal of the Academy of Nutrition and Dietetics",
+      "published": "2017 Feb",
+      "doi": "10.1016/j.jand.2016.07.019",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/27666380/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "27509519",
+      "title": "Compliance, Palatability and Feasibility of PALEOLITHIC and Australian Guide to Healthy Eating Diets in Healthy Women: A 4-Week Dietary Intervention.",
+      "authors": [
+        "Genoni A",
+        "Lo J",
+        "Lyons-Wall P",
+        "Devine A"
+      ],
+      "journal": "Nutrients",
+      "published": "2016 Aug 6",
+      "doi": "10.3390/nu8080481",
+      "pmcid": "PMC4997394",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/27509519/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "27306734",
+      "title": "The effects of the combination of egg and fiber on appetite, glycemic response and food intake in normal weight adults - a randomized, controlled, crossover trial.",
+      "authors": [
+        "Bonnema AL",
+        "Altschwager DK",
+        "Thomas W",
+        "Slavin JL"
+      ],
+      "journal": "International journal of food sciences and nutrition",
+      "published": "2016 Sep",
+      "doi": "10.1080/09637486.2016.1196654",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/27306734/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "27216013",
+      "title": "Palaeolithic diet decreases fasting plasma leptin concentrations more than a diabetes diet in patients with type 2 diabetes: a randomised cross-over trial.",
+      "authors": [
+        "Fontes-Villalba M",
+        "Lindeberg S",
+        "Granfeldt Y",
+        "Knop FK",
+        "Memon AA",
+        "Carrera-Bastos P",
+        "Picazo Ó",
+        "Chanrai M",
+        "Sunquist J",
+        "Sundquist K",
+        "Jönsson T"
+      ],
+      "journal": "Cardiovascular diabetology",
+      "published": "2016 May 23",
+      "doi": "10.1186/s12933-016-0398-1",
+      "pmcid": "PMC4877952",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/27216013/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "26956032",
+      "title": "Swipe out Stroke: Feasibility and efficacy of using a smart-phone based mobile application to improve compliance with weight loss in obese minority stroke patients and their carers.",
+      "authors": [
+        "Ifejika NL",
+        "Noser EA",
+        "Grotta JC",
+        "Savitz SI"
+      ],
+      "journal": "International journal of stroke : official journal of the International Stroke Society",
+      "published": "2016 Jul",
+      "doi": "10.1177/1747493016631557",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/26956032/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "26400262",
+      "title": "Dietary proteins improve endothelial function under fasting conditions but not in the postprandial state, with no effects on markers of low-grade inflammation.",
+      "authors": [
+        "Teunissen-Beekman KF",
+        "Dopheide J",
+        "Geleijnse JM",
+        "Bakker SJ",
+        "Brink EJ",
+        "de Leeuw PW",
+        "Schalkwijk CG",
+        "van Baak MA"
+      ],
+      "journal": "The British journal of nutrition",
+      "published": "2015 Dec 14",
+      "doi": "10.1017/S0007114515003530",
+      "pmcid": null,
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/26400262/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "26135893",
+      "title": "Reducing Colonization and Eggborne Transmission of Salmonella Enteritidis in Layer Chickens by In-Feed Supplementation of Caprylic Acid.",
+      "authors": [
+        "Upadhyaya I",
+        "Upadhyay A",
+        "Yin HB",
+        "Nair MS",
+        "Bhattaram VK",
+        "Karumathil D",
+        "Kollanoor-Johny A",
+        "Khan MI",
+        "Darre MJ",
+        "Curtis PA",
+        "Venkitanarayanan K"
+      ],
+      "journal": "Foodborne pathogens and disease",
+      "published": "2015 Jul",
+      "doi": "10.1089/fpd.2014.1931",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, U.S. Gov't, Non-P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/26135893/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "25970149",
+      "title": "One Egg per Day Improves Inflammation when Compared to an Oatmeal-Based Breakfast without Increasing Other Cardiometabolic Risk Factors in Diabetic Patients.",
+      "authors": [
+        "Ballesteros MN",
+        "Valenzuela F",
+        "Robles AE",
+        "Artalejo E",
+        "Aguilar D",
+        "Andersen CJ",
+        "Valdez H",
+        "Fernandez ML"
+      ],
+      "journal": "Nutrients",
+      "published": "2015 May 11",
+      "doi": "10.3390/nu7053449",
+      "pmcid": "PMC4446761",
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/25970149/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "25889354",
+      "title": "A randomized, controlled, crossover trial to assess the acute appetitive and metabolic effects of sausage and egg-based convenience breakfast meals in overweight premenopausal women.",
+      "authors": [
+        "Rains TM",
+        "Leidy HJ",
+        "Sanoshy KD",
+        "Lawless AL",
+        "Maki KC"
+      ],
+      "journal": "Nutrition journal",
+      "published": "2015 Feb 10",
+      "doi": "10.1186/s12937-015-0002-7",
+      "pmcid": "PMC4334852",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/25889354/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "25833969",
+      "title": "The effect of a high-egg diet on cardiovascular risk factors in people with type 2 diabetes: the Diabetes and Egg (DIABEGG) study-a 3-mo randomized controlled trial.",
+      "authors": [
+        "Fuller NR",
+        "Caterson ID",
+        "Sainsbury A",
+        "Denyer G",
+        "Fong M",
+        "Gerofi J",
+        "Baqleh K",
+        "Williams KH",
+        "Lau NS",
+        "Markovic TP"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "2015 Apr",
+      "doi": "10.3945/ajcn.114.096925",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/25833969/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "25772196",
+      "title": "The satiating effects of eggs or cottage cheese are similar in healthy subjects despite differences in postprandial kinetics.",
+      "authors": [
+        "Marsset-Baglieri A",
+        "Fromentin G",
+        "Nau F",
+        "Airinei G",
+        "Piedcoq J",
+        "Rémond D",
+        "Barbillon P",
+        "Benamouzig R",
+        "Tomé D",
+        "Gaudichon C"
+      ],
+      "journal": "Appetite",
+      "published": "2015 Jul",
+      "doi": "10.1016/j.appet.2015.03.010",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/25772196/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "25748830",
+      "title": "The effect of an egg breakfast on satiety in children and adolescents: a randomized crossover trial.",
+      "authors": [
+        "Liu AG",
+        "Puyau RS",
+        "Han H",
+        "Johnson WD",
+        "Greenway FL",
+        "Dhurandhar NV"
+      ],
+      "journal": "Journal of the American College of Nutrition",
+      "published": "2015",
+      "doi": "10.1080/07315724.2014.942471",
+      "pmcid": "PMC4876708",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/25748830/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "25497262",
+      "title": "Effects of egg ingestion on endothelial function in adults with coronary artery disease: a randomized, controlled, crossover trial.",
+      "authors": [
+        "Katz DL",
+        "Gnanaraj J",
+        "Treu JA",
+        "Ma Y",
+        "Kavak Y",
+        "Njike VY"
+      ],
+      "journal": "American heart journal",
+      "published": "2015 Jan",
+      "doi": "10.1016/j.ahj.2014.10.001",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/25497262/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "24944063",
+      "title": "Effect of egg ingestion on trimethylamine-N-oxide production in humans: a randomized, controlled, dose-response study.",
+      "authors": [
+        "Miller CA",
+        "Corbin KD",
+        "da Costa KA",
+        "Zhang S",
+        "Zhao X",
+        "Galanko JA",
+        "Blevins T",
+        "Bennett BJ",
+        "O'Connor A",
+        "Zeisel SH"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "2014 Sep",
+      "doi": "10.3945/ajcn.114.087692",
+      "pmcid": "PMC4135488",
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/24944063/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "24923232",
+      "title": "High-protein breakfast promotes weight loss by suppressing subsequent food intake and regulating appetite hormones in obese Chinese adolescents.",
+      "authors": [
+        "Wang S",
+        "Yang L",
+        "Lu J",
+        "Mu Y"
+      ],
+      "journal": "Hormone research in paediatrics",
+      "published": "2015",
+      "doi": "10.1159/000362168",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/24923232/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "24893214",
+      "title": "Differential effects of proteins and carbohydrates on postprandial blood pressure-related responses.",
+      "authors": [
+        "Teunissen-Beekman KF",
+        "Dopheide J",
+        "Geleijnse JM",
+        "Bakker SJ",
+        "Brink EJ",
+        "de Leeuw PW",
+        "Serroyen J",
+        "van Baak MA"
+      ],
+      "journal": "The British journal of nutrition",
+      "published": "2014 Aug 28",
+      "doi": "10.1017/S0007114514001251",
+      "pmcid": null,
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/24893214/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "24709026",
+      "title": "Dietary effects of introducing school meals based on the New Nordic Diet - a randomised controlled trial in Danish children. The OPUS School Meal Study.",
+      "authors": [
+        "Andersen R",
+        "Biltoft-Jensen A",
+        "Christensen T",
+        "Andersen EW",
+        "Ege M",
+        "Thorsen AV",
+        "Dalskov SM",
+        "Damsgaard CT",
+        "Astrup A",
+        "Michaelsen KF",
+        "Tetens I"
+      ],
+      "journal": "The British journal of nutrition",
+      "published": "2014 Jun 14",
+      "doi": "10.1017/S0007114514000634",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/24709026/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "24703415",
+      "title": "A randomized trial to manipulate the quality instead of quantity of dietary proteins to influence the markers of satiety.",
+      "authors": [
+        "Bayham BE",
+        "Greenway FL",
+        "Johnson WD",
+        "Dhurandhar NV"
+      ],
+      "journal": "Journal of diabetes and its complications",
+      "published": "2014 Jul-Aug",
+      "doi": "10.1016/j.jdiacomp.2014.02.002",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/24703415/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "24352089",
+      "title": "Impact of breakfasts (with or without eggs) on body weight regulation and blood lipids in university students over a 14-week semester.",
+      "authors": [
+        "Rueda JM",
+        "Khosla P"
+      ],
+      "journal": "Nutrients",
+      "published": "2013 Dec 16",
+      "doi": "10.3390/nu5125097",
+      "pmcid": "PMC3875930",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/24352089/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "24079288",
+      "title": "Effects of carbohydrate restriction and dietary cholesterol provided by eggs on clinical risk factors in metabolic syndrome.",
+      "authors": [
+        "Blesso CN",
+        "Andersen CJ",
+        "Barona J",
+        "Volk B",
+        "Volek JS",
+        "Fernandez ML"
+      ],
+      "journal": "Journal of clinical lipidology",
+      "published": "2013 Sep-Oct",
+      "doi": "10.1016/j.jacl.2013.03.008",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/24079288/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "23890471",
+      "title": "Subjective satiety and other experiences of a Paleolithic diet compared to a diabetes diet in patients with type 2 diabetes.",
+      "authors": [
+        "Jönsson T",
+        "Granfeldt Y",
+        "Lindeberg S",
+        "Hallberg AC"
+      ],
+      "journal": "Nutrition journal",
+      "published": "2013 Jul 29",
+      "doi": "10.1186/1475-2891-12-105",
+      "pmcid": "PMC3727993",
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/23890471/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "23841997",
+      "title": "Investigating the obesogenic effects of marketing snacks with toys: an experimental study in Latin America.",
+      "authors": [
+        "Gregori D",
+        "Ballali S",
+        "Gafare CE",
+        "Casella A",
+        "Stefanini G",
+        "de Sousa Alves R",
+        "Franchin L",
+        "Amador I",
+        "Da Silva NM",
+        "Dibildox J"
+      ],
+      "journal": "Nutrition journal",
+      "published": "2013 Jul 10",
+      "doi": "10.1186/1475-2891-12-95",
+      "pmcid": "PMC3717125",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/23841997/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "23791232",
+      "title": "Very early feeding in stable small for gestational age preterm infants: a randomized clinical trial.",
+      "authors": [
+        "Arnon S",
+        "Sulam D",
+        "Konikoff F",
+        "Regev RH",
+        "Litmanovitz I",
+        "Naftali T"
+      ],
+      "journal": "Jornal de pediatria",
+      "published": "2013 Jul-Aug",
+      "doi": "10.1016/j.jped.2012.12.004",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/23791232/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "23446906",
+      "title": "Beneficial effects of a higher-protein breakfast on the appetitive, hormonal, and neural signals controlling energy intake regulation in overweight/obese, \"breakfast-skipping,\" late-adolescent girls.",
+      "authors": [
+        "Leidy HJ",
+        "Ortinau LC",
+        "Douglas SM",
+        "Hoertel HA"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "2013 Apr",
+      "doi": "10.3945/ajcn.112.053116",
+      "pmcid": "PMC3718776",
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/23446906/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "22948783",
+      "title": "Variation in the effects of three different breakfast meals on subjective satiety and subsequent intake of energy at lunch and evening meal.",
+      "authors": [
+        "Fallaize R",
+        "Wilson L",
+        "Gray J",
+        "Morgan LM",
+        "Griffin BA"
+      ],
+      "journal": "European journal of nutrition",
+      "published": "2013 Jun",
+      "doi": "10.1007/s00394-012-0444-z",
+      "pmcid": null,
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/22948783/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "22513296",
+      "title": "Obesity susceptibility loci and dietary intake in the Look AHEAD Trial.",
+      "authors": [
+        "McCaffery JM",
+        "Papandonatos GD",
+        "Peter I",
+        "Huggins GS",
+        "Raynor HA",
+        "Delahanty LM",
+        "Cheskin LJ",
+        "Balasubramanyam A",
+        "Wagenknecht LE",
+        "Wing RR",
+        "Genetic Subgroup of Look AHEAD",
+        "Look AHEAD Research Group"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "2012 Jun",
+      "doi": "10.3945/ajcn.111.026955",
+      "pmcid": "PMC3349457",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural",
+        "Research Support, U.S. Gov't, Non-P.H.S.",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/22513296/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "22411386",
+      "title": "Paper and pencil vs online self-administered food frequency questionnaire (FFQ) applied to university population: a pilot study.",
+      "authors": [
+        "González Carrascosa R",
+        "García Segovia P",
+        "Martínez Monzó J"
+      ],
+      "journal": "Nutricion hospitalaria",
+      "published": "2011 Nov-Dec",
+      "doi": "10.1590/S0212-16112011000600027",
+      "pmcid": null,
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/22411386/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "22357725",
+      "title": "Protein supplementation lowers blood pressure in overweight adults: effect of dietary proteins on blood pressure (PROPRES), a randomized trial.",
+      "authors": [
+        "Teunissen-Beekman KF",
+        "Dopheide J",
+        "Geleijnse JM",
+        "Bakker SJ",
+        "Brink EJ",
+        "de Leeuw PW",
+        "van Baak MA"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "2012 Apr",
+      "doi": "10.3945/ajcn.111.029116",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/22357725/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "22331684",
+      "title": "Effect of changes in the intake of weight of specific food groups on successful body weight loss during a multi-dietary strategy intervention trial.",
+      "authors": [
+        "Canfi A",
+        "Gepner Y",
+        "Schwarzfuchs D",
+        "Golan R",
+        "Shahar DR",
+        "Fraser D",
+        "Witkow S",
+        "Greenberg I",
+        "Sarusi B",
+        "Vardi H",
+        "Friger M",
+        "Stampfer MJ",
+        "Shai I"
+      ],
+      "journal": "Journal of the American College of Nutrition",
+      "published": "2011 Dec",
+      "doi": "10.1080/07315724.2011.10719995",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/22331684/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "22196620",
+      "title": "Effect of different protein sources on satiation and short-term satiety when consumed as a starter.",
+      "authors": [
+        "Abou-Samra R",
+        "Keersmaekers L",
+        "Brienza D",
+        "Mukherjee R",
+        "Macé K"
+      ],
+      "journal": "Nutrition journal",
+      "published": "2011 Dec 23",
+      "doi": "10.1186/1475-2891-10-139",
+      "pmcid": "PMC3295702",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/22196620/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "21940599",
+      "title": "Plasma sterol evidence for decreased absorption and increased synthesis of cholesterol in insulin resistance and obesity.",
+      "authors": [
+        "Paramsothy P",
+        "Knopp RH",
+        "Kahn SE",
+        "Retzlaff BM",
+        "Fish B",
+        "Ma L",
+        "Ostlund RE Jr"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "2011 Nov",
+      "doi": "10.3945/ajcn.110.006668",
+      "pmcid": "PMC3192472",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural",
+        "Research Support, Non-U.S. Gov't",
+        "Research Support, U.S. Gov't, Non-P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/21940599/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "21495899",
+      "title": "The effects of consuming eggs for lunch on satiety and subsequent food intake.",
+      "authors": [
+        "Pombo-Rodrigues S",
+        "Calame W",
+        "Re R"
+      ],
+      "journal": "International journal of food sciences and nutrition",
+      "published": "2011 Sep",
+      "doi": "10.3109/09637486.2011.566212",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/21495899/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "21411612",
+      "title": "Slowly and rapidly digested fat emulsions are equally satiating but their triglycerides are differentially absorbed and metabolized in humans.",
+      "authors": [
+        "Keogh JB",
+        "Wooster TJ",
+        "Golding M",
+        "Day L",
+        "Otto B",
+        "Clifton PM"
+      ],
+      "journal": "The Journal of nutrition",
+      "published": "2011 May",
+      "doi": "10.3945/jn.110.131110",
+      "pmcid": null,
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/21411612/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "21134328",
+      "title": "Egg consumption as part of an energy-restricted high-protein diet improves blood lipid and blood glucose profiles in individuals with type 2 diabetes.",
+      "authors": [
+        "Pearce KL",
+        "Clifton PM",
+        "Noakes M"
+      ],
+      "journal": "The British journal of nutrition",
+      "published": "2011 Feb",
+      "doi": "10.1017/S0007114510003983",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/21134328/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "20598142",
+      "title": "Daily egg consumption in hyperlipidemic adults--effects on endothelial function and cardiovascular risk.",
+      "authors": [
+        "Njike V",
+        "Faridi Z",
+        "Dutta S",
+        "Gonzalez-Simon AL",
+        "Katz DL"
+      ],
+      "journal": "Nutrition journal",
+      "published": "2010 Jul 2",
+      "doi": "10.1186/1475-2891-9-28",
+      "pmcid": "PMC2904713",
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/20598142/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "20456814",
+      "title": "The acute effects of four protein meals on insulin, glucose, appetite and energy intake in lean men.",
+      "authors": [
+        "Pal S",
+        "Ellis V"
+      ],
+      "journal": "The British journal of nutrition",
+      "published": "2010 Oct",
+      "doi": "10.1017/S0007114510001911",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/20456814/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "20226994",
+      "title": "Consuming eggs for breakfast influences plasma glucose and ghrelin, while reducing energy intake during the next 24 hours in adult men.",
+      "authors": [
+        "Ratliff J",
+        "Leite JO",
+        "de Ogburn R",
+        "Puglisi MJ",
+        "VanHeest J",
+        "Fernandez ML"
+      ],
+      "journal": "Nutrition research (New York, N.Y.)",
+      "published": "2010 Feb",
+      "doi": "10.1016/j.nutres.2010.01.002",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/20226994/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "19410978",
+      "title": "Carbohydrate restriction (with or without additional dietary cholesterol provided by eggs) reduces insulin resistance and plasma leptin without modifying appetite hormones in adult men.",
+      "authors": [
+        "Ratliff J",
+        "Mutungi G",
+        "Puglisi MJ",
+        "Volek JS",
+        "Fernandez ML"
+      ],
+      "journal": "Nutrition research (New York, N.Y.)",
+      "published": "2009 Apr",
+      "doi": "10.1016/j.nutres.2009.03.007",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/19410978/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "19369056",
+      "title": "Eggs distinctly modulate plasma carotenoid and lipoprotein subclasses in adult men following a carbohydrate-restricted diet.",
+      "authors": [
+        "Mutungi G",
+        "Waters D",
+        "Ratliff J",
+        "Puglisi M",
+        "Clark RM",
+        "Volek JS",
+        "Fernandez ML"
+      ],
+      "journal": "The Journal of nutritional biochemistry",
+      "published": "2010 Apr",
+      "doi": "10.1016/j.jnutbio.2008.12.011",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/19369056/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "19283886",
+      "title": "Increased dietary protein consumed at breakfast leads to an initial and sustained feeling of fullness during energy restriction compared to other meal times.",
+      "authors": [
+        "Leidy HJ",
+        "Bossingham MJ",
+        "Mattes RD",
+        "Campbell WW"
+      ],
+      "journal": "The British journal of nutrition",
+      "published": "2009 Mar",
+      "doi": "10.1017/s0007114508051532",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/19283886/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "18726564",
+      "title": "Increased dietary cholesterol does not increase plasma low density lipoprotein when accompanied by an energy-restricted diet and weight loss.",
+      "authors": [
+        "Harman NL",
+        "Leeds AR",
+        "Griffin BA"
+      ],
+      "journal": "European journal of nutrition",
+      "published": "2008 Sep",
+      "doi": "10.1007/s00394-008-0730-y",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/18726564/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "18679412",
+      "title": "Egg breakfast enhances weight loss.",
+      "authors": [
+        "Vander Wal JS",
+        "Gupta A",
+        "Khosla P",
+        "Dhurandhar NV"
+      ],
+      "journal": "International journal of obesity (2005)",
+      "published": "2008 Oct",
+      "doi": "10.1038/ijo.2008.130",
+      "pmcid": "PMC2755181",
+      "publicationTypes": [
+        "Journal Article",
+        "Multicenter Study",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/18679412/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "18675854",
+      "title": "Effect of exenatide on gastric emptying and relationship to postprandial glycemia in type 2 diabetes.",
+      "authors": [
+        "Linnebjerg H",
+        "Park S",
+        "Kothare PA",
+        "Trautmann ME",
+        "Mace K",
+        "Fineman M",
+        "Wilding I",
+        "Nauck M",
+        "Horowitz M"
+      ],
+      "journal": "Regulatory peptides",
+      "published": "2008 Nov 29",
+      "doi": "10.1016/j.regpep.2008.07.003",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/18675854/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "18580887",
+      "title": "The relationship between dietary protein intake and blood pressure: results from the PREMIER study.",
+      "authors": [
+        "Wang YF",
+        "Yancy WS Jr",
+        "Yu D",
+        "Champagne C",
+        "Appel LJ",
+        "Lin PH"
+      ],
+      "journal": "Journal of human hypertension",
+      "published": "2008 Nov",
+      "doi": "10.1038/jhh.2008.64",
+      "pmcid": null,
+      "publicationTypes": [
+        "Comparative Study",
+        "Journal Article",
+        "Multicenter Study",
+        "Randomized Controlled Trial",
+        "Research Support, U.S. Gov't, Non-P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/18580887/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "18203890",
+      "title": "Dietary cholesterol from eggs increases plasma HDL cholesterol in overweight men consuming a carbohydrate-restricted diet.",
+      "authors": [
+        "Mutungi G",
+        "Ratliff J",
+        "Puglisi M",
+        "Torres-Gonzalez M",
+        "Vaishnav U",
+        "Leite JO",
+        "Quann E",
+        "Volek JS",
+        "Fernandez ML"
+      ],
+      "journal": "The Journal of nutrition",
+      "published": "2008 Feb",
+      "doi": "10.1093/jn/138.2.272",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/18203890/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "17888059",
+      "title": "Preterm infant massage elicits consistent increases in vagal activity and gastric motility that are associated with greater weight gain.",
+      "authors": [
+        "Diego MA",
+        "Field T",
+        "Hernandez-Reif M",
+        "Deeds O",
+        "Ascencio A",
+        "Begert G"
+      ],
+      "journal": "Acta paediatrica (Oslo, Norway : 1992)",
+      "published": "2007 Nov",
+      "doi": "10.1111/j.1651-2227.2007.00476.x",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/17888059/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "17675277",
+      "title": "[Dietary supplementation of obese children with 1000 mg alpha-linolenic acid per day: a placebo-controlled double blind study].",
+      "authors": [
+        "Lohner S",
+        "Marosvölgyi T",
+        "Burus I",
+        "Schmidt J",
+        "Molnár D",
+        "Decsi T"
+      ],
+      "journal": "Orvosi hetilap",
+      "published": "2007 Aug 12",
+      "doi": "10.1556/OH.2007.28015",
+      "pmcid": null,
+      "publicationTypes": [
+        "Controlled Clinical Trial",
+        "English Abstract",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/17675277/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "17101319",
+      "title": "Obesity does not increase effects of synthetic ghrelin on human gastric motor functions.",
+      "authors": [
+        "Cremonini F",
+        "Camilleri M",
+        "Vazquez Roque M",
+        "McKinzie S",
+        "Burton D",
+        "Baxter K",
+        "Zinsmeister AR"
+      ],
+      "journal": "Gastroenterology",
+      "published": "2006 Nov",
+      "doi": "10.1053/j.gastro.2006.09.021",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/17101319/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "16373948",
+      "title": "Short-term effect of eggs on satiety in overweight and obese subjects.",
+      "authors": [
+        "Vander Wal JS",
+        "Marth JM",
+        "Khosla P",
+        "Jen KL",
+        "Dhurandhar NV"
+      ],
+      "journal": "Journal of the American College of Nutrition",
+      "published": "2005 Dec",
+      "doi": "10.1080/07315724.2005.10719497",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/16373948/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "16371080",
+      "title": "Effect of atilmotin on gastrointestinal transit in healthy subjects: a randomized, placebo-controlled study.",
+      "authors": [
+        "Park MI",
+        "Ferber I",
+        "Camilleri M",
+        "Allenby K",
+        "Trillo R",
+        "Burton D",
+        "Zinsmeister AR"
+      ],
+      "journal": "Neurogastroenterology and motility",
+      "published": "2006 Jan",
+      "doi": "10.1111/j.1365-2982.2005.00726.x",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/16371080/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "15725188",
+      "title": "Effect of cooked and raw egg consumption on ovalbumin content of human milk: a randomized, double-blind, cross-over trial.",
+      "authors": [
+        "Palmer DJ",
+        "Gold MS",
+        "Makrides M"
+      ],
+      "journal": "Clinical and experimental allergy : journal of the British Society for Allergy and Clinical Immunology",
+      "published": "2005 Feb",
+      "doi": "10.1111/j.1365-2222.2005.02170.x",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/15725188/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "15718356",
+      "title": "Body composition in preterm infants who are fed long-chain polyunsaturated fatty acids: a prospective, randomized, controlled trial.",
+      "authors": [
+        "Groh-Wargo S",
+        "Jacobs J",
+        "Auestad N",
+        "O'Connor DL",
+        "Moore JJ",
+        "Lerner E"
+      ],
+      "journal": "Pediatric research",
+      "published": "2005 May",
+      "doi": "10.1203/01.PDR.0000156509.29310.55",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, N.I.H., Extramural",
+        "Research Support, Non-U.S. Gov't",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/15718356/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "14711565",
+      "title": "A new follicle aspiration needle set is equally effective and as well tolerated as the standard needle when used in a prospective randomized trial in a large in vitro fertilization program.",
+      "authors": [
+        "Miller KA",
+        "Elkind-Hirsch K",
+        "Benson M",
+        "Bergh P",
+        "Drews M",
+        "Scott RT"
+      ],
+      "journal": "Fertility and sterility",
+      "published": "2004 Jan",
+      "doi": "10.1016/j.fertnstert.2003.06.010",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/14711565/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "14588176",
+      "title": "Effects of diet on body weight, haemoglobin, serum proteins and trace elements in burned children.",
+      "authors": [
+        "Javed MT",
+        "Nagra ZM",
+        "Bhatti N",
+        "Bashir Z",
+        "Shabbir N"
+      ],
+      "journal": "Journal of the College of Physicians and Surgeons--Pakistan : JCPSP",
+      "published": "2003 Oct",
+      "doi": "10.2003/JCPSP.592595",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/14588176/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "12816878",
+      "title": "Effects of insulin resistance and obesity on lipoproteins and sensitivity to egg feeding.",
+      "authors": [
+        "Knopp RH",
+        "Retzlaff B",
+        "Fish B",
+        "Walden C",
+        "Wallick S",
+        "Anderson M",
+        "Aikawa K",
+        "Kahn SE"
+      ],
+      "journal": "Arteriosclerosis, thrombosis, and vascular biology",
+      "published": "2003 Aug 1",
+      "doi": "10.1161/01.ATV.0000082461.77557.C7",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, U.S. Gov't, Non-P.H.S.",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/12816878/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "12636950",
+      "title": "A randomized trial of docosahexaenoic acid supplementation during the third trimester of pregnancy.",
+      "authors": [
+        "Smuts CM",
+        "Huang M",
+        "Mundy D",
+        "Plasse T",
+        "Major S",
+        "Carlson SE"
+      ],
+      "journal": "Obstetrics and gynecology",
+      "published": "2003 Mar",
+      "doi": "10.1016/s0029-7844(02)02585-1",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/12636950/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "12530554",
+      "title": "Long-chain PUFA supplementation improves PUFA profile in infants with cholestasis.",
+      "authors": [
+        "Socha P",
+        "Koletzko B",
+        "Jankowska I",
+        "Pawłowska J",
+        "Demmelmair H",
+        "Stolarczyk A",
+        "Swiatkowska E",
+        "Socha J"
+      ],
+      "journal": "Lipids",
+      "published": "2002 Oct",
+      "doi": "10.1007/s11745-006-0986-z",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/12530554/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "11818981",
+      "title": "[Ascariasis: comparison of the therapeutic efficacy between paico and albendazole in children from Huaraz].",
+      "authors": [
+        "López De Guimaraes D",
+        "Neyra Llanos RS",
+        "Romero Acevedo JH"
+      ],
+      "journal": "Revista de gastroenterologia del Peru : organo oficial de la Sociedad de Gastroenterologia del Peru",
+      "published": "2001 Jul-Sep",
+      "doi": null,
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "English Abstract",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/11818981/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "11483801",
+      "title": "Growth and development in preterm infants fed long-chain polyunsaturated fatty acids: a prospective, randomized controlled trial.",
+      "authors": [
+        "O'Connor DL",
+        "Hall R",
+        "Adamkin D",
+        "Auestad N",
+        "Castillo M",
+        "Connor WE",
+        "Connor SL",
+        "Fitzgerald K",
+        "Groh-Wargo S",
+        "Hartmann EE",
+        "Jacobs J",
+        "Janowsky J",
+        "Lucas A",
+        "Margeson D",
+        "Mena P",
+        "Neuringer M",
+        "Nesin M",
+        "Singer L",
+        "Stephenson T",
+        "Szabo J",
+        "Zemon V",
+        "Ross Preterm Lipid Study"
+      ],
+      "journal": "Pediatrics",
+      "published": "2001 Aug",
+      "doi": "10.1542/peds.108.2.359",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Multicenter Study",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/11483801/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "11360125",
+      "title": "Impact of iron supplementation and deworming on growth performance in preschool Beninese children.",
+      "authors": [
+        "Dossa RA",
+        "Ategbo EA",
+        "de Koning FL",
+        "van Raaij JM",
+        "Hautvast JG"
+      ],
+      "journal": "European journal of clinical nutrition",
+      "published": "2001 Apr",
+      "doi": "10.1038/sj.ejcn.1601126",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/11360125/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "10772554",
+      "title": "Ascariasis, trichuriasis, and growth of schoolchildren in Northeastern Peninsular Malaysia.",
+      "authors": [
+        "Raj SM",
+        "Naing NN"
+      ],
+      "journal": "The Southeast Asian journal of tropical medicine and public health",
+      "published": "1998 Dec",
+      "doi": null,
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/10772554/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "10070130",
+      "title": "Muscarinic blockade inhibits gastric emptying of mixed-nutrient meal: effects of weight and gender.",
+      "authors": [
+        "Teff KL",
+        "Alavi A",
+        "Chen J",
+        "Pourdehnad M",
+        "Townsend RR"
+      ],
+      "journal": "The American journal of physiology",
+      "published": "1999 Mar",
+      "doi": "10.1152/ajpregu.1999.276.3.R707",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/10070130/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "9846854",
+      "title": "Schistosoma mansoni infection and nutritional status in schoolchildren: a randomized, double-blind trial in northeastern Brazil.",
+      "authors": [
+        "Assis AM",
+        "Barreto ML",
+        "Prado MS",
+        "Reis MG",
+        "Parraga IM",
+        "Blanton RE"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "1998 Dec",
+      "doi": "10.1093/ajcn/68.6.1247",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/9846854/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "9430083",
+      "title": "A double-blind, randomized, controlled trial of the effects of two eggs per day in moderately hypercholesterolemic and combined hyperlipidemic subjects taught the NCEP step I diet.",
+      "authors": [
+        "Knopp RH",
+        "Retzlaff BM",
+        "Walden CE",
+        "Dowdy AA",
+        "Tsunehara CH",
+        "Austin MA",
+        "Nguyen T"
+      ],
+      "journal": "Journal of the American College of Nutrition",
+      "published": "1997 Dec",
+      "doi": null,
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/9430083/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "9209014",
+      "title": "Diet, nutrition and prostate cancer.",
+      "authors": [
+        "Giles G",
+        "Ireland P"
+      ],
+      "journal": "International journal of cancer",
+      "published": "1997",
+      "doi": "10.1002/(sici)1097-0215(1997)10+<13::aid-ijc5>3.0.co;2-c",
+      "pmcid": null,
+      "publicationTypes": [
+        "Journal Article",
+        "Meta-Analysis"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/9209014/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "8657529",
+      "title": "Effect of removing Ascaris on the growth of Guatemalan schoolchildren.",
+      "authors": [
+        "Watkins WE",
+        "Pollitt E"
+      ],
+      "journal": "Pediatrics",
+      "published": "1996 Jun",
+      "doi": null,
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/8657529/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "8601981",
+      "title": "Erythromycin stimulates gastric emptying after esophagectomy with gastric replacement: a randomized clinical trial.",
+      "authors": [
+        "Burt M",
+        "Scott A",
+        "Williard WC",
+        "Pommier R",
+        "Yeh S",
+        "Bains MS",
+        "Turnbull AD",
+        "Fortner JG",
+        "McCormack PM",
+        "Ginsberg RJ"
+      ],
+      "journal": "The Journal of thoracic and cardiovascular surgery",
+      "published": "1996 Mar",
+      "doi": "10.1016/s0022-5223(96)70318-5",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/8601981/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "8825804",
+      "title": "Do exclusively breast-fed infants require extra protein?",
+      "authors": [
+        "Dewey KG",
+        "Cohen RJ",
+        "Rivera LL",
+        "Canahuati J",
+        "Brown KH"
+      ],
+      "journal": "Pediatric research",
+      "published": "1996 Feb",
+      "doi": "10.1203/00006450-199602000-00019",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't",
+        "Research Support, U.S. Gov't, Non-P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/8825804/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "8773735",
+      "title": "Effect of egg consumption in healthy volunteers: influence of yolk, white or whole-egg on gastric emptying and on glycemic and hormonal responses.",
+      "authors": [
+        "Pelletier X",
+        "Thouvenot P",
+        "Belbraouet S",
+        "Chayvialle JA",
+        "Hanesse B",
+        "Mayeux D",
+        "Debry G"
+      ],
+      "journal": "Annals of nutrition & metabolism",
+      "published": "1996",
+      "doi": "10.1159/000177903",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/8773735/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "8557061",
+      "title": "Effects of cholestyramine on gallbladder and gastric emptying in obese and lean subjects.",
+      "authors": [
+        "Portincasa P",
+        "Di Ciaula A",
+        "Palmieri V",
+        "Van Berge-Henegouwen GP",
+        "Palasciano G"
+      ],
+      "journal": "European journal of clinical investigation",
+      "published": "1995 Oct",
+      "doi": "10.1111/j.1365-2362.1995.tb01953.x",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/8557061/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "7562112",
+      "title": "Antihypercholesterolemic effect of undigested fraction of soybean protein in young female volunteers.",
+      "authors": [
+        "Wang MF",
+        "Yamamoto S",
+        "Chung HM",
+        "Chung SY",
+        "Miyatani S",
+        "Mori M",
+        "Okita T",
+        "Sugano M"
+      ],
+      "journal": "Journal of nutritional science and vitaminology",
+      "published": "1995 Apr",
+      "doi": "10.3177/jnsv.41.187",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/7562112/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "8026248",
+      "title": "Open label study of long-term effectiveness of cisapride in patients with idiopathic gastroparesis.",
+      "authors": [
+        "Dworkin BM",
+        "Rosenthal WS",
+        "Casellas AR",
+        "Girolomo R",
+        "Lebovics E",
+        "Freeman S",
+        "Clark SB"
+      ],
+      "journal": "Digestive diseases and sciences",
+      "published": "1994 Jul",
+      "doi": "10.1007/BF02088039",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/8026248/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "8228209",
+      "title": "Biochemical and neurohormonal responses to the introduction of a lacto-ovovegetarian diet.",
+      "authors": [
+        "Sciarrone SE",
+        "Strahan MT",
+        "Beilin LJ",
+        "Burke V",
+        "Rogers P",
+        "Rouse IL"
+      ],
+      "journal": "Journal of hypertension",
+      "published": "1993 Aug",
+      "doi": "10.1097/00004872-199308000-00012",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/8228209/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "8463866",
+      "title": "Weight gain of Kenyan school children infected with hookworm, Trichuris trichiura and Ascaris lumbricoides is improved following once- or twice-yearly treatment with albendazole.",
+      "authors": [
+        "Stephenson LS",
+        "Latham MC",
+        "Adams EJ",
+        "Kinoti SN",
+        "Pertet A"
+      ],
+      "journal": "The Journal of nutrition",
+      "published": "1993 Apr",
+      "doi": "10.1093/jn/123.4.656",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/8463866/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "8387085",
+      "title": "Ambulatory blood pressure and heart rate responses to vegetarian meals.",
+      "authors": [
+        "Sciarrone SE",
+        "Strahan MT",
+        "Beilin LJ",
+        "Burke V",
+        "Rogers P",
+        "Rouse IR"
+      ],
+      "journal": "Journal of hypertension",
+      "published": "1993 Mar",
+      "doi": "10.1097/00004872-199303000-00008",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/8387085/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "1619181",
+      "title": "Plasma lipoproteins in hyperlipidemic subjects eating iodine-enriched eggs.",
+      "authors": [
+        "Garber DW",
+        "Henkin Y",
+        "Osterlund LC",
+        "Darnell BE",
+        "Segrest JP"
+      ],
+      "journal": "Journal of the American College of Nutrition",
+      "published": "1992 Jun",
+      "doi": "10.1080/07315724.1992.10718230",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/1619181/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "1610161",
+      "title": "Relationship of satiety to postprandial glycaemic, insulin and cholecystokinin responses.",
+      "authors": [
+        "Holt S",
+        "Brand J",
+        "Soveny C",
+        "Hansky J"
+      ],
+      "journal": "Appetite",
+      "published": "1992 Apr",
+      "doi": "10.1016/0195-6663(92)90190-h",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/1610161/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "1790038",
+      "title": "Dietary changes among husbands of participants in a low-fat dietary intervention.",
+      "authors": [
+        "White E",
+        "Hurlich M",
+        "Thompson RS",
+        "Woods MN",
+        "Henderson MM",
+        "Urban N",
+        "Kristal A"
+      ],
+      "journal": "American journal of preventive medicine",
+      "published": "1991 Sep-Oct",
+      "doi": null,
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/1790038/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "2239778",
+      "title": "Protein-energy requirements of prepubertal school-age boys determined by using the nitrogen-balance response to a mixed-protein diet.",
+      "authors": [
+        "Gattas V",
+        "Barrera GA",
+        "Riumallo JS",
+        "Uauy R"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "1990 Dec",
+      "doi": "10.1093/ajcn/52.6.1037",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/2239778/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "2556909",
+      "title": "All bran vs corn flakes: plasma glucose and insulin responses in young females.",
+      "authors": [
+        "Behme MT",
+        "Dupre J"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "1989 Dec",
+      "doi": "10.1093/ajcn/50.6.1240",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Controlled Clinical Trial",
+        "Journal Article",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/2556909/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "2508502",
+      "title": "Single dose metrifonate or praziquantel treatment in Kenyan children. II. Effects on growth in relation to Schistosoma haematobium and hookworm egg counts.",
+      "authors": [
+        "Stephenson LS",
+        "Latham MC",
+        "Kurz KM",
+        "Kinoti SN"
+      ],
+      "journal": "The American journal of tropical medicine and hygiene",
+      "published": "1989 Oct",
+      "doi": "10.4269/ajtmh.1989.41.445",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/2508502/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "2764230",
+      "title": "Treatment with a single dose of albendazole improves growth of Kenyan schoolchildren with hookworm, Trichuris trichiura, and Ascaris lumbricoides infections.",
+      "authors": [
+        "Stephenson LS",
+        "Latham MC",
+        "Kurz KM",
+        "Kinoti SN",
+        "Brigham H"
+      ],
+      "journal": "The American journal of tropical medicine and hygiene",
+      "published": "1989 Jul",
+      "doi": null,
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/2764230/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "2743965",
+      "title": "Weight reduction on lactovegetarian and mixed diets. Changes in weight, nutrient intake, skinfold thicknesses and blood pressure.",
+      "authors": [
+        "Hakala P",
+        "Karvetti RL"
+      ],
+      "journal": "European journal of clinical nutrition",
+      "published": "1989 Jun",
+      "doi": null,
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/2743965/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "3693764",
+      "title": "Development of atopic disease in babies whose mothers were receiving exclusion diet during pregnancy--a randomized study.",
+      "authors": [
+        "Fälth-Magnusson K",
+        "Kjellman NI"
+      ],
+      "journal": "The Journal of allergy and clinical immunology",
+      "published": "1987 Dec",
+      "doi": "10.1016/s0091-6749(87)80279-8",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/3693764/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "3676232",
+      "title": "Effects of a low-energy diet associated with egg supplementation on plasma cholesterol and lipoprotein levels in normal subjects: results of a cross-over study.",
+      "authors": [
+        "Lacombe CR",
+        "Corraze GR",
+        "Nibbelink MM",
+        "Boulze D",
+        "Douste-Blazy P",
+        "Camare R"
+      ],
+      "journal": "The British journal of nutrition",
+      "published": "1986 Nov",
+      "doi": "10.1079/bjn19860137",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/3676232/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "3938925",
+      "title": "Relationships of Schistosoma haematobium, hookworm and malarial infections and metrifonate treatment to growth of Kenyan school children.",
+      "authors": [
+        "Stephenson LS",
+        "Latham MC",
+        "Kurz KM",
+        "Kinoti SN",
+        "Oduori ML",
+        "Crompton DW"
+      ],
+      "journal": "The American journal of tropical medicine and hygiene",
+      "published": "1985 Nov",
+      "doi": "10.4269/ajtmh.1985.34.1109",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, Non-U.S. Gov't",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/3938925/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "3993611",
+      "title": "Effect of food supplementation (WIC) during pregnancy on birth weight.",
+      "authors": [
+        "Metcoff J",
+        "Costiloe P",
+        "Crosby WM",
+        "Dutta S",
+        "Sandstead HH",
+        "Milne D",
+        "Bodwell CE",
+        "Majors SH"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "1985 May",
+      "doi": "10.1093/ajcn/41.5.933",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, U.S. Gov't, Non-P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/3993611/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "6472116",
+      "title": "Metabolic effects of carbohydrate in low-calorie diets.",
+      "authors": [
+        "Hoffer LJ",
+        "Bistrian BR",
+        "Young VR",
+        "Blackburn GL",
+        "Wannemacher RW"
+      ],
+      "journal": "Metabolism: clinical and experimental",
+      "published": "1984 Sep",
+      "doi": "10.1016/0026-0495(84)90108-2",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/6472116/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "6679363",
+      "title": "Parasitic infections, anaemia and nutritional status: a study of their interrelationships and the effect of prophylaxis and treatment on workers in Kwale District, Kenya.",
+      "authors": [
+        "Latham MC",
+        "Stephenson LS",
+        "Hall A",
+        "Wolgemuth JC",
+        "Elliot TC",
+        "Crompton DW"
+      ],
+      "journal": "Transactions of the Royal Society of Tropical Medicine and Hygiene",
+      "published": "1983",
+      "doi": "10.1016/0035-9203(83)90009-3",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article",
+        "Research Support, Non-U.S. Gov't"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/6679363/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "7048948",
+      "title": "Oltipraz--antischistosomal efficacy in Sudanese infected with Schistosoma mansoni.",
+      "authors": [
+        "Bella H",
+        "Rahim AG",
+        "Mustafa MD",
+        "Ahmed MA",
+        "Wasfi S",
+        "Bennett JL"
+      ],
+      "journal": "The American journal of tropical medicine and hygiene",
+      "published": "1982 Jul",
+      "doi": "10.4269/ajtmh.1982.31.775",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/7048948/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "7197116",
+      "title": "Determinants of hypocholesterolemic response to soy and animal protein-based diets.",
+      "authors": [
+        "Shorey RL",
+        "Bazan B",
+        "Lo GS",
+        "Steinke FH"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "1981 Sep",
+      "doi": "10.1093/ajcn/34.9.1769",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/7197116/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "506972",
+      "title": "Absorption of iron from breakfast meals.",
+      "authors": [
+        "Rossander L",
+        "Hallberg L",
+        "Björn-Rasmussen E"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "1979 Dec",
+      "doi": "10.1093/ajcn/32.12.2484",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/506972/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "453056",
+      "title": "An analysis of temporal patterns in urinary nitrogen excretion of young adults receiving constant diets at two nitrogen intakes for 8 to 11 weeks.",
+      "authors": [
+        "Rand WM",
+        "Scrimshaw NS",
+        "Young VR"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "1979 Jul",
+      "doi": "10.1093/ajcn/32.7.1408",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/453056/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "424690",
+      "title": "The effect of parietal cell vagotomy and selective vagotomy with pyloroplasty on body weight and dietary habits. A prospective randomized study.",
+      "authors": [
+        "Faxén A",
+        "Rossander L",
+        "Kewenter J"
+      ],
+      "journal": "Scandinavian journal of gastroenterology",
+      "published": "1979",
+      "doi": "10.3109/00365527909179839",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/424690/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "645626",
+      "title": "Human protein requirements: nitrogen balance response to graded levels of egg protein in elderly men and women.",
+      "authors": [
+        "Uauy R",
+        "Scrimshaw NS",
+        "Young VR"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "1978 May",
+      "doi": "10.1093/ajcn/31.5.779",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Journal Article",
+        "Randomized Controlled Trial",
+        "Research Support, U.S. Gov't, P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/645626/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "629918",
+      "title": "The utilization of proteins and amino acids in diets based on cassava (Manihot utilissima), rice or sorghum (Sorghum sativa) by young Nigerian men of low income.",
+      "authors": [
+        "Nicol BM",
+        "Phillips PG"
+      ],
+      "journal": "The British journal of nutrition",
+      "published": "1978 Mar",
+      "doi": "10.1079/bjn19780037",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/629918/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "363631",
+      "title": "A double-blind trial of mazindol using a very low calorie formula diet.",
+      "authors": [
+        "Baird IM",
+        "Howard AN"
+      ],
+      "journal": "International journal of obesity",
+      "published": "1977",
+      "doi": null,
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Controlled Clinical Trial",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/363631/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "1146725",
+      "title": "Combined zinc and iron compared with iron supplementation of diets of 6- to 12-year old village schoolchildren in southern Iran.",
+      "authors": [
+        "Mahloudji M",
+        "Reinhold JG",
+        "Haghshenass M",
+        "Ronaghy HA",
+        "Fox MR",
+        "Halsted JA"
+      ],
+      "journal": "The American journal of clinical nutrition",
+      "published": "1975 Jul",
+      "doi": "10.1093/ajcn/28.7.721",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article",
+        "Research Support, U.S. Gov't, Non-P.H.S."
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/1146725/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "1098155",
+      "title": "A clinical evaluation of the efficacy of mebendazole in the treatment of trichuriasis.",
+      "authors": [
+        "Sargent RG",
+        "Dotterer TD",
+        "Savory AM",
+        "Lee PR"
+      ],
+      "journal": "Southern medical journal",
+      "published": "1975 Jan",
+      "doi": "10.1097/00007611-197501000-00011",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Controlled Clinical Trial",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/1098155/",
+      "status": "discovered-not-assessed"
+    },
+    {
+      "pmid": "4179567",
+      "title": "Dialysed egg as nitrogen source in dietary control of chronic renal failure.",
+      "authors": [
+        "Hood CE",
+        "Housley J",
+        "Beale DJ",
+        "Hardwicke J"
+      ],
+      "journal": "Lancet (London, England)",
+      "published": "1969 Mar 8",
+      "doi": "10.1016/s0140-6736(69)91586-4",
+      "pmcid": null,
+      "publicationTypes": [
+        "Clinical Trial",
+        "Comparative Study",
+        "Controlled Clinical Trial",
+        "Journal Article"
+      ],
+      "url": "https://pubmed.ncbi.nlm.nih.gov/4179567/",
+      "status": "discovered-not-assessed"
+    }
+  ]
+}
