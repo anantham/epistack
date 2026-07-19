@@ -1,0 +1,628 @@
+{
+  "nodes": [
+    {
+      "id": "title",
+      "type": "text",
+      "x": 0,
+      "y": -300,
+      "width": 1990,
+      "height": 90,
+      "text": "# Epistack — current implementation · data flow & stores\nHow data is structured (**stores**) and how it moves (**labeled edges**). Straight from the `claude/work` tree."
+    },
+    {
+      "id": "legend",
+      "type": "text",
+      "x": 0,
+      "y": -195,
+      "width": 1310,
+      "height": 80,
+      "text": "🟦 human input · 🟪 backend endpoint (`claude -p`) · 🟩 store / data structure · 🟨 rendered view · 🟥 known gap. **⟨WebSearch⟩** = hits the live internet."
+    },
+    {
+      "id": "beknote",
+      "type": "text",
+      "x": 1330,
+      "y": -195,
+      "width": 660,
+      "height": 80,
+      "text": "**Backend** = 9 vite dev-middleware routes, each spawns **`claude -p`** (free, no API key). Only `/research` + `/deepdive` use **WebSearch/WebFetch**. NOT Exa/Grok/Gemini.",
+      "color": "6"
+    },
+    {
+      "id": "g1",
+      "type": "group",
+      "x": -30,
+      "y": 0,
+      "width": 2010,
+      "height": 360,
+      "label": "STAGE 1 · EXPAND"
+    },
+    {
+      "id": "in_q",
+      "type": "text",
+      "x": 0,
+      "y": 110,
+      "width": 320,
+      "height": 120,
+      "text": "**textarea `question`**\n`tokenize()` → `tokens[]`\n(⌘↵ → decompose)",
+      "color": "5"
+    },
+    {
+      "id": "ep_dec",
+      "type": "text",
+      "x": 380,
+      "y": 90,
+      "width": 470,
+      "height": 160,
+      "text": "**POST `/api/decompose`**\nfn `decomposePrompt(question, tokens)`\ntools: — (no web) · `claude -p`",
+      "color": "6"
+    },
+    {
+      "id": "st_data",
+      "type": "text",
+      "x": 900,
+      "y": 60,
+      "width": 540,
+      "height": 230,
+      "text": "**`data`**  (React state · **cached** localStorage[`epistack_decomp_cache`][question])\n`{ clusters:[{id,name,color,prompt,resolutions[]}],\n  assignments[] (1 per token),\n  elicit:[{id,question,why,options[]}] }`",
+      "color": "4"
+    },
+    {
+      "id": "vw_cluster",
+      "type": "text",
+      "x": 1490,
+      "y": 100,
+      "width": 380,
+      "height": 150,
+      "text": "**ClusterSection ×N**\neditable name/prompt/resolutions · ✨ suggest → `/api/suggest` · scroll word-fly",
+      "color": "3"
+    },
+    {
+      "id": "g2",
+      "type": "group",
+      "x": -30,
+      "y": 400,
+      "width": 2010,
+      "height": 360,
+      "label": "STAGE 2 · CONTEXTUALIZE"
+    },
+    {
+      "id": "in_ctx",
+      "type": "text",
+      "x": 0,
+      "y": 500,
+      "width": 320,
+      "height": 140,
+      "text": "**`elicitAns{qid:opt}`** (chips)\n+ **`ctxText`** (rant textarea)",
+      "color": "5"
+    },
+    {
+      "id": "ep_pers",
+      "type": "text",
+      "x": 380,
+      "y": 500,
+      "width": 470,
+      "height": 150,
+      "text": "**POST `/api/personalize`**\nfn `personalizePrompt(question, clusters, context)`\ntools: — · `claude -p`",
+      "color": "6"
+    },
+    {
+      "id": "st_pdata",
+      "type": "text",
+      "x": 900,
+      "y": 470,
+      "width": 540,
+      "height": 220,
+      "text": "**`pdata`** (React state · transient) + **`ctxSummary`** (joined string)\n`{ clusters:[{id, status:pinned|open|dropped, value, reason}],\n  newClusters:[{id,name,color,prompt,resolutions[],reason}],\n  takeaway }`",
+      "color": "4"
+    },
+    {
+      "id": "vw_pmap",
+      "type": "text",
+      "x": 1490,
+      "y": 510,
+      "width": 380,
+      "height": 130,
+      "text": "**PersonalizedMap**\npinned/open/dropped/new axes + takeaway",
+      "color": "3"
+    },
+    {
+      "id": "g3",
+      "type": "group",
+      "x": -30,
+      "y": 800,
+      "width": 2010,
+      "height": 1520,
+      "label": "STAGE 3 · RESEARCH + ENRICH  (ResearchStage)"
+    },
+    {
+      "id": "st_axes",
+      "type": "text",
+      "x": 900,
+      "y": 850,
+      "width": 540,
+      "height": 110,
+      "text": "**`axes`** (computed)\n`pdata ? [...openClusters, ...newClusters] : data.clusters`  ← the *filtered graph*",
+      "color": "4"
+    },
+    {
+      "id": "ep_plan",
+      "type": "text",
+      "x": 380,
+      "y": 1000,
+      "width": 470,
+      "height": 150,
+      "text": "**POST `/api/plan`**\nfn `orchestratorPrompt(question, axes, context)`\ntools: — · `claude -p` (~25s)",
+      "color": "6"
+    },
+    {
+      "id": "st_plan",
+      "type": "text",
+      "x": 900,
+      "y": 1000,
+      "width": 540,
+      "height": 150,
+      "text": "**`plan`** (React state · transient)\n`{ strategy, agents:[{dimension, role, focus, sources, crux}] }`",
+      "color": "4"
+    },
+    {
+      "id": "vw_plan",
+      "type": "text",
+      "x": 1490,
+      "y": 1010,
+      "width": 380,
+      "height": 130,
+      "text": "**orchestrator plan panel** + per-lane role badge",
+      "color": "3"
+    },
+    {
+      "id": "ep_res",
+      "type": "text",
+      "x": 380,
+      "y": 1200,
+      "width": 470,
+      "height": 180,
+      "text": "**POST `/api/research`** ⟨WebSearch+WebFetch⟩\nfn `researchPrompt(axis, context, brief)`\n`claude -p --allowedTools WebSearch,WebFetch` (~60-100s)",
+      "color": "6"
+    },
+    {
+      "id": "st_lanes",
+      "type": "text",
+      "x": 900,
+      "y": 1195,
+      "width": 540,
+      "height": 235,
+      "text": "**`lanes`** (React state · **transient**)\n`{ [axisId]: { status, t0, ms, findings:[{\n   claim, supports, source, url, kind, n, year,\n   confidence, coi, dataset, relevance? }] } }`",
+      "color": "4"
+    },
+    {
+      "id": "st_stats",
+      "type": "text",
+      "x": 900,
+      "y": 1450,
+      "width": 540,
+      "height": 120,
+      "text": "**`statsById`** = `axisStats(axis, findings)`\n`{ segs, u = normalised entropy, evidence, top }`  ⚠ **spread of retrieved findings, NOT P(truth)**",
+      "color": "4"
+    },
+    {
+      "id": "vw_graph",
+      "type": "text",
+      "x": 1490,
+      "y": 1210,
+      "width": 380,
+      "height": 180,
+      "text": "**GraphState** — evidence-spread bars + verdict\n**ResearchLane** — live status/timer/findings",
+      "color": "3"
+    },
+    {
+      "id": "ep_dd",
+      "type": "text",
+      "x": 380,
+      "y": 1600,
+      "width": 470,
+      "height": 190,
+      "text": "**POST `/api/deepdive`** ⟨WebSearch+WebFetch⟩\nfn `deepDivePrompt(claim, source, url)`\n`claude -p` (~140-220s · ⚠ intermittent invalid-JSON)",
+      "color": "6"
+    },
+    {
+      "id": "st_ledg",
+      "type": "text",
+      "x": 900,
+      "y": 1600,
+      "width": 540,
+      "height": 250,
+      "text": "**`ledgers`** (React state · **transient** · key `axisId#idx`)  ← *canonical result store*\n`{ study:{design,journal,tier,peer,PIs,funding,coi,open_data, dataset, critiques},\n  results:[{statement, locus, population, exposure, outcome, estimate, model,\n    status, n, relation, relationNote, verification}],\n  authorConclusion:{text, assessment} }`",
+      "color": "4"
+    },
+    {
+      "id": "vw_ledg",
+      "type": "text",
+      "x": 1490,
+      "y": 1620,
+      "width": 380,
+      "height": 170,
+      "text": "**ResultLedger** — result cards\nrelation/status/**verification** chip + passage `locus`; author-conclusion flagged",
+      "color": "3"
+    },
+    {
+      "id": "ep_dep",
+      "type": "text",
+      "x": 380,
+      "y": 1900,
+      "width": 470,
+      "height": 150,
+      "text": "**POST `/api/dependence`**\nfn `dependencePrompt(findings)`\ntools: — · `claude -p` (~17s)",
+      "color": "6"
+    },
+    {
+      "id": "st_fam",
+      "type": "text",
+      "x": 900,
+      "y": 1890,
+      "width": 540,
+      "height": 180,
+      "text": "**`families`** (React state · **transient** · key `axisId`)\n`{ families:[{id,label,basis,members[],note}],\n  independentCount, totalSources, note }`",
+      "color": "4"
+    },
+    {
+      "id": "vw_dep",
+      "type": "text",
+      "x": 1490,
+      "y": 1910,
+      "width": 380,
+      "height": 130,
+      "text": "**DependencePanel** — 'N sources → K families'; correlated flagged amber",
+      "color": "3"
+    },
+    {
+      "id": "ep_mat",
+      "type": "text",
+      "x": 380,
+      "y": 2110,
+      "width": 470,
+      "height": 150,
+      "text": "**POST `/api/matrix`**\nfn `matrixPrompt(findings)`\ntools: — · `claude -p` (~50s)",
+      "color": "6"
+    },
+    {
+      "id": "st_mat",
+      "type": "text",
+      "x": 900,
+      "y": 2105,
+      "width": 540,
+      "height": 170,
+      "text": "**AxisMatrix `m`** (component-local · transient)\n`{ sources:[{id,name,url,kind,year}],\n  claims:[{id,text,resolution, stances:{sid: supports|disputes|silent}}] }`",
+      "color": "4"
+    },
+    {
+      "id": "vw_mat",
+      "type": "text",
+      "x": 1490,
+      "y": 2110,
+      "width": 380,
+      "height": 120,
+      "text": "**claim × source matrix** (toggle) — ✚/✕/· cells",
+      "color": "3"
+    },
+    {
+      "id": "gap_mat",
+      "type": "text",
+      "x": 380,
+      "y": 2285,
+      "width": 1050,
+      "height": 95,
+      "text": "⚠ **KNOWN GAP (Codex):** `/matrix` reads the SHALLOW `lanes.findings` → **source-level** supports/disputes/silent, NOT the result-level `ledgers`. Upstream says 'a paper has many results'; the matrix quietly turns each source back into ONE vote.  → **A.2: matrix reads results**",
+      "color": "1"
+    },
+    {
+      "id": "g4",
+      "type": "group",
+      "x": -30,
+      "y": 2420,
+      "width": 2010,
+      "height": 420,
+      "label": "STAGE 4 · DECIDE"
+    },
+    {
+      "id": "ep_dcd",
+      "type": "text",
+      "x": 380,
+      "y": 2500,
+      "width": 470,
+      "height": 170,
+      "text": "**POST `/api/decide`**\nfn `decidePrompt(dimensions)`\ntools: — · `claude -p` (~60s)",
+      "color": "6"
+    },
+    {
+      "id": "st_dcn",
+      "type": "text",
+      "x": 900,
+      "y": 2490,
+      "width": 540,
+      "height": 200,
+      "text": "**`decision`** (React state · transient)\n`{ answer, stance, for[], against[], crux,\n  decisiveTest, confidence, confidenceNote, missing[] }`",
+      "color": "4"
+    },
+    {
+      "id": "vw_dcd",
+      "type": "text",
+      "x": 1490,
+      "y": 2510,
+      "width": 380,
+      "height": 150,
+      "text": "**decision panel** — answer/stance/for·against/crux/n=1/confidence/missing",
+      "color": "3"
+    },
+    {
+      "id": "gap_persist",
+      "type": "text",
+      "x": 380,
+      "y": 2700,
+      "width": 1050,
+      "height": 110,
+      "text": "⚠ **GAP:** `ledgers` / `families` / `plan` / `decision` are **transient React state — lost on reload.** Only `data` (decompose) is cached (localStorage). No typed persistent result store · snapshots · exports · update history yet.  → **A.3: persistent store**",
+      "color": "1"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "fromNode": "in_q",
+      "fromSide": "right",
+      "toNode": "ep_dec",
+      "toSide": "left",
+      "label": "{question, tokens}"
+    },
+    {
+      "id": "e2",
+      "fromNode": "ep_dec",
+      "fromSide": "right",
+      "toNode": "st_data",
+      "toSide": "left",
+      "label": "clusters/assignments/elicit"
+    },
+    {
+      "id": "e3",
+      "fromNode": "st_data",
+      "fromSide": "right",
+      "toNode": "vw_cluster",
+      "toSide": "left",
+      "label": "clusters[]"
+    },
+    {
+      "id": "e4",
+      "fromNode": "vw_cluster",
+      "fromSide": "bottom",
+      "toNode": "st_data",
+      "toSide": "bottom",
+      "label": "edits mutate clusters ↺"
+    },
+    {
+      "id": "e5",
+      "fromNode": "st_data",
+      "fromSide": "bottom",
+      "toNode": "ep_pers",
+      "toSide": "top",
+      "label": "clusters[{id,name,resolutions}]"
+    },
+    {
+      "id": "e6",
+      "fromNode": "in_ctx",
+      "fromSide": "right",
+      "toNode": "ep_pers",
+      "toSide": "left",
+      "label": "context = ctxText + elicit answers"
+    },
+    {
+      "id": "e7",
+      "fromNode": "ep_pers",
+      "fromSide": "right",
+      "toNode": "st_pdata",
+      "toSide": "left",
+      "label": "clusters(status)/newClusters/takeaway"
+    },
+    {
+      "id": "e8",
+      "fromNode": "st_pdata",
+      "fromSide": "right",
+      "toNode": "vw_pmap",
+      "toSide": "left"
+    },
+    {
+      "id": "e9",
+      "fromNode": "st_pdata",
+      "fromSide": "bottom",
+      "toNode": "st_axes",
+      "toSide": "top",
+      "label": "open + newClusters"
+    },
+    {
+      "id": "e10",
+      "fromNode": "st_data",
+      "fromSide": "bottom",
+      "toNode": "st_axes",
+      "toSide": "left",
+      "label": "fallback: all clusters"
+    },
+    {
+      "id": "e11",
+      "fromNode": "st_axes",
+      "fromSide": "bottom",
+      "toNode": "ep_plan",
+      "toSide": "top",
+      "label": "{question, axes, context}"
+    },
+    {
+      "id": "e12",
+      "fromNode": "ep_plan",
+      "fromSide": "right",
+      "toNode": "st_plan",
+      "toSide": "left",
+      "label": "strategy + agent briefs"
+    },
+    {
+      "id": "e13",
+      "fromNode": "st_plan",
+      "fromSide": "right",
+      "toNode": "vw_plan",
+      "toSide": "left"
+    },
+    {
+      "id": "e14",
+      "fromNode": "st_plan",
+      "fromSide": "bottom",
+      "toNode": "ep_res",
+      "toSide": "top",
+      "label": "brief per axis"
+    },
+    {
+      "id": "e15",
+      "fromNode": "st_axes",
+      "fromSide": "left",
+      "toNode": "ep_res",
+      "toSide": "left",
+      "label": "axis + ctxSummary"
+    },
+    {
+      "id": "e16",
+      "fromNode": "ep_res",
+      "fromSide": "right",
+      "toNode": "st_lanes",
+      "toSide": "left",
+      "label": "findings[]  (+dataset hint)"
+    },
+    {
+      "id": "e17",
+      "fromNode": "st_lanes",
+      "fromSide": "bottom",
+      "toNode": "st_stats",
+      "toSide": "top",
+      "label": "findings"
+    },
+    {
+      "id": "e18",
+      "fromNode": "st_stats",
+      "fromSide": "right",
+      "toNode": "vw_graph",
+      "toSide": "left",
+      "label": "spread/verdict"
+    },
+    {
+      "id": "e19",
+      "fromNode": "st_lanes",
+      "fromSide": "right",
+      "toNode": "vw_graph",
+      "toSide": "left",
+      "label": "live status/findings"
+    },
+    {
+      "id": "e20",
+      "fromNode": "st_lanes",
+      "fromSide": "bottom",
+      "toNode": "ep_dd",
+      "toSide": "top",
+      "label": "{claim, source, url}"
+    },
+    {
+      "id": "e21",
+      "fromNode": "ep_dd",
+      "fromSide": "right",
+      "toNode": "vw_ledg",
+      "toSide": "left",
+      "label": "resultLedger (local dd)"
+    },
+    {
+      "id": "e22",
+      "fromNode": "ep_dd",
+      "fromSide": "right",
+      "toNode": "st_ledg",
+      "toSide": "left",
+      "label": "onLedger(axisId#idx, ledger)"
+    },
+    {
+      "id": "e23",
+      "fromNode": "st_lanes",
+      "fromSide": "bottom",
+      "toNode": "ep_dep",
+      "toSide": "top",
+      "label": "findings[{source, dataset}]"
+    },
+    {
+      "id": "e24",
+      "fromNode": "ep_dep",
+      "fromSide": "right",
+      "toNode": "st_fam",
+      "toSide": "left",
+      "label": "onFamilies(axisId)"
+    },
+    {
+      "id": "e25",
+      "fromNode": "ep_dep",
+      "fromSide": "right",
+      "toNode": "vw_dep",
+      "toSide": "left"
+    },
+    {
+      "id": "e26",
+      "fromNode": "st_lanes",
+      "fromSide": "bottom",
+      "toNode": "ep_mat",
+      "toSide": "top",
+      "label": "findings[]  ⚠ source-level"
+    },
+    {
+      "id": "e27",
+      "fromNode": "ep_mat",
+      "fromSide": "right",
+      "toNode": "st_mat",
+      "toSide": "left"
+    },
+    {
+      "id": "e28",
+      "fromNode": "st_mat",
+      "fromSide": "right",
+      "toNode": "vw_mat",
+      "toSide": "left"
+    },
+    {
+      "id": "e29",
+      "fromNode": "st_lanes",
+      "fromSide": "right",
+      "toNode": "ep_dcd",
+      "toSide": "left",
+      "label": "findings[]"
+    },
+    {
+      "id": "e30",
+      "fromNode": "st_ledg",
+      "fromSide": "bottom",
+      "toNode": "ep_dcd",
+      "toSide": "top",
+      "label": "results[] + verification"
+    },
+    {
+      "id": "e31",
+      "fromNode": "st_fam",
+      "fromSide": "bottom",
+      "toNode": "ep_dcd",
+      "toSide": "left",
+      "label": "evidenceFamilies + count"
+    },
+    {
+      "id": "e32",
+      "fromNode": "ep_dcd",
+      "fromSide": "right",
+      "toNode": "st_dcn",
+      "toSide": "left",
+      "label": "answer/stance/crux/n=1"
+    },
+    {
+      "id": "e33",
+      "fromNode": "st_dcn",
+      "fromSide": "right",
+      "toNode": "vw_dcd",
+      "toSide": "left"
+    }
+  ]
+}
