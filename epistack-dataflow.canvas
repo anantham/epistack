@@ -3,365 +3,404 @@
     {
       "id": "title",
       "type": "text",
-      "x": 0,
-      "y": -300,
-      "width": 1990,
-      "height": 90,
-      "text": "# Epistack — current implementation · data flow & stores\nHow data is structured (**stores**) and how it moves (**labeled edges**). Straight from the `claude/work` tree."
+      "x": 40,
+      "y": -400,
+      "width": 2340,
+      "height": 100,
+      "text": "# Epistack — current implementation · data flow & stores\nHow data is structured (**stores**) and how it moves (**labeled edges**). Straight from the `claude/work` tree · updated 2026-07-20."
     },
     {
       "id": "legend",
       "type": "text",
-      "x": 0,
-      "y": -195,
-      "width": 1310,
-      "height": 80,
-      "text": "🟦 human input · 🟪 backend endpoint (`claude -p`) · 🟩 store / data structure · 🟨 rendered view · 🟥 known gap. **⟨WebSearch⟩** = hits the live internet."
+      "x": 40,
+      "y": -270,
+      "width": 1480,
+      "height": 90,
+      "text": "🟦 human input · 🟪 backend endpoint (`claude -p`) · 🟩 store / data structure · 🟨 rendered view · 🟥 open gap · ✅ closed gap. **⟨WebSearch⟩** = hits the live internet."
     },
     {
       "id": "beknote",
       "type": "text",
-      "x": 1330,
-      "y": -195,
-      "width": 660,
-      "height": 80,
-      "text": "**Backend** = 9 vite dev-middleware routes, each spawns **`claude -p`** (free, no API key). Only `/research` + `/deepdive` use **WebSearch/WebFetch**. NOT Exa/Grok/Gemini.",
+      "x": 1580,
+      "y": -270,
+      "width": 800,
+      "height": 130,
+      "text": "**Backend** = 11 vite dev-middleware routes, each spawns **`claude -p`** (free, no API key): decompose · personalize · suggest · research⟨web⟩ · deepdive⟨web⟩(two-phase) · plan(legacy) · **compile** · dependence · matrix · decide · prompts. Model picker ⚙ appends `--model`; every call logged → terminal + `epistack.log`.",
       "color": "6"
     },
     {
       "id": "g1",
       "type": "group",
-      "x": -30,
-      "y": 0,
-      "width": 2010,
-      "height": 360,
+      "x": -40,
+      "y": -120,
+      "width": 2520,
+      "height": 580,
       "label": "STAGE 1 · EXPAND"
     },
     {
       "id": "in_q",
       "type": "text",
-      "x": 0,
-      "y": 110,
-      "width": 320,
-      "height": 120,
-      "text": "**textarea `question`**\n`tokenize()` → `tokens[]`\n(⌘↵ → decompose)",
+      "x": 40,
+      "y": 20,
+      "width": 360,
+      "height": 170,
+      "text": "**textarea `question`**\n`tokenize()` → `tokens[]`\n(⌘↵ → decompose; re-asking a saved question = instant full restore)",
       "color": "5"
     },
     {
       "id": "ep_dec",
       "type": "text",
-      "x": 380,
-      "y": 90,
-      "width": 470,
-      "height": 160,
-      "text": "**POST `/api/decompose`**\nfn `decomposePrompt(question, tokens)`\ntools: — (no web) · `claude -p`",
+      "x": 520,
+      "y": 0,
+      "width": 540,
+      "height": 210,
+      "text": "**POST `/api/decompose`**\nfn `decomposePrompt(question, tokens)`\ntools: — · `claude -p`\n\n⚖️ prior-conflation fix: resolutions stay NEUTRAL; the AI's tentative answer goes in a separate `prior` field, kept OUT of the research agents.",
       "color": "6"
     },
     {
       "id": "st_data",
       "type": "text",
-      "x": 900,
-      "y": 60,
-      "width": 540,
-      "height": 230,
-      "text": "**`data`**  (React state · **cached** localStorage[`epistack_decomp_cache`][question])\n`{ clusters:[{id,name,color,prompt,resolutions[]}],\n  assignments[] (1 per token),\n  elicit:[{id,question,why,options[]}] }`",
+      "x": 1180,
+      "y": -60,
+      "width": 640,
+      "height": 330,
+      "text": "**`data`**  (persisted · localStorage `epistack_investigations[question]` + decompose cache)\n`{ clusters:[{ id, name, color, prompt,\n    resolutions[] (neutral candidates),\n    prior (explicit, to-be-tested),\n    highlightQuotes[] (verbatim spans of the question; MANY-TO-MANY — one word may ground several dimensions) }],\n  elicit:[{id, question, why, options[]}] }`\n\n`assignments[]` is GONE — per-token membership is computed client-side: `computeTokenMembers(tokens, clusters)` → per-token cluster SETS.",
       "color": "4"
     },
     {
       "id": "vw_cluster",
       "type": "text",
-      "x": 1490,
-      "y": 100,
-      "width": 380,
-      "height": 150,
-      "text": "**ClusterSection ×N**\neditable name/prompt/resolutions · ✨ suggest → `/api/suggest` · scroll word-fly",
+      "x": 1940,
+      "y": -20,
+      "width": 440,
+      "height": 260,
+      "text": "**Stage-1 `expand-layout`** (two-column)\nleft **q-rail**: pinned question, per-token multi-membership colors + numbered dimension nav\nright **ClusterDetail**: auto-growing editable name/prompt/resolutions · \"grounded in your words\" cues · AI-prior chip · ✨ suggest → `/api/suggest`",
       "color": "3"
     },
     {
       "id": "g2",
       "type": "group",
-      "x": -30,
-      "y": 400,
-      "width": 2010,
-      "height": 360,
+      "x": -40,
+      "y": 540,
+      "width": 2520,
+      "height": 560,
       "label": "STAGE 2 · CONTEXTUALIZE"
     },
     {
       "id": "in_ctx",
       "type": "text",
-      "x": 0,
-      "y": 500,
-      "width": 320,
-      "height": 140,
-      "text": "**`elicitAns{qid:opt}`** (chips)\n+ **`ctxText`** (rant textarea)",
+      "x": 40,
+      "y": 680,
+      "width": 360,
+      "height": 190,
+      "text": "**`elicitAns{qid:opt}`** (chips)\n+ **`ctxText`** (free-text rant)\n\nsaved live as you type — no re-entry on return",
       "color": "5"
     },
     {
       "id": "ep_pers",
       "type": "text",
-      "x": 380,
-      "y": 500,
-      "width": 470,
-      "height": 150,
+      "x": 520,
+      "y": 680,
+      "width": 540,
+      "height": 190,
       "text": "**POST `/api/personalize`**\nfn `personalizePrompt(question, clusters, context)`\ntools: — · `claude -p`",
       "color": "6"
     },
     {
       "id": "st_pdata",
       "type": "text",
-      "x": 900,
-      "y": 470,
-      "width": 540,
-      "height": 220,
-      "text": "**`pdata`** (React state · transient) + **`ctxSummary`** (joined string)\n`{ clusters:[{id, status:pinned|open|dropped, value, reason}],\n  newClusters:[{id,name,color,prompt,resolutions[],reason}],\n  takeaway }`",
+      "x": 1180,
+      "y": 620,
+      "width": 640,
+      "height": 290,
+      "text": "**`pdata`** (persisted) + **`ctxSummary`** (rant + \"Q → A\" lines, joined)\n`{ clusters:[{ id, status: pinned|open|dropped, value, reason }],\n  newClusters:[{id, name, color, prompt, resolutions[], reason}],\n  takeaway }`\n\npinned = your context answers it → applicability FACT\nopen = still uncertain FOR YOU → research lane\ndropped = irrelevant to you → parked, zero budget",
       "color": "4"
     },
     {
       "id": "vw_pmap",
       "type": "text",
-      "x": 1490,
-      "y": 510,
-      "width": 380,
-      "height": 130,
-      "text": "**PersonalizedMap**\npinned/open/dropped/new axes + takeaway",
+      "x": 1940,
+      "y": 680,
+      "width": 440,
+      "height": 190,
+      "text": "**PersonalizedMap**\n\"for you, it comes down to\" takeaway + settled-by-you / worth-investigating / new-for-you / skip cards",
       "color": "3"
     },
     {
       "id": "g3",
       "type": "group",
-      "x": -30,
-      "y": 800,
-      "width": 2010,
-      "height": 1520,
+      "x": -40,
+      "y": 1180,
+      "width": 2520,
+      "height": 2780,
       "label": "STAGE 3 · RESEARCH + ENRICH  (ResearchStage)"
     },
     {
       "id": "st_axes",
       "type": "text",
-      "x": 900,
-      "y": 850,
-      "width": 540,
-      "height": 110,
-      "text": "**`axes`** (computed)\n`pdata ? [...openClusters, ...newClusters] : data.clusters`  ← the *filtered graph*",
+      "x": 1180,
+      "y": 1280,
+      "width": 640,
+      "height": 160,
+      "text": "**`axes`** (computed)\n`pdata ? [openClusters… , newClusters…] : data.clusters`\n← the *filtered graph*: only what your context left OPEN gets research budget",
       "color": "4"
     },
     {
-      "id": "ep_plan",
+      "id": "ep_cmp",
       "type": "text",
-      "x": 380,
-      "y": 1000,
-      "width": 470,
-      "height": 150,
-      "text": "**POST `/api/plan`**\nfn `orchestratorPrompt(question, axes, context)`\ntools: — · `claude -p` (~25s)",
+      "x": 520,
+      "y": 1540,
+      "width": 540,
+      "height": 260,
+      "text": "**POST `/api/compile`**  ★ NEW — the research compiler\nfn `compilePrompt(question, context, pinned, dropped, axes)`\ntools: — · `claude -p` (240s window, ~157s observed)\n\nProjects Stage 1×2 into a tractable plan: claim portfolio + applicability profile + retrieval plans + parked. Subsumes the `/api/plan` orchestrator (route kept as legacy).",
       "color": "6"
     },
     {
-      "id": "st_plan",
+      "id": "st_brief",
       "type": "text",
-      "x": 900,
-      "y": 1000,
-      "width": 540,
-      "height": 150,
-      "text": "**`plan`** (React state · transient)\n`{ strategy, agents:[{dimension, role, focus, sources, crux}] }`",
+      "x": 1180,
+      "y": 1500,
+      "width": 640,
+      "height": 360,
+      "text": "**`brief`** (persisted in the research slice) — the RESEARCH BRIEF\n`{ applicability:[{ field: population|dose|comparator|outcome|setting|implementation, value, use: constrain-search | judge-transport-only }],\n  claims:[{ id, axis, priority, kind: effectiveness|harm|comparator|mechanism|implementation, statement (scoped PICO), population, intervention, comparator, outcome, wouldChange, queries[] (privacy-scrubbed), sources, relaxation[] (constraint ladder) }],\n  parked:[{axis, name, reactivate}],\n  privacyNote }`\n\n3–7 claims TOTAL; every open axis covered or explicitly parked.",
       "color": "4"
     },
     {
-      "id": "vw_plan",
+      "id": "vw_brief",
       "type": "text",
-      "x": 1490,
-      "y": 1010,
-      "width": 380,
-      "height": 130,
-      "text": "**orchestrator plan panel** + per-lane role badge",
+      "x": 1940,
+      "y": 1540,
+      "width": 440,
+      "height": 280,
+      "text": "**research-brief panel**\napplicability chips (dashed = transport-only, kept OUT of searches) · claim cards: P# priority, kind, PICO row, \"would change the decision\", outbound queries, relaxation ladder · parked rows · 🔒 privacy note · ↻ recompile",
       "color": "3"
     },
     {
       "id": "ep_res",
       "type": "text",
-      "x": 380,
-      "y": 1200,
-      "width": 470,
-      "height": 180,
-      "text": "**POST `/api/research`** ⟨WebSearch+WebFetch⟩\nfn `researchPrompt(axis, context, brief)`\n`claude -p --allowedTools WebSearch,WebFetch` (~60-100s)",
+      "x": 520,
+      "y": 1940,
+      "width": 540,
+      "height": 250,
+      "text": "**POST `/api/research`** ⟨WebSearch+WebFetch⟩\nfn `researchPrompt(axis, context, claims, applicability, brief)`\n`claude -p --allowedTools WebSearch,WebFetch` (~60-360s)\n\nAgents research the CLAIM FRAMES, climb the relaxation ladder one constraint at a time, and score every finding's scope distance. 🔒 outbound queries must never carry identifying details.",
       "color": "6"
     },
     {
       "id": "st_lanes",
       "type": "text",
-      "x": 900,
-      "y": 1195,
-      "width": 540,
-      "height": 235,
-      "text": "**`lanes`** (React state · **transient**)\n`{ [axisId]: { status, t0, ms, findings:[{\n   claim, supports, source, url, kind, n, year,\n   confidence, coi, dataset, relevance? }] } }`",
-      "color": "4"
-    },
-    {
-      "id": "st_stats",
-      "type": "text",
-      "x": 900,
-      "y": 1450,
-      "width": 540,
-      "height": 120,
-      "text": "**`statsById`** = `axisStats(axis, findings)`\n`{ segs, u = normalised entropy, evidence, top }`  ⚠ **spread of retrieved findings, NOT P(truth)**",
+      "x": 1180,
+      "y": 1930,
+      "width": 640,
+      "height": 300,
+      "text": "**`lanes`** (persisted when done · key `axisId`)\n`{ status, t0, ms, findings:[{\n   claim, supports, source, url, kind, n, year,\n   confidence, coi, dataset,\n   claimId? (which compiled claim it bears on),\n   scope?:{population, dose, comparator, outcome: match|near|far},\n   scopeNote? (which constraint was relaxed),\n   relevance? }] }`",
       "color": "4"
     },
     {
       "id": "vw_graph",
       "type": "text",
-      "x": 1490,
-      "y": 1210,
-      "width": 380,
-      "height": 180,
-      "text": "**GraphState** — evidence-spread bars + verdict\n**ResearchLane** — live status/timer/findings",
+      "x": 1940,
+      "y": 1960,
+      "width": 440,
+      "height": 230,
+      "text": "**GraphState** — evidence-spread bars + verdict\n**ResearchLane** — live status/timer/findings\n**FindingCard** — provenance tags + NEW scope-match chips (match ◆ / near / far △)",
       "color": "3"
+    },
+    {
+      "id": "st_stats",
+      "type": "text",
+      "x": 1180,
+      "y": 2290,
+      "width": 640,
+      "height": 140,
+      "text": "**`statsById`** = `axisStats(axis, findings)`\n`{ segs, u = normalised entropy, evidence, top }`\n⚠ **spread of retrieved findings, NOT P(truth)**",
+      "color": "4"
     },
     {
       "id": "ep_dd",
       "type": "text",
-      "x": 380,
-      "y": 1600,
-      "width": 470,
-      "height": 190,
-      "text": "**POST `/api/deepdive`** ⟨WebSearch+WebFetch⟩\nfn `deepDivePrompt(claim, source, url)`\n`claude -p` (~140-220s · ⚠ intermittent invalid-JSON)",
+      "x": 520,
+      "y": 2510,
+      "width": 540,
+      "height": 240,
+      "text": "**POST `/api/deepdive`** ⟨WebSearch+WebFetch⟩ · TWO-PHASE\n1️⃣ `deepDiveEnumeratePrompt` — find the paper, list result stubs\n2️⃣ `deepDiveDetailPrompt` — chunked detail per stub\n(carved along natural boundaries after the monolithic call kept truncating; tolerant JSON + timeout + one retry)",
       "color": "6"
     },
     {
       "id": "st_ledg",
       "type": "text",
-      "x": 900,
-      "y": 1600,
-      "width": 540,
-      "height": 250,
-      "text": "**`ledgers`** (React state · **transient** · key `axisId#idx`)  ← *canonical result store*\n`{ study:{design,journal,tier,peer,PIs,funding,coi,open_data, dataset, critiques},\n  results:[{statement, locus, population, exposure, outcome, estimate, model,\n    status, n, relation, relationNote, verification}],\n  authorConclusion:{text, assessment} }`",
+      "x": 1180,
+      "y": 2490,
+      "width": 640,
+      "height": 310,
+      "text": "**`ledgers`** (persisted · key `axisId#idx`)  ← *canonical result store*\n`{ study:{design, journal, journal_tier, peer_reviewed, investigators, funding, coi, open_data, dataset, critiques},\n  results:[{ statement, locus, population, exposure, outcome, estimate, model, status, n, relation (supports|qualifies|undercuts…), relationNote, verification: source-checked|abstract-only|review-extracted|unverified }],\n  authorConclusion:{text, assessment} }`\n\na paper is a CONTAINER — one source ≠ one vote",
       "color": "4"
     },
     {
       "id": "vw_ledg",
       "type": "text",
-      "x": 1490,
-      "y": 1620,
-      "width": 380,
-      "height": 170,
-      "text": "**ResultLedger** — result cards\nrelation/status/**verification** chip + passage `locus`; author-conclusion flagged",
+      "x": 1940,
+      "y": 2540,
+      "width": 440,
+      "height": 200,
+      "text": "**ResultLedger** — result cards with relation/status/**verification** chips + passage `locus`; author-conclusion flagged when it outruns the results",
       "color": "3"
     },
     {
       "id": "ep_dep",
       "type": "text",
-      "x": 380,
-      "y": 1900,
-      "width": 470,
-      "height": 150,
+      "x": 520,
+      "y": 2880,
+      "width": 540,
+      "height": 180,
       "text": "**POST `/api/dependence`**\nfn `dependencePrompt(findings)`\ntools: — · `claude -p` (~17s)",
       "color": "6"
     },
     {
       "id": "st_fam",
       "type": "text",
-      "x": 900,
-      "y": 1890,
-      "width": 540,
-      "height": 180,
-      "text": "**`families`** (React state · **transient** · key `axisId`)\n`{ families:[{id,label,basis,members[],note}],\n  independentCount, totalSources, note }`",
+      "x": 1180,
+      "y": 2860,
+      "width": 640,
+      "height": 210,
+      "text": "**`families`** (persisted · key `axisId`)\n`{ families:[{id, label, basis, members[], note}],\n  independentCount, totalSources, note }`\n\nshared cohort/team/data = ONE family — counts once",
       "color": "4"
     },
     {
       "id": "vw_dep",
       "type": "text",
-      "x": 1490,
-      "y": 1910,
-      "width": 380,
-      "height": 130,
-      "text": "**DependencePanel** — 'N sources → K families'; correlated flagged amber",
+      "x": 1940,
+      "y": 2890,
+      "width": 440,
+      "height": 160,
+      "text": "**DependencePanel** — 'N sources → K independent families'; correlated evidence flagged amber",
       "color": "3"
     },
     {
       "id": "ep_mat",
       "type": "text",
-      "x": 380,
-      "y": 2110,
-      "width": 470,
-      "height": 150,
-      "text": "**POST `/api/matrix`**\nfn `matrixPrompt(findings)`\ntools: — · `claude -p` (~50s)",
+      "x": 520,
+      "y": 3140,
+      "width": 540,
+      "height": 190,
+      "text": "**POST `/api/matrix`**\nfn `matrixPrompt(sources — result-aware)`\ntools: — · `claude -p` (~50s)",
       "color": "6"
     },
     {
       "id": "st_mat",
       "type": "text",
-      "x": 900,
-      "y": 2105,
-      "width": 540,
-      "height": 170,
-      "text": "**AxisMatrix `m`** (component-local · transient)\n`{ sources:[{id,name,url,kind,year}],\n  claims:[{id,text,resolution, stances:{sid: supports|disputes|silent}}] }`",
+      "x": 1180,
+      "y": 3120,
+      "width": 640,
+      "height": 240,
+      "text": "**AxisMatrix `m`** (component-local · transient)\n`{ sources:[{id, name, url, deepDived}],\n  claims:[{id, text, resolution}],\n  cells:[{claim, source, verdict: supports|disputes|qualifies|mixed|silent, results:[\"statement → relation\"]}] }`",
       "color": "4"
     },
     {
       "id": "vw_mat",
       "type": "text",
-      "x": 1490,
-      "y": 2110,
-      "width": 380,
-      "height": 120,
-      "text": "**claim × source matrix** (toggle) — ✚/✕/· cells",
+      "x": 1940,
+      "y": 3150,
+      "width": 440,
+      "height": 160,
+      "text": "**claim × source matrix** (toggle) — cells show verdict + the result statements behind it",
       "color": "3"
     },
     {
-      "id": "gap_mat",
+      "id": "note_a2",
       "type": "text",
-      "x": 380,
-      "y": 2285,
-      "width": 1050,
-      "height": 95,
-      "text": "⚠ **KNOWN GAP (Codex):** `/matrix` reads the SHALLOW `lanes.findings` → **source-level** supports/disputes/silent, NOT the result-level `ledgers`. Upstream says 'a paper has many results'; the matrix quietly turns each source back into ONE vote.  → **A.2: matrix reads results**",
-      "color": "1"
-    },
-    {
-      "id": "g4",
-      "type": "group",
-      "x": -30,
-      "y": 2420,
-      "width": 2010,
-      "height": 420,
-      "label": "STAGE 4 · DECIDE"
+      "x": 520,
+      "y": 3400,
+      "width": 1300,
+      "height": 110,
+      "text": "✅ **A.2 CLOSED** — the matrix is now a PROJECTION over result-level evidence: deep-dived sources carry `results[]` into `/api/matrix`, cells reason per-result (supports/disputes/**qualifies/mixed**/silent). A paper with 8 results is no longer squashed back into one vote.",
+      "color": "4"
     },
     {
       "id": "ep_dcd",
       "type": "text",
-      "x": 380,
-      "y": 2500,
-      "width": 470,
-      "height": 170,
-      "text": "**POST `/api/decide`**\nfn `decidePrompt(dimensions)`\ntools: — · `claude -p` (~60s)",
+      "x": 520,
+      "y": 3600,
+      "width": 540,
+      "height": 220,
+      "text": "**POST `/api/decide`**\nfn `decidePrompt(question, context, applicability, dimensions)`\ntools: — · `claude -p` (~60s)\n\nreasons at the RESULT level · prefers source-checked · counts FAMILIES not sources · weighs scope distance via the applicability profile",
       "color": "6"
     },
     {
       "id": "st_dcn",
       "type": "text",
-      "x": 900,
-      "y": 2490,
-      "width": 540,
+      "x": 1180,
+      "y": 3610,
+      "width": 640,
       "height": 200,
-      "text": "**`decision`** (React state · transient)\n`{ answer, stance, for[], against[], crux,\n  decisiveTest, confidence, confidenceNote, missing[] }`",
+      "text": "**`decision`** (persisted in the research slice)\n`{ answer, stance, for[], against[], crux,\n  decisiveTest (n=1 experiment + what it can't settle),\n  confidence, confidenceNote, missing[] }`",
       "color": "4"
     },
     {
       "id": "vw_dcd",
       "type": "text",
-      "x": 1490,
-      "y": 2510,
-      "width": 380,
-      "height": 150,
-      "text": "**decision panel** — answer/stance/for·against/crux/n=1/confidence/missing",
+      "x": 1940,
+      "y": 3620,
+      "width": 440,
+      "height": 180,
+      "text": "**decision panel** — answer/stance/for·against/crux/n=1 test/confidence/missing",
       "color": "3"
     },
     {
-      "id": "gap_persist",
+      "id": "g4",
+      "type": "group",
+      "x": -40,
+      "y": 4040,
+      "width": 2520,
+      "height": 480,
+      "label": "STAGE 4 · ARTIFACT"
+    },
+    {
+      "id": "vw_art",
       "type": "text",
-      "x": 380,
-      "y": 2700,
-      "width": 1050,
-      "height": 110,
-      "text": "⚠ **GAP:** `ledgers` / `families` / `plan` / `decision` are **transient React state — lost on reload.** Only `data` (decompose) is cached (localStorage). No typed persistent result store · snapshots · exports · update history yet.  → **A.3: persistent store**",
+      "x": 520,
+      "y": 4160,
+      "width": 760,
+      "height": 280,
+      "text": "**Stage4Artifact** (step 4 in the stepper)\nreads the WHOLE persisted investigation: the takeaway, every dimension's fate (settled-by-your-context / researched with finding+result counts / parked), the evidence families, and the decision — the navigable record of what was asked, what your context pruned, what the agents found, and what it all settled.",
+      "color": "3"
+    },
+    {
+      "id": "g5",
+      "type": "group",
+      "x": -40,
+      "y": 4600,
+      "width": 2520,
+      "height": 720,
+      "label": "PERSISTENCE + EXPORT  (cross-cutting)"
+    },
+    {
+      "id": "st_store",
+      "type": "text",
+      "x": 520,
+      "y": 4720,
+      "width": 800,
+      "height": 340,
+      "text": "✅ **A.3 CLOSED** — **localStorage `epistack_investigations[question]`**\n`{ data, tokens, pdata, context, elicitAns, ctxText, step,\n  research:{ lanes(done only), plan(legacy), brief, ledgers, families, decision },\n  interactions:[ every human action + AI call via logInteraction ] }`\n\nsaved live as state changes; re-asking the SAME question (exact string) restores everything instantly — chips, rant, brief, findings, step. Plus `epistack_model` (⚙ model pref) and `epistack_decomp_cache`.",
+      "color": "4"
+    },
+    {
+      "id": "vw_exp",
+      "type": "text",
+      "x": 1420,
+      "y": 4740,
+      "width": 540,
+      "height": 240,
+      "text": "**⤓ export** — one JSON with EVERYTHING: question, decomposition, context (rant + answers), research slice (findings, ledgers, families, brief, decision), and the human interaction log. AI data + human data, schema-versioned.\n\n**⚙ settings** → model picker + **prompt inspector** (`/api/prompts`, all 12 prompts with «placeholder» inputs — view-only).",
+      "color": "3"
+    },
+    {
+      "id": "gap_open",
+      "type": "text",
+      "x": 520,
+      "y": 5100,
+      "width": 1440,
+      "height": 160,
+      "text": "⚠ **STILL OPEN:** prompt EDITING (inspector is view-only) · single-provider (100% `claude -p` subagents — no Exa/Grok/Gemini fan-out) · no gap-agent feedback loop (`decision.missing` doesn't reactivate Stage 2 or ask a targeted follow-up) · scope-match vector recorded at research level only (deep-dive results carry `population` but no match scoring) · cache keyed on the EXACT question string (no fuzzy match)",
       "color": "1"
     }
   ],
@@ -380,7 +419,7 @@
       "fromSide": "right",
       "toNode": "st_data",
       "toSide": "left",
-      "label": "clusters/assignments/elicit"
+      "label": "clusters (+prior, highlightQuotes) / elicit"
     },
     {
       "id": "e3",
@@ -388,7 +427,7 @@
       "fromSide": "right",
       "toNode": "vw_cluster",
       "toSide": "left",
-      "label": "clusters[]"
+      "label": "clusters[] + token membership"
     },
     {
       "id": "e4",
@@ -412,7 +451,7 @@
       "fromSide": "right",
       "toNode": "ep_pers",
       "toSide": "left",
-      "label": "context = ctxText + elicit answers"
+      "label": "context = ctxText + chip answers"
     },
     {
       "id": "e7",
@@ -446,35 +485,43 @@
       "label": "fallback: all clusters"
     },
     {
-      "id": "e11",
+      "id": "ec1",
       "fromNode": "st_axes",
       "fromSide": "bottom",
-      "toNode": "ep_plan",
+      "toNode": "ep_cmp",
       "toSide": "top",
-      "label": "{question, axes, context}"
+      "label": "open axes"
     },
     {
-      "id": "e12",
-      "fromNode": "ep_plan",
-      "fromSide": "right",
-      "toNode": "st_plan",
+      "id": "ec2",
+      "fromNode": "st_pdata",
+      "fromSide": "left",
+      "toNode": "ep_cmp",
       "toSide": "left",
-      "label": "strategy + agent briefs"
+      "label": "pinned (→ applicability) + dropped (→ parked) + context"
     },
     {
-      "id": "e13",
-      "fromNode": "st_plan",
+      "id": "ec3",
+      "fromNode": "ep_cmp",
       "fromSide": "right",
-      "toNode": "vw_plan",
+      "toNode": "st_brief",
+      "toSide": "left",
+      "label": "the compiled brief"
+    },
+    {
+      "id": "ec4",
+      "fromNode": "st_brief",
+      "fromSide": "right",
+      "toNode": "vw_brief",
       "toSide": "left"
     },
     {
-      "id": "e14",
-      "fromNode": "st_plan",
+      "id": "ec5",
+      "fromNode": "st_brief",
       "fromSide": "bottom",
       "toNode": "ep_res",
       "toSide": "top",
-      "label": "brief per axis"
+      "label": "claims(axis) + applicability"
     },
     {
       "id": "e15",
@@ -490,7 +537,7 @@
       "fromSide": "right",
       "toNode": "st_lanes",
       "toSide": "left",
-      "label": "findings[]  (+dataset hint)"
+      "label": "findings[] (+claimId, scope vector)"
     },
     {
       "id": "e17",
@@ -505,7 +552,7 @@
       "fromNode": "st_stats",
       "fromSide": "right",
       "toNode": "vw_graph",
-      "toSide": "left",
+      "toSide": "bottom",
       "label": "spread/verdict"
     },
     {
@@ -525,20 +572,19 @@
       "label": "{claim, source, url}"
     },
     {
-      "id": "e21",
-      "fromNode": "ep_dd",
-      "fromSide": "right",
-      "toNode": "vw_ledg",
-      "toSide": "left",
-      "label": "resultLedger (local dd)"
-    },
-    {
       "id": "e22",
       "fromNode": "ep_dd",
       "fromSide": "right",
       "toNode": "st_ledg",
       "toSide": "left",
       "label": "onLedger(axisId#idx, ledger)"
+    },
+    {
+      "id": "e21",
+      "fromNode": "st_ledg",
+      "fromSide": "right",
+      "toNode": "vw_ledg",
+      "toSide": "left"
     },
     {
       "id": "e23",
@@ -558,7 +604,7 @@
     },
     {
       "id": "e25",
-      "fromNode": "ep_dep",
+      "fromNode": "st_fam",
       "fromSide": "right",
       "toNode": "vw_dep",
       "toSide": "left"
@@ -569,7 +615,15 @@
       "fromSide": "bottom",
       "toNode": "ep_mat",
       "toSide": "top",
-      "label": "findings[]  ⚠ source-level"
+      "label": "shallow findings (fallback)"
+    },
+    {
+      "id": "em2",
+      "fromNode": "st_ledg",
+      "fromSide": "bottom",
+      "toNode": "ep_mat",
+      "toSide": "top",
+      "label": "result-aware sources (deep-dived carry results[])"
     },
     {
       "id": "e27",
@@ -588,7 +642,7 @@
     {
       "id": "e29",
       "fromNode": "st_lanes",
-      "fromSide": "right",
+      "fromSide": "left",
       "toNode": "ep_dcd",
       "toSide": "left",
       "label": "findings[]"
@@ -596,18 +650,26 @@
     {
       "id": "e30",
       "fromNode": "st_ledg",
-      "fromSide": "bottom",
+      "fromSide": "left",
       "toNode": "ep_dcd",
-      "toSide": "top",
+      "toSide": "left",
       "label": "results[] + verification"
     },
     {
       "id": "e31",
       "fromNode": "st_fam",
-      "fromSide": "bottom",
+      "fromSide": "left",
       "toNode": "ep_dcd",
       "toSide": "left",
       "label": "evidenceFamilies + count"
+    },
+    {
+      "id": "ed4",
+      "fromNode": "st_brief",
+      "fromSide": "left",
+      "toNode": "ep_dcd",
+      "toSide": "left",
+      "label": "applicability profile"
     },
     {
       "id": "e32",
@@ -623,6 +685,30 @@
       "fromSide": "right",
       "toNode": "vw_dcd",
       "toSide": "left"
+    },
+    {
+      "id": "ep1",
+      "fromNode": "st_dcn",
+      "fromSide": "bottom",
+      "toNode": "vw_art",
+      "toSide": "top",
+      "label": "the whole investigation"
+    },
+    {
+      "id": "ep2",
+      "fromNode": "vw_art",
+      "fromSide": "bottom",
+      "toNode": "st_store",
+      "toSide": "top",
+      "label": "reads from"
+    },
+    {
+      "id": "ep3",
+      "fromNode": "st_store",
+      "fromSide": "right",
+      "toNode": "vw_exp",
+      "toSide": "left",
+      "label": "⤓ one JSON"
     }
   ]
 }

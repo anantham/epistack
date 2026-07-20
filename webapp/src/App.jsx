@@ -276,7 +276,7 @@ function ClusterSection({ cluster, wordIdxs, tokens, wordRefs, active, onActivat
         <ul>
           {(cluster.resolutions || []).map((r, k) => (
             <li className="res-row" key={k}>
-              <input className="edit-res" value={r} placeholder="a resolution…" onChange={(e) => onEdit.res(cluster.id, k, e.target.value)} />
+              <AutoGrowText className="edit-res" value={r} placeholder="a resolution…" onChange={(e) => onEdit.res(cluster.id, k, e.target.value)} />
               <button className="del-res" title="delete" onClick={() => onEdit.delRes(cluster.id, k)} aria-label="delete resolution">×</button>
             </li>
           ))}
@@ -312,6 +312,29 @@ function ClusterSection({ cluster, wordIdxs, tokens, wordRefs, active, onActivat
 }
 
 // Stage 1 right panel — the active dimension, editable (name/prompt/resolutions/prior + its grounding cues)
+// a text field that wraps + grows with its content instead of clipping on one line
+function AutoGrowText({ className, value, placeholder, onChange, onKeyDown }) {
+  const ref = useRef(null)
+  const resize = () => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+  }
+  useEffect(resize, [value])
+  return (
+    <textarea
+      ref={ref}
+      className={className}
+      value={value}
+      placeholder={placeholder}
+      rows={1}
+      onChange={(e) => onChange(e)}
+      onKeyDown={onKeyDown}
+    />
+  )
+}
+
 function ClusterDetail({ cluster, onEdit, question }) {
   const [suggesting, setSuggesting] = useState(false)
   const [suggestions, setSuggestions] = useState([])
@@ -342,16 +365,16 @@ function ClusterDetail({ cluster, onEdit, question }) {
       </div>
       <div className="section-head">
         <span className="dot" style={{ background: cluster.color }} />
-        <input className="edit-name" value={cluster.name} placeholder="name this dimension…" onChange={(e) => onEdit.name(cluster.id, e.target.value)} />
+        <AutoGrowText className="edit-name" value={cluster.name} placeholder="name this dimension…" onChange={(e) => onEdit.name(cluster.id, e.target.value)} />
         <button className="del-dim" title="delete this dimension" onClick={() => onEdit.delDim(cluster.id)} aria-label="delete dimension">×</button>
       </div>
-      <input className="edit-prompt" value={cluster.prompt || ''} placeholder="one line on what this turns on…" onChange={(e) => onEdit.prompt(cluster.id, e.target.value)} />
+      <AutoGrowText className="edit-prompt" value={cluster.prompt || ''} placeholder="one line on what this turns on…" onChange={(e) => onEdit.prompt(cluster.id, e.target.value)} />
       <div className="section-res">
         <span className="rlabel">ways to resolve it</span>
         <ul>
           {(cluster.resolutions || []).map((r, k) => (
             <li className="res-row" key={k}>
-              <input className="edit-res" value={r} placeholder="a resolution…" onChange={(e) => onEdit.res(cluster.id, k, e.target.value)} />
+              <AutoGrowText className="edit-res" value={r} placeholder="a resolution…" onChange={(e) => onEdit.res(cluster.id, k, e.target.value)} />
               <button className="del-res" title="delete" onClick={() => onEdit.delRes(cluster.id, k)} aria-label="delete resolution">×</button>
             </li>
           ))}
@@ -642,6 +665,15 @@ function FindingCard({ f, question, axisName, rkey, onLedger, initialLedger }) {
         {f.confidence && <span className={`tag t-conf c-${conf}`}>{f.confidence}</span>}
         {coi && <span className="tag t-coi">⚠ {f.coi}</span>}
       </div>
+      {f.scope && typeof f.scope === 'object' && (() => {
+        const ent = Object.entries(f.scope).filter(([, v]) => v && !/n\/?a|unknown/i.test(String(v)))
+        return ent.length ? (
+          <div className="scope-chips" title="distance of this evidence from YOUR scope (per the applicability profile)">
+            {ent.map(([k, v]) => <span key={k} className={`schip s-${norm(v)}`}>{k} · {v}</span>)}
+            {f.scopeNote && <span className="schip snote">{f.scopeNote}</span>}
+          </div>
+        ) : null
+      })()}
       <div className="finding-foot">
         {f.url && (
           <a className="finding-src" href={f.url} target="_blank" rel="noreferrer">
@@ -1032,6 +1064,17 @@ function ResearchStage({ question, data, pdata, context }) {
   // canonical result store, populated live by deep-dives + dependence passes; matrix & decide read from it
   const [ledgers, setLedgers] = useState(() => saved0.ledgers || {}) // "axisId#idx" -> result ledger {study, results, authorConclusion}
   const [families, setFamilies] = useState(() => saved0.families || {}) // axisId -> dependence {families, independentCount, ...}
+  // the compiled RESEARCH BRIEF — claim portfolio + applicability profile + retrieval plans + parked
+  const [brief, setBrief] = useState(() => saved0.brief || null) // null | 'compiling' | result | {error}
+
+  // structured Stage-2 outputs the compiler consumes (pinned = applicability facts, dropped = parked)
+  const nameOf = (id) => (data.clusters || []).find((x) => x.id === id)?.name || id
+  const pinnedAxes = pdata
+    ? (pdata.clusters || []).filter((c) => c.status === 'pinned').map((c) => ({ id: c.id, name: nameOf(c.id), value: c.value || '', reason: c.reason || '' }))
+    : []
+  const droppedAxes = pdata
+    ? (pdata.clusters || []).filter((c) => c.status === 'dropped').map((c) => ({ id: c.id, name: nameOf(c.id), reason: c.reason || '' }))
+    : []
 
   // A.3: persist the research slice (only completed lanes / results — drop in-flight state)
   useEffect(() => {
@@ -1042,12 +1085,13 @@ function ResearchStage({ question, data, pdata, context }) {
       research: {
         lanes: doneLanes,
         plan: plan && plan.agents ? plan : null,
+        brief: brief && brief.claims ? brief : null,
         ledgers,
         families,
         decision: decision && decision.answer ? decision : null,
       },
     })
-  }, [lanes, plan, ledgers, families, decision, question])
+  }, [lanes, plan, brief, ledgers, families, decision, question])
   const onLedger = (k, l) => setLedgers((m) => ({ ...m, [k]: l }))
   const onFamilies = (id, fam) => setFamilies((m) => ({ ...m, [id]: fam }))
   const statsById = useMemo(
@@ -1057,25 +1101,30 @@ function ResearchStage({ question, data, pdata, context }) {
   const briefFor = (id) => (plan && plan.agents ? plan.agents.find((a) => a.dimension === id) : null)
   const briefText = (b) => (b ? `${b.focus || ''}${b.crux ? ` — crux: ${b.crux}` : ''}${b.sources ? `; prioritise: ${b.sources}` : ''}`.trim() : '')
 
-  async function planResearch() {
-    setPlan('planning')
+  async function compileBrief() {
+    setBrief('compiling')
+    logInteraction(question?.trim(), 'human', 'compile-brief')
     try {
-      const r = await fetch('/api/plan', {
+      const r = await fetch('/api/compile', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ model: getModel(),
           question,
           context: context || '',
+          pinned: pinnedAxes,
+          dropped: droppedAxes,
           axes: axes.map((a) => ({ id: a.id, name: a.name, prompt: a.prompt || '', resolutions: a.resolutions || [] })),
         }),
       })
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
-      setPlan(j)
+      setBrief(j)
     } catch (e) {
-      setPlan({ error: String(e.message || e) })
+      setBrief({ error: String(e.message || e) })
     }
   }
+  const claimsFor = (id) => (brief && Array.isArray(brief.claims) ? brief.claims.filter((c) => c.axis === id) : [])
+  const applicability = brief && Array.isArray(brief.applicability) ? brief.applicability : []
 
   useEffect(() => {
     if (!Object.values(lanes).some((l) => l && l.status === 'searching')) return
@@ -1096,6 +1145,8 @@ function ResearchStage({ question, data, pdata, context }) {
           dimensionPrompt: axis.prompt || '',
           resolutions: axis.resolutions || [],
           context: context || '',
+          claims: claimsFor(axis.id),
+          applicability,
           brief: briefText(briefFor(axis.id)),
         }),
       })
@@ -1163,7 +1214,7 @@ function ResearchStage({ question, data, pdata, context }) {
       const r = await fetch('/api/decide', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ model: getModel(), question, context: context || '', dimensions }),
+        body: JSON.stringify({ model: getModel(), question, context: context || '', applicability, dimensions }),
       })
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
@@ -1194,7 +1245,7 @@ function ResearchStage({ question, data, pdata, context }) {
         <button className="btn-decompose research-go" onClick={researchAll} disabled={anyRunning}>
           {anyRunning
             ? 'agents working…'
-            : `▶ dispatch ${axes.length} ${plan && plan.agents ? 'briefed ' : ''}${axes.length === 1 ? 'agent' : 'agents'}`}
+            : `▶ dispatch ${axes.length} ${(brief && brief.claims) || (plan && plan.agents) ? 'briefed ' : ''}${axes.length === 1 ? 'agent' : 'agents'}`}
         </button>
       </div>
 
@@ -1211,36 +1262,81 @@ function ResearchStage({ question, data, pdata, context }) {
       </div>
 
       <div className="orch">
-        {(!plan || plan === 'planning' || plan.error) && (
-          <button className="orch-btn" onClick={planResearch} disabled={plan === 'planning'}>
-            {plan === 'planning' ? '◆ orchestrator planning…' : '◆ plan the research with an orchestrator'}
+        {(!brief || brief === 'compiling' || brief.error) && (
+          <button className="orch-btn" onClick={compileBrief} disabled={brief === 'compiling'}>
+            {brief === 'compiling' ? '◆ compiling the research brief…' : '◆ compile the research brief'}
           </button>
         )}
-        {plan === 'planning' && <span className="orch-hint">assigning a specialist to each axis…</span>}
-        {plan && plan.error && <div className="dd-err">plan failed: {plan.error}</div>}
-        {plan && plan !== 'planning' && !plan.error && (
-          <div className="plan">
-            <div className="plan-strategy">
-              <span className="rlabel">orchestrator strategy</span>
-              {plan.strategy}
-            </div>
-            <div className="plan-agents">
-              {(plan.agents || []).map((a, i) => {
-                const ax = axes.find((x) => x.id === a.dimension)
+        {brief === 'compiling' && (
+          <span className="orch-hint">projecting your context into scoped claims, an applicability profile + retrieval plans…</span>
+        )}
+        {brief && brief.error && <div className="dd-err">compile failed: {brief.error}</div>}
+        {brief && brief !== 'compiling' && !brief.error && (
+          <div className="plan brief">
+            {applicability.length > 0 && (
+              <div className="brief-appl">
+                <span className="rlabel">applicability profile — your actual scope; every finding is scored by its distance from this</span>
+                <div className="appl-chips">
+                  {applicability.map((a, i) => (
+                    <span
+                      key={i}
+                      className={`appl-chip${a.use === 'judge-transport-only' ? ' transport' : ''}`}
+                      title={a.use === 'judge-transport-only'
+                        ? 'kept OUT of outbound searches — used only to judge whether evidence transports to you'
+                        : 'constrains what the agents search for'}
+                    >
+                      <b>{a.field}</b> {a.value}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="brief-claims">
+              <span className="rlabel">claim portfolio — {(brief.claims || []).length} scoped claims drive the agents</span>
+              {(brief.claims || []).slice().sort((x, y) => (x.priority || 9) - (y.priority || 9)).map((c, i) => {
+                const ax = axes.find((x) => x.id === c.axis)
                 return (
-                  <div className="plan-agent" key={i} style={{ '--c': ax?.color || 'var(--accent)' }}>
-                    <div className="pa-head">
-                      <span className="lane-dot" />
-                      <b>{a.role}</b>
-                      <span className="pa-dim">{ax?.name || a.dimension}</span>
+                  <div className="claim-card" key={i} style={{ '--c': ax?.color || 'var(--accent)' }}>
+                    <div className="cc-head">
+                      <span className="cc-pri">P{c.priority || '?'}</span>
+                      {c.kind && <span className="cc-kind">{c.kind}</span>}
+                      <span className="cc-axis">{ax?.name || c.axis}</span>
                     </div>
-                    {a.focus && <div className="pa-focus">{a.focus}</div>}
-                    {a.crux && <div className="pa-crux">crux · {a.crux}</div>}
+                    <div className="cc-statement">{c.statement}</div>
+                    {(c.population || c.intervention || c.comparator || c.outcome) && (
+                      <div className="cc-pico">
+                        {c.population && <span><b>pop</b> {c.population}</span>}
+                        {c.intervention && <span><b>intervention</b> {c.intervention}</span>}
+                        {c.comparator && <span><b>vs</b> {c.comparator}</span>}
+                        {c.outcome && <span><b>outcome</b> {c.outcome}</span>}
+                      </div>
+                    )}
+                    {c.wouldChange && <div className="cc-would">would change the decision · {c.wouldChange}</div>}
+                    {Array.isArray(c.queries) && c.queries.length > 0 && (
+                      <div className="cc-queries">{c.queries.map((q, k) => <code key={k}>{q}</code>)}</div>
+                    )}
+                    {Array.isArray(c.relaxation) && c.relaxation.length > 0 && (
+                      <div className="cc-ladder" title="when direct evidence is sparse the agent relaxes ONE constraint at a time, recording the distance">
+                        {c.relaxation.join(' → ')}
+                      </div>
+                    )}
                   </div>
                 )
               })}
             </div>
-            <button className="orch-btn re" onClick={planResearch}>↻ re-plan</button>
+            {Array.isArray(brief.parked) && brief.parked.length > 0 && (
+              <div className="brief-parked">
+                <span className="rlabel">parked — zero research budget, preserved</span>
+                {brief.parked.map((pk, i) => (
+                  <div className="parked-row" key={i}>
+                    <b>{pk.name || nameOf(pk.axis)}</b>
+                    {pk.reactivate ? <span> — reopens if: {pk.reactivate}</span> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+            {brief.privacyNote && <div className="brief-privacy">🔒 {brief.privacyNote}</div>}
+            <button className="orch-btn re" onClick={compileBrief}>↻ recompile</button>
           </div>
         )}
       </div>
@@ -1788,6 +1884,7 @@ export default function App() {
       clusters: [...(d.clusters || []), { id, name: '', color: palette[(d.clusters?.length || 0) % palette.length], prompt: '', resolutions: [''] }],
     }))
     setActivated((a) => (a.includes(id) ? a : [...a, id]))
+    setActiveDim(id) // show the new blank dimension on the right so you can fill it in
     logInteraction(iq(), 'human', 'add-dimension', { id })
   }
 

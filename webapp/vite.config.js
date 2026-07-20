@@ -52,8 +52,8 @@ function spawnClaude(prompt, tools, timeoutMs, model) {
 }
 
 // retry on parse-fail / timeout (both retryable); spawn errors don't retry
-async function runClaude(prompt, tools, model) {
-  const timeoutMs = tools ? 240000 : 90000
+async function runClaude(prompt, tools, model, timeoutOverride) {
+  const timeoutMs = timeoutOverride || (tools ? 240000 : 90000)
   let lastErr
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -155,14 +155,17 @@ EXISTING DIMENSIONS: ${JSON.stringify(p.existing || [])}`
 // Stage 3 · DEEP RESEARCH — one agent per open axis, web-searching and tagging findings back to it
 function researchPrompt(p) {
   const hasCtx = p.context && String(p.context).trim()
+  const claims = Array.isArray(p.claims) && p.claims.length ? p.claims : null
+  const appl = Array.isArray(p.applicability) && p.applicability.length ? p.applicability : null
   return `You are a research agent enriching a decision graph. Use web search to find REAL, current evidence for ONE axis of a decision, and tag each finding to the candidate resolution it best supports.
 
 QUESTION: ${JSON.stringify(p.question)}
 AXIS: ${JSON.stringify(p.dimensionName)} — ${JSON.stringify(p.dimensionPrompt || '')}
 CANDIDATE RESOLUTIONS (tag each finding to the closest one, verbatim): ${JSON.stringify(p.resolutions || [])}
-${hasCtx ? `THE ASKER — PERSONALIZE TO THEM. Prefer evidence about their specific subgroup/situation, prioritise studies whose population matches them, and for EACH finding say in one line how it applies to THEM:\n${JSON.stringify(p.context)}\n` : ''}
-${p.brief ? `ORCHESTRATOR BRIEF — prioritise exactly this: ${JSON.stringify(p.brief)}\n` : ''}Search the web now. Return 3-4 REAL findings — prefer meta-analyses, RCTs, and official guidelines; be quantitative; flag conflicts of interest honestly.${hasCtx ? ' Bias hard toward evidence that applies to THIS asker.' : ''} Return ONLY JSON, no prose, no fences:
-{"findings":[{"claim":"one specific, quantitative sentence","supports":"one of the candidate resolutions, verbatim (or 'unclear')","source":"publication or org","url":"a real, working URL","kind":"meta-analysis|RCT|cohort|guideline|observational|expert","n":"sample size or scale, if stated","year":"YYYY","confidence":"high|medium|low","coi":"funding/conflict note, or 'none noted'","dataset":"the underlying cohort/dataset/registry if identifiable (e.g. ARIC, NHANES, Framingham); for a meta-analysis name the pooled cohorts; 'primary study' for an original trial; else 'unclear' — used to detect shared-data dependence"${hasCtx ? ',"relevance":"one line: how this applies to THIS asker specifically"' : ''}}]}`
+${claims ? `COMPILED CLAIM FRAMES — research THESE scoped claims (compiled from the asker's context), not the axis in the abstract. Use their "queries" as your outbound search vocabulary and their "relaxation" ladder when direct evidence is sparse — relax ONE constraint at a time and say which:\n${JSON.stringify(claims)}\n` : ''}${appl ? `APPLICABILITY PROFILE — the asker's actual scope. Score EVERY finding's distance from it:\n${JSON.stringify(appl)}\n` : ''}${hasCtx ? `THE ASKER — PERSONALIZE TO THEM. Prefer evidence about their specific subgroup/situation, prioritise studies whose population matches them, and for EACH finding say in one line how it applies to THEM:\n${JSON.stringify(p.context)}\n` : ''}
+${p.brief ? `ORCHESTRATOR BRIEF — prioritise exactly this: ${JSON.stringify(p.brief)}\n` : ''}PRIVACY: outbound web searches must NEVER contain the asker's name, exact town/village, or any identifying detail — ${claims ? 'use the compiled query vocabulary; generalize anything personal (region/climate, not the place name).' : 'generalize anything personal (region/climate, not the place name).'}
+Search the web now. Return 3-4 REAL findings — prefer meta-analyses, RCTs, and official guidelines; be quantitative; flag conflicts of interest honestly.${hasCtx ? ' Bias hard toward evidence that applies to THIS asker.' : ''} Return ONLY JSON, no prose, no fences:
+{"findings":[{"claim":"one specific, quantitative sentence","supports":"one of the candidate resolutions, verbatim (or 'unclear')","source":"publication or org","url":"a real, working URL","kind":"meta-analysis|RCT|cohort|guideline|observational|expert","n":"sample size or scale, if stated","year":"YYYY","confidence":"high|medium|low","coi":"funding/conflict note, or 'none noted'","dataset":"the underlying cohort/dataset/registry if identifiable (e.g. ARIC, NHANES, Framingham); for a meta-analysis name the pooled cohorts; 'primary study' for an original trial; else 'unclear' — used to detect shared-data dependence"${claims ? `,"claimId":"the id of the compiled claim this finding bears on (or 'other')"` : ''}${appl ? `,"scope":{"population":"match|near|far|n/a","dose":"match|near|far|n/a","comparator":"match|near|far|n/a","outcome":"match|near|far|n/a"},"scopeNote":"if not an exact match: which constraint you relaxed and by how many ladder steps (e.g. 'trained men → active adults, 2 steps')"` : ''}${hasCtx ? ',"relevance":"one line: how this applies to THIS asker specifically"' : ''}}]}`
 }
 
 // DECIDE — synthesize the whole graph into ONE person's actionable answer (no web; reasons over the evidence)
@@ -170,7 +173,7 @@ function decidePrompt(p) {
   return `You are helping ONE person reach an actionable, honest decision from a structured evidence graph. This is a concrete, reversible choice — NOT a theory to settle. Give them: the answer, the real tradeoffs, the single crux it hinges on, an honestly-calibrated confidence, what's missing, and the one test that would resolve it for THEM.
 
 QUESTION: ${JSON.stringify(p.question)}
-${p.context ? `THE ASKER: ${JSON.stringify(p.context)}\n` : ''}
+${p.context ? `THE ASKER: ${JSON.stringify(p.context)}\n` : ''}${Array.isArray(p.applicability) && p.applicability.length ? `APPLICABILITY PROFILE — the asker's actual scope. Weigh every piece of evidence by its distance from this (findings may carry a "scope" match vector — trust match > near > far):\n${JSON.stringify(p.applicability)}\n` : ''}
 EVIDENCE — dimensions, each with: its findings (claim + stance + provenance + a "dataset" hint); any RESULT-LEVEL records from deep-dived papers (each result has its own scope, estimate, typed relation, and a "verification" status: source-checked / abstract-only / review-extracted / unverified); and its INDEPENDENT EVIDENCE FAMILIES (sources grouped by shared cohort/data): ${JSON.stringify(p.dimensions || [])}
 
 Be decisive but honest. Explicitly account for: what the evidence genuinely SETTLED vs. merely performed settling; **REASON AT THE RESULT LEVEL where result records exist — a paper is not one vote; a single study can support one scoped claim and undercut another**; **VERIFICATION — prefer source-checked results; down-weight abstract-only and especially unverified ones**; **INDEPENDENCE — count independent evidence FAMILIES, not sources (studies sharing a cohort like Framingham/ARIC are ONE family); say so when apparent agreement is really one dataset counted repeatedly**; claims where rhetoric outweighs evidence; conflicts of interest; and the hard limit that population data cannot tell an individual their own response. Return ONLY JSON, no prose, no fences:
@@ -246,6 +249,39 @@ Return ONLY JSON, no prose, no fences:
   ]
 }
 Rules: EXACTLY one agent per open axis; "dimension" must equal the given axis id verbatim. Make focus and crux concrete and personalised. Valid JSON only.`
+}
+
+// The RESEARCH COMPILER — the missing pass between contextualize and research: projects the
+// decomposition × the asker's context into a small claim portfolio + applicability profile +
+// retrieval plans + parked items. It COMPILES; it does not research.
+function compilePrompt(p) {
+  return `You are the RESEARCH COMPILER sitting between contextualization and investigation. Project this person's decomposed question and personal context into a tractable, auditable research brief. Do NOT research anything — COMPILE.
+
+QUESTION: ${JSON.stringify(p.question)}
+THE ASKER (raw context — free text + their answers): ${JSON.stringify(p.context || '')}
+AXES THEIR CONTEXT SETTLED (pinned — these become applicability FACTS, never research lanes): ${JSON.stringify(p.pinned || [])}
+OPEN AXES (the research lanes; every one must be covered by a claim or explicitly parked): ${JSON.stringify(p.axes || [])}
+AXES DROPPED AS IRRELEVANT TO THEM (already parked upstream; keep them visible, zero budget): ${JSON.stringify(p.dropped || [])}
+
+Return ONLY JSON, no prose, no fences:
+{
+  "applicability": [ { "field": "population|dose|comparator|outcome|setting|implementation", "value": "the asker's actual value, extracted from their context", "use": "constrain-search | judge-transport-only" } ],
+  "claims": [
+    {
+      "id": "c1", "axis": "<open axis id, verbatim>", "priority": 1,
+      "kind": "effectiveness|harm|comparator|mechanism|implementation",
+      "statement": "ONE testable, scoped claim — population + intervention + comparator + outcome where meaningful",
+      "population": "", "intervention": "", "comparator": "", "outcome": "",
+      "wouldChange": "what finding on this claim would actually change the decision",
+      "queries": ["2-4 outbound search queries — MUST NOT contain the asker's name, exact town, or any identifying detail; generalize (region/climate, not the place name)"],
+      "sources": "which kinds of sources to prioritise",
+      "relaxation": ["exact scope", "relax one constraint", "relax further", "broadest acceptable"]
+    }
+  ],
+  "parked": [ { "axis": "<axis id>", "name": "", "reactivate": "the evidence or life-change that would justify reopening it" } ],
+  "privacyNote": "one line: which personal details were EXCLUDED from outbound queries and how they were generalized"
+}
+Rules: 3-7 claims TOTAL (not per axis), priority 1 = most decision-loaded. Portfolio shape: direct effectiveness first, then important harms, then the most realistic comparator; a mechanism claim ONLY if it helps transport evidence to this asker; a sourcing/implementation claim when locally relevant. Every open axis appears in ≥1 claim's "axis" OR in "parked" with a reactivate note — never silently dropped. The applicability profile comes from PINNED axes + context facts (their dose, their alternatives, their subgroup); mark each field "constrain-search" (goes into queries) or "judge-transport-only" (used to score evidence distance, kept OUT of queries). "relaxation" is the ladder an agent climbs when direct evidence is sparse — one constraint at a time, most specific first (e.g. "resistance-trained men 25-40" → "active men" → "men" → "adults"). Valid JSON only.`
 }
 
 // Deep-dive PHASE 1 — ENUMERATE: find the paper, list the decision-relevant result stubs (shallow, small output)
@@ -331,6 +367,24 @@ function promptCatalog() {
     { name: 'suggest · dimension', route: '/api/suggest', tools: 'none', text: suggestPrompt(P({ kind: 'dimension' })) },
     { name: 'research agent', route: '/api/research', tools: 'WebSearch, WebFetch', text: researchPrompt(P({})) },
     { name: 'orchestrator · plan', route: '/api/plan', tools: 'none', text: orchestratorPrompt(P({})) },
+    {
+      name: 'research compiler',
+      route: '/api/compile',
+      tools: 'none',
+      text: compilePrompt(P({
+        pinned: [{ id: '«id»', name: '«settled axis»', value: '«their answer»', reason: '«why»' }],
+        dropped: [{ id: '«id»', name: '«irrelevant axis»', reason: '«why»' }],
+      })),
+    },
+    {
+      name: 'research agent · briefed',
+      route: '/api/research',
+      tools: 'WebSearch, WebFetch',
+      text: researchPrompt(P({
+        claims: [{ id: 'c1', statement: '«a scoped claim»', queries: ['«query»'], relaxation: ['«exact»', '«wider»'] }],
+        applicability: [{ field: 'population', value: '«their subgroup»', use: 'judge-transport-only' }],
+      })),
+    },
     { name: 'deep-dive · 1 enumerate', route: '/api/deepdive', tools: 'WebSearch, WebFetch', text: deepDiveEnumeratePrompt(P({})) },
     { name: 'deep-dive · 2 detail', route: '/api/deepdive', tools: 'WebFetch', text: deepDiveDetailPrompt(P({}), { journal: '«journal»', dataset: '«cohort»' }, [{ statement: '«a result stub»', status: 'primary' }]) },
     { name: 'dependence grouping', route: '/api/dependence', tools: 'none', text: dependencePrompt(P({})) },
@@ -343,7 +397,7 @@ function apiPlugin() {
   return {
     name: 'epistack-api',
     configureServer(server) {
-      const handle = (buildPrompt, tools) => (req, res) => {
+      const handle = (buildPrompt, tools, timeoutMs) => (req, res) => {
         const route = (req.originalUrl || req.url || '').split('?')[0]
         const json = (code, obj) => {
           res.statusCode = code
@@ -365,7 +419,7 @@ function apiPlugin() {
           const t0 = Date.now()
           logEvent(`→ ${route}${tools ? ' [web]' : ''}${p.model ? ` (${p.model})` : ''}`)
           try {
-            const out = await runClaude(prompt, tools, p.model)
+            const out = await runClaude(prompt, tools, p.model, timeoutMs)
             logEvent(`✓ ${route} ${((Date.now() - t0) / 1000).toFixed(0)}s`)
             json(200, out)
           } catch (e) {
@@ -422,6 +476,7 @@ function apiPlugin() {
         handleCustom((p) => (p.claim ? deepDiveRun(p) : Promise.reject({ error: 'missing fields' }))),
       )
       server.middlewares.use('/api/plan', handle((p) => (p.question && p.axes ? orchestratorPrompt(p) : null)))
+      server.middlewares.use('/api/compile', handle((p) => (p.question && p.axes ? compilePrompt(p) : null), undefined, 240000))
       server.middlewares.use('/api/matrix', handle((p) => (p.dimensionName && (p.sources || p.findings) ? matrixPrompt(p) : null)))
       server.middlewares.use('/api/decide', handle((p) => (p.question && p.dimensions ? decidePrompt(p) : null)))
       server.middlewares.use('/api/dependence', handle((p) => (p.dimensionName && p.findings ? dependencePrompt(p) : null)))
