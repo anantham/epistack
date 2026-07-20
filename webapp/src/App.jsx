@@ -71,6 +71,28 @@ const saveInvestigationPatch = (q, patch) => {
     localStorage.setItem(STORE_KEY, JSON.stringify(s))
   } catch {}
 }
+// model preference for claude -p (global; '' / undefined = the CLI default). Injected into every API call.
+const MODEL_KEY = 'epistack_model'
+const MODELS = [
+  { v: '', label: 'default', note: 'your CLI default' },
+  { v: 'opus', label: 'Opus 4.8', note: 'strongest' },
+  { v: 'sonnet', label: 'Sonnet 5', note: 'balanced' },
+  { v: 'haiku', label: 'Haiku 4.5', note: 'fast · cheap' },
+  { v: 'claude-fable-5', label: 'Fable 5', note: 'fast' },
+]
+const getModel = () => {
+  try {
+    return localStorage.getItem(MODEL_KEY) || undefined
+  } catch {
+    return undefined
+  }
+}
+const setModelPref = (m) => {
+  try {
+    m ? localStorage.setItem(MODEL_KEY, m) : localStorage.removeItem(MODEL_KEY)
+  } catch {}
+}
+
 const exportInvestigation = (q) => {
   const inv = loadInvestigation(q)
   if (!inv) return
@@ -155,7 +177,7 @@ function ClusterSection({ cluster, wordIdxs, tokens, wordRefs, active, onActivat
       const r = await fetch('/api/suggest', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ kind: 'resolution', question, dimensionName: cluster.name, dimensionPrompt: cluster.prompt, existing: cluster.resolutions || [] }),
+        body: JSON.stringify({ model: getModel(), kind: 'resolution', question, dimensionName: cluster.name, dimensionPrompt: cluster.prompt, existing: cluster.resolutions || [] }),
       })
       const j = await r.json()
       if (r.ok && Array.isArray(j.suggestions)) {
@@ -466,7 +488,7 @@ function FindingCard({ f, question, axisName, rkey, onLedger, initialLedger }) {
       const r = await fetch('/api/deepdive', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question, axis: axisName, claim: f.claim, source: f.source, url: f.url }),
+        body: JSON.stringify({ model: getModel(), question, axis: axisName, claim: f.claim, source: f.source, url: f.url }),
       })
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
@@ -522,7 +544,7 @@ function DependencePanel({ axis, findings, question, onFamilies, initialDep }) {
       const r = await fetch('/api/dependence', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify({ model: getModel(),
           question,
           dimensionName: axis.name,
           findings: findings.map((f) => ({ claim: f.claim, source: f.source, url: f.url, kind: f.kind, dataset: f.dataset, year: f.year })),
@@ -736,7 +758,7 @@ function AxisMatrix({ axis, findings, ledgers, question }) {
       const r = await fetch('/api/matrix', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question, dimensionName: axis.name, resolutions: axis.resolutions || [], sources }),
+        body: JSON.stringify({ model: getModel(), question, dimensionName: axis.name, resolutions: axis.resolutions || [], sources }),
       })
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
@@ -909,7 +931,7 @@ function ResearchStage({ question, data, pdata, context }) {
       const r = await fetch('/api/plan', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify({ model: getModel(),
           question,
           context: context || '',
           axes: axes.map((a) => ({ id: a.id, name: a.name, prompt: a.prompt || '', resolutions: a.resolutions || [] })),
@@ -935,7 +957,7 @@ function ResearchStage({ question, data, pdata, context }) {
       const r = await fetch('/api/research', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify({ model: getModel(),
           question,
           dimensionName: axis.name,
           dimensionPrompt: axis.prompt || '',
@@ -1007,7 +1029,7 @@ function ResearchStage({ question, data, pdata, context }) {
       const r = await fetch('/api/decide', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question, context: context || '', dimensions }),
+        body: JSON.stringify({ model: getModel(), question, context: context || '', dimensions }),
       })
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
@@ -1399,6 +1421,8 @@ export default function App() {
   const [ctxSummary, setCtxSummary] = useState('')
   const [step, setStep] = useState(1)
   const [qOpen, setQOpen] = useState(false) // the question paragraph is collapsed by default once docked
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [modelPref, setModelPrefState] = useState(() => getModel() || '')
 
   const wordRefs = useRef({})
   const taRef = useRef(null)
@@ -1502,7 +1526,7 @@ export default function App() {
       const r = await fetch('/api/decompose', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: q, tokens: toks }),
+        body: JSON.stringify({ model: getModel(), question: q, tokens: toks }),
       })
       const j = await r.json()
       if (!r.ok || j.error) {
@@ -1534,7 +1558,7 @@ export default function App() {
       const r = await fetch('/api/personalize', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify({ model: getModel(),
           question: question.trim(),
           clusters: data.clusters.map((c) => ({ id: c.id, name: c.name, resolutions: c.resolutions })),
           context,
@@ -1616,6 +1640,35 @@ export default function App() {
 
   return (
     <div className={`app ${docked ? 'docked' : 'landing'}`}>
+      <div className="settings">
+        <button className="settings-gear" onClick={() => setSettingsOpen((o) => !o)} title="settings — pick the model" aria-label="settings">
+          ⚙{modelPref && <span className="settings-badge">{MODELS.find((m) => m.v === modelPref)?.label || modelPref}</span>}
+        </button>
+        {settingsOpen && (
+          <>
+            <div className="settings-scrim" onClick={() => setSettingsOpen(false)} />
+            <div className="settings-pop">
+              <div className="sp-title">
+                model for <code>claude -p</code>
+              </div>
+              {MODELS.map((m) => (
+                <button
+                  key={m.v}
+                  className={`sp-opt${modelPref === m.v ? ' on' : ''}`}
+                  onClick={() => {
+                    setModelPref(m.v)
+                    setModelPrefState(m.v)
+                  }}
+                >
+                  <span className="sp-name">{m.label}</span>
+                  <span className="sp-note">{m.note}</span>
+                </button>
+              ))}
+              <div className="sp-foot">applies to every AI call, from the next one on</div>
+            </div>
+          </>
+        )}
+      </div>
       <div className={`brand ${introMoved ? 'moved' : 'center'}`}>
         <b>{'epistack'.slice(0, charsShown)}</b>
         {charsShown < 8 && !prefersReduced && <span className="caret" aria-hidden="true" />}

@@ -29,10 +29,11 @@ function extractJson(text) {
   return undefined
 }
 
-function spawnClaude(prompt, tools, timeoutMs) {
+function spawnClaude(prompt, tools, timeoutMs, model) {
   return new Promise((resolve, reject) => {
     const args = ['-p']
     if (tools) args.push('--allowedTools', tools)
+    if (model) args.push('--model', model)
     const child = spawn('claude', args, { stdio: ['pipe', 'pipe', 'pipe'] })
     let out = '', err = '', settled = false
     const finish = (fn, v) => { if (!settled) { settled = true; clearTimeout(timer); fn(v) } }
@@ -51,12 +52,12 @@ function spawnClaude(prompt, tools, timeoutMs) {
 }
 
 // retry on parse-fail / timeout (both retryable); spawn errors don't retry
-async function runClaude(prompt, tools) {
+async function runClaude(prompt, tools, model) {
   const timeoutMs = tools ? 240000 : 90000
   let lastErr
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return await spawnClaude(prompt, tools, timeoutMs)
+      return await spawnClaude(prompt, tools, timeoutMs, model)
     } catch (e) {
       lastErr = e
       if (!e || !e.retryable) break
@@ -294,12 +295,12 @@ Use "unclear" for unverifiable fields. Return ONLY JSON, no prose, no fences:
 
 // orchestrate the two phases: enumerate (WebSearch) → detail (WebFetch), with graceful fallback to stubs
 async function deepDiveRun(p) {
-  const meta = await runClaude(deepDiveEnumeratePrompt(p), 'WebSearch,WebFetch')
+  const meta = await runClaude(deepDiveEnumeratePrompt(p), 'WebSearch,WebFetch', p.model)
   const stubs = Array.isArray(meta.resultStubs) ? meta.resultStubs.slice(0, 6) : []
   let results = []
   if (stubs.length) {
     try {
-      const detail = await runClaude(deepDiveDetailPrompt(p, meta.study, stubs), 'WebFetch')
+      const detail = await runClaude(deepDiveDetailPrompt(p, meta.study, stubs), 'WebFetch', p.model)
       if (Array.isArray(detail.results) && detail.results.length) results = detail.results
     } catch {}
     if (!results.length) {
@@ -334,9 +335,9 @@ function apiPlugin() {
           const prompt = buildPrompt(p)
           if (prompt == null) return json(400, { error: 'missing fields' })
           const t0 = Date.now()
-          logEvent(`→ ${route}${tools ? ' [web]' : ''}`)
+          logEvent(`→ ${route}${tools ? ' [web]' : ''}${p.model ? ` (${p.model})` : ''}`)
           try {
-            const out = await runClaude(prompt, tools)
+            const out = await runClaude(prompt, tools, p.model)
             logEvent(`✓ ${route} ${((Date.now() - t0) / 1000).toFixed(0)}s`)
             json(200, out)
           } catch (e) {
@@ -364,7 +365,7 @@ function apiPlugin() {
             return json(400, { error: 'bad request json' })
           }
           const t0 = Date.now()
-          logEvent(`→ ${route} [multi]`)
+          logEvent(`→ ${route} [multi]${p.model ? ` (${p.model})` : ''}`)
           try {
             const out = await run(p)
             logEvent(`✓ ${route} ${((Date.now() - t0) / 1000).toFixed(0)}s`)
