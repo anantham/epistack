@@ -928,15 +928,13 @@ export default function InterpretationMapPage() {
           <section className="route-handoff" aria-label="Continue investigation">
             <div>
               <div className="eyebrow">Next workspace</div>
-              <h2>{caseId === "eggs-weight-loss" ? "Now inspect evidence against this framing." : "The framing artifact is ready for research."}</h2>
+              <h2>Now direct research against this framing.</h2>
               <p>
-                {caseId === "eggs-weight-loss"
-                  ? "Your selected frame remains explicit; the evidence workspace keeps source review focused and separate."
-                  : "This prototype does not attach the eggs evidence corpus to an unrelated question. Save or export this map before beginning a claim-matched evidence search."}
+                Your selected frame and known unknowns remain explicit. Start with human-editable retrieval lanes; discovery stays separate from evidence that earns promotion into the artifact.
               </p>
             </div>
-            <a className="primary-link" href={caseId === "eggs-weight-loss" ? "/evidence" : "/"}>
-              {caseId === "eggs-weight-loss" ? "Continue to evidence →" : "Compile another question →"}
+            <a className="primary-link" href="/research">
+              Proceed to research →
             </a>
           </section>
         </>

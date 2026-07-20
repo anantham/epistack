@@ -66,6 +66,9 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(map, /Create probabilistic claim/);
   assert.match(map, /analysis-neutral placeholder/);
   assert.match(map, /interpretation branches above do not share this probability mass/i);
+  assert.match(map, /href="\/research"/);
+  assert.match(map, /Proceed to research/);
+  assert.doesNotMatch(map, /Compile another question/);
   assert.match(api, /generateText/);
   assert.match(api, /Output\.object/);
   assert.match(api, /dimensionScoutOutputSchema/);
