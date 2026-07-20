@@ -53,6 +53,39 @@ const setCache = (q, data) => {
   } catch {}
 }
 
+// --- A.3: persistent investigation store (the whole artifact per question, survives reload + tab-switch) ---
+const STORE_KEY = 'epistack_investigations'
+const getStore = () => {
+  try {
+    return JSON.parse(localStorage.getItem(STORE_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+const loadInvestigation = (q) => getStore()[q] || null
+const saveInvestigationPatch = (q, patch) => {
+  if (!q) return
+  try {
+    const s = getStore()
+    s[q] = { ...(s[q] || {}), ...patch, question: q, updatedAt: Date.now() }
+    localStorage.setItem(STORE_KEY, JSON.stringify(s))
+  } catch {}
+}
+const exportInvestigation = (q) => {
+  const inv = loadInvestigation(q)
+  if (!inv) return
+  const payload = { schema: 'epistack.investigation/v1', question: q, exportedAt: new Date().toISOString(), ...inv }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `epistack-${(q || 'investigation').slice(0, 40).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()}.json`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 // One cluster = one scroll "stage". Activates when scrolled into view:
 // its words colour in the sticky question above, then fly down into this card.
 function ClusterSection({ cluster, wordIdxs, tokens, wordRefs, active, onActivate, onEdit, question }) {
@@ -423,10 +456,10 @@ function ResultLedger({ d }) {
   )
 }
 
-function FindingCard({ f, question, axisName, rkey, onLedger }) {
+function FindingCard({ f, question, axisName, rkey, onLedger, initialLedger }) {
   const coi = f.coi && !/^none/i.test(String(f.coi))
   const conf = norm(f.confidence)
-  const [dd, setDd] = useState(null) // null | 'loading' | result | {error}
+  const [dd, setDd] = useState(initialLedger || null) // null | 'loading' | result | {error}
   async function deepdive() {
     setDd('loading')
     try {
@@ -481,8 +514,8 @@ function FindingCard({ f, question, axisName, rkey, onLedger }) {
 }
 
 // dependence grouping — cluster the axis's sources into independent evidence families
-function DependencePanel({ axis, findings, question, onFamilies }) {
-  const [dep, setDep] = useState(null) // null | 'loading' | result | {error}
+function DependencePanel({ axis, findings, question, onFamilies, initialDep }) {
+  const [dep, setDep] = useState(initialDep || null) // null | 'loading' | result | {error}
   async function run() {
     setDep('loading')
     try {
@@ -554,7 +587,7 @@ function DependencePanel({ axis, findings, question, onFamilies }) {
   )
 }
 
-function ResearchLane({ axis, lane, stats, brief, now, onRun, question, onLedger, onFamilies }) {
+function ResearchLane({ axis, lane, stats, brief, now, onRun, question, onLedger, onFamilies, ledgers, families }) {
   const status = lane?.status || 'idle'
   const elapsed = lane?.t0 ? ((now - lane.t0) / 1000).toFixed(1) : null
   const findings = lane?.findings || []
@@ -608,10 +641,18 @@ function ResearchLane({ axis, lane, stats, brief, now, onRun, question, onLedger
           </div>
           <div className="findings">
             {findings.map((f, i) => (
-              <FindingCard key={i} f={f} question={question} axisName={axis.name} rkey={`${axis.id}#${i}`} onLedger={onLedger} />
+              <FindingCard
+                key={i}
+                f={f}
+                question={question}
+                axisName={axis.name}
+                rkey={`${axis.id}#${i}`}
+                onLedger={onLedger}
+                initialLedger={ledgers?.[`${axis.id}#${i}`]}
+              />
             ))}
           </div>
-          <DependencePanel axis={axis} findings={findings} question={question} onFamilies={onFamilies} />
+          <DependencePanel axis={axis} findings={findings} question={question} onFamilies={onFamilies} initialDep={families?.[axis.id]} />
         </>
       )}
     </div>
@@ -828,14 +869,31 @@ function ResearchStage({ question, data, pdata, context }) {
     return data.clusters || []
   }, [data, pdata])
 
-  const [lanes, setLanes] = useState({})
+  const saved0 = loadInvestigation(question)?.research || {} // hydrate on mount (survives reload + tab-switch)
+  const [lanes, setLanes] = useState(() => saved0.lanes || {})
   const [now, setNow] = useState(() => Date.now())
-  const [plan, setPlan] = useState(null) // null | 'planning' | result | {error}
+  const [plan, setPlan] = useState(() => saved0.plan || null) // null | 'planning' | result | {error}
   const [view, setView] = useState('lanes') // lanes | matrix
-  const [decision, setDecision] = useState(null) // null | 'deciding' | result | {error}
+  const [decision, setDecision] = useState(() => saved0.decision || null) // null | 'deciding' | result | {error}
   // canonical result store, populated live by deep-dives + dependence passes; matrix & decide read from it
-  const [ledgers, setLedgers] = useState({}) // "axisId#idx" -> result ledger {study, results, authorConclusion}
-  const [families, setFamilies] = useState({}) // axisId -> dependence {families, independentCount, ...}
+  const [ledgers, setLedgers] = useState(() => saved0.ledgers || {}) // "axisId#idx" -> result ledger {study, results, authorConclusion}
+  const [families, setFamilies] = useState(() => saved0.families || {}) // axisId -> dependence {families, independentCount, ...}
+
+  // A.3: persist the research slice (only completed lanes / results — drop in-flight state)
+  useEffect(() => {
+    const q = question?.trim()
+    if (!q) return
+    const doneLanes = Object.fromEntries(Object.entries(lanes).filter(([, l]) => l?.status === 'done'))
+    saveInvestigationPatch(q, {
+      research: {
+        lanes: doneLanes,
+        plan: plan && plan.agents ? plan : null,
+        ledgers,
+        families,
+        decision: decision && decision.answer ? decision : null,
+      },
+    })
+  }, [lanes, plan, ledgers, families, decision, question])
   const onLedger = (k, l) => setLedgers((m) => ({ ...m, [k]: l }))
   const onFamilies = (id, fam) => setFamilies((m) => ({ ...m, [id]: fam }))
   const statsById = useMemo(
@@ -1146,6 +1204,8 @@ function ResearchStage({ question, data, pdata, context }) {
               question={question}
               onLedger={onLedger}
               onFamilies={onFamilies}
+              ledgers={ledgers}
+              families={families}
             />
           ))}
         </div>
@@ -1237,27 +1297,41 @@ export default function App() {
     }
   }, [phase])
 
+  // A.3: persist the app-slice (context, personalization, step) as it changes
+  useEffect(() => {
+    if (phase !== 'clustered' || !data) return
+    saveInvestigationPatch(question.trim(), { data, tokens, pdata, context: ctxSummary, elicitAns, ctxText, step })
+  }, [phase, data, pdata, ctxSummary, elicitAns, ctxText, step, question, tokens])
+
   async function decompose() {
     const q = question.trim()
     if (!q) return
     setEverDecomposed(true)
     const toks = tokenize(q)
-    setTokens(toks)
     setErr('')
     setActivated([])
+    // full restore: a saved investigation brings back context, personalization + research too
+    const saved = loadInvestigation(q)
+    if (saved && saved.data) {
+      setTokens(saved.tokens && saved.tokens.length ? saved.tokens : toks)
+      setData(saved.data)
+      setPdata(saved.pdata || null)
+      setPersonalized(!!saved.pdata)
+      setCtxSummary(saved.context || '')
+      setElicitAns(saved.elicitAns || {})
+      setCtxText(saved.ctxText || '')
+      setStep(saved.step || 1)
+      setFromCache(true)
+      setPhase('clustered')
+      return
+    }
+    setTokens(toks)
     setPersonalized(false)
     setPdata(null)
     setElicitAns({})
     setCtxText('')
     setCtxSummary('')
     setStep(1)
-    const cached = getCache()[q]
-    if (cached) {
-      setFromCache(true)
-      setData(cached)
-      setPhase('clustered')
-      return
-    }
     setFromCache(false)
     setData(null)
     setPhase('loading')
@@ -1275,7 +1349,7 @@ export default function App() {
         return
       }
       setDurations(pushDuration(performance.now() - t0))
-      setCache(q, j)
+      saveInvestigationPatch(q, { data: j, tokens: toks })
       setData(j)
       setPhase('clustered')
     } catch (e) {
@@ -1421,6 +1495,9 @@ export default function App() {
             <div className="docked-q">
               <div className="dq-head">
                 <button className="dq-icon reset-btn" onClick={reset} title="ask another question" aria-label="ask another question">↺</button>
+                {phase === 'clustered' && data && (
+                  <button className="dq-icon" onClick={() => exportInvestigation(question.trim())} title="export this investigation as JSON" aria-label="export investigation">⤓</button>
+                )}
                 <button className="dq-toggle" onClick={() => setQOpen((o) => !o)} aria-expanded={qOpen} title={qOpen ? 'collapse the question' : 'expand the question'}>
                   <span className="dq-chev">{qOpen ? '⌃' : '⌄'}</span>
                   {!qOpen && <span className="dq-preview">{question.length > 72 ? question.slice(0, 72) + '…' : question}</span>}
