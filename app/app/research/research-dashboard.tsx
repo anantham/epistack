@@ -14,6 +14,7 @@ import {
 import { atomicResults } from "../../data/eggs-result-ledger";
 import type { DeepDiveResponse } from "../../lib/deep-dive";
 import type { PublicationFilter, PubmedDiscovery, ResearchResponse } from "../../lib/research";
+import { agentPromptStorageKey, sanitizeAgentPromptOverrides } from "../../lib/agent-prompts";
 
 type LaneRun = {
   status: "ready" | "running" | "complete" | "error";
@@ -287,6 +288,14 @@ export function ResearchDashboard() {
     }
   }
 
+  function promptOverrides() {
+    try {
+      return sanitizeAgentPromptOverrides(JSON.parse(window.localStorage.getItem(agentPromptStorageKey) || "{}"));
+    } catch {
+      return {};
+    }
+  }
+
   async function extractRecord(record: PubmedDiscovery, refresh = false) {
     setDeepDives((current) => ({
       ...current,
@@ -297,7 +306,13 @@ export function ResearchDashboard() {
       const response = await fetch("/api/deep-dive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ record, openRouterApiKey: preferences.apiKey, openRouterModel: preferences.model, refresh }),
+        body: JSON.stringify({
+          record,
+          openRouterApiKey: preferences.apiKey,
+          openRouterModel: preferences.model,
+          promptOverrides: promptOverrides(),
+          refresh,
+        }),
       });
       const payload = await response.json() as DeepDiveResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "The abstract extraction failed.");

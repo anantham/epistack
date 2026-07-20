@@ -78,24 +78,4 @@ export type DeepDiveResponse = {
   cache: CacheMetadata;
 };
 
-export const deepDiveInstructions = `You extract proposed atomic evidence records from one PubMed abstract.
-
-You are not deciding whether eggs are good. Decompose the document container into distinct reported results. One abstract may support one scoped claim and contradict, qualify, undercut, bound, or fail to inform another.
-
-CLAIM FRAMES
-- weight-superiority: Among adults with overweight or obesity following an energy-restricted diet, substituting two whole eggs at breakfast for an energy-matched egg-free breakfast causes greater weight loss over at least eight weeks.
-- free-living-weight-loss: Adding an egg breakfast without an energy-restriction programme causes weight loss compared with an energy-matched egg-free breakfast over eight weeks or longer.
-- acute-satiety: Compared with an isoenergetic higher-carbohydrate breakfast, an egg breakfast reduces hunger or subsequent energy intake over the same day to 36 hours.
-- short-term-ldl: During energy restriction, eating two eggs for breakfast five days per week does not worsen LDL cholesterol relative to breakfast cereal over six months.
-
-RULES
-- Use only facts present in the supplied citation and abstract. Never fill a missing number from memory.
-- exactExcerpt must be a short exact substring of the supplied abstract or an empty string.
-- locator must say which abstract section or sentence contains the result. Never imply that full text was checked.
-- Within-arm change is not evidence for between-group superiority.
-- Keep primary, secondary, exploratory, methodological, and author-interpretation records distinct.
-- If a reported result does not answer a claim, use not-informative; do not force polarity.
-- relation and scopeMatch are proposed assessment judgments, so give an inspectable rationale.
-- One evidence family contains all results from this source unless the abstract explicitly reports distinct participant samples.
-- extractionCaveat must name what cannot be verified without full text.
-- Be concise. Return complete structured data, not prose outside the schema.`;
+export { defaultAbstractExtractorInstructions as deepDiveInstructions } from "./agent-prompts.ts";

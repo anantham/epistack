@@ -5,27 +5,31 @@ import { operationCacheKey, readOperationCache, writeOperationCache } from "../.
 import type { DecompositionResponse } from "../../../lib/decomposition";
 import {
   assembleDecomposition,
-  contextAgentInstructions,
   contextAgentOutputSchema,
   contextAgentSchema,
   createFallbackDecomposition,
   decompositionSchema,
-  dimensionScoutInstructions,
   dimensionScoutOutputSchema,
   dimensionScoutSchema,
   normalizeDimensionScout,
-  traceAgentInstructions,
   traceAgentOutputSchema,
   traceAgentSchema,
   type ContextAgentResult,
   type DimensionScout,
   type TraceAgentResult,
 } from "../../../lib/decomposition-server";
+import {
+  promptOverridesSignature,
+  renderAgentPrompt,
+  resolveAgentPrompt,
+  sanitizeAgentPromptOverrides,
+  type AgentPromptOverrides,
+} from "../../../lib/agent-prompts";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
 const openRouterBaseURL = "https://openrouter.ai/api/v1";
-const decompositionCacheContract = "question-decomposition-orchestrator-v2";
+const decompositionCacheContract = "question-decomposition-orchestrator-v3";
 const decompositionCacheTtlMs = 30 * 24 * 60 * 60 * 1000;
 type CachedDecomposition = Omit<DecompositionResponse, "cache">;
 
@@ -39,6 +43,7 @@ type DecompositionRequest = {
   decisionContext?: unknown;
   openRouterApiKey?: unknown;
   openRouterModel?: unknown;
+  promptOverrides?: unknown;
   refresh?: unknown;
 };
 
@@ -53,6 +58,7 @@ export async function POST(request: Request) {
   let decisionContext = "";
   let suppliedOpenRouterKey = "";
   let suppliedOpenRouterModel = "";
+  let promptOverrides: AgentPromptOverrides = {};
   let refresh = false;
   try {
     const body = (await request.json()) as DecompositionRequest;
@@ -60,6 +66,10 @@ export async function POST(request: Request) {
     decisionContext = typeof body.decisionContext === "string" ? body.decisionContext.trim() : "";
     suppliedOpenRouterKey = typeof body.openRouterApiKey === "string" ? body.openRouterApiKey.trim() : "";
     suppliedOpenRouterModel = typeof body.openRouterModel === "string" ? body.openRouterModel.trim() : "";
+    if (body.promptOverrides && JSON.stringify(body.promptOverrides).length > 120_000) {
+      return Response.json({ error: "Prompt overrides are too large." }, { status: 400 });
+    }
+    promptOverrides = sanitizeAgentPromptOverrides(body.promptOverrides);
     refresh = body.refresh === true;
   } catch {
     return Response.json({ error: "Request body must be valid JSON." }, { status: 400 });
@@ -90,6 +100,7 @@ export async function POST(request: Request) {
     prompt,
     decisionContext,
     model: openRouterModel,
+    promptConfig: promptOverridesSignature(promptOverrides),
   });
   if (!refresh) {
     const cached = await readOperationCache<CachedDecomposition>(cacheKey);
@@ -119,7 +130,13 @@ export async function POST(request: Request) {
       "X-OpenRouter-Metadata": "enabled",
     },
   });
-  const dimensionPrompt = `SUBMITTED QUESTION\n${prompt}\n\nKNOWN DECISION CONTEXT\n${decisionContext || "None supplied. Do not invent personal facts."}`;
+  const dimensionAgent = resolveAgentPrompt("dimension-scout", promptOverrides);
+  const traceAgent = resolveAgentPrompt("trace-specialist", promptOverrides);
+  const contextAgent = resolveAgentPrompt("context-retrieval", promptOverrides);
+  const dimensionPrompt = renderAgentPrompt(dimensionAgent.taskTemplate, {
+    question: prompt,
+    decisionContext: decisionContext || "None supplied. Do not invent personal facts.",
+  });
   let scout: DimensionScout | null = null;
   let scoutFailure: unknown = null;
   let scoutValidation = "";
@@ -133,12 +150,15 @@ export async function POST(request: Request) {
           description: "A compact list of substantive dimensions and concrete resolutions for an underspecified question.",
           schema: dimensionScoutOutputSchema,
         }),
-        system: dimensionScoutInstructions,
+        system: dimensionAgent.instructions,
         prompt: attempt === 0
           ? dimensionPrompt
-          : `${dimensionPrompt}\n\nREPAIR: Return every required field. Keep 4–7 dimensions and at least two concrete resolutions per dimension. Previous validation: ${scoutValidation || "incomplete object"}.`,
-        maxOutputTokens: 5000,
-        temperature: 0.15,
+          : renderAgentPrompt(dimensionAgent.repairTemplate ?? "{{basePrompt}}", {
+              basePrompt: dimensionPrompt,
+              validation: scoutValidation || "incomplete object",
+            }),
+        maxOutputTokens: dimensionAgent.maxOutputTokens,
+        temperature: dimensionAgent.temperature,
       });
       const parsed = dimensionScoutSchema.safeParse(output);
       if (parsed.success) scout = parsed.data;
@@ -184,10 +204,13 @@ export async function POST(request: Request) {
         description: "Exact submitted-language cues mapped to fixed dimensions.",
         schema: traceAgentOutputSchema,
       }),
-      system: traceAgentInstructions,
-      prompt: `SUBMITTED QUESTION\n${prompt}\n\nFIXED DIMENSIONS\n${JSON.stringify(axisBrief)}`,
-      maxOutputTokens: 3500,
-      temperature: 0.05,
+      system: traceAgent.instructions,
+      prompt: renderAgentPrompt(traceAgent.taskTemplate, {
+        question: prompt,
+        dimensionsJson: JSON.stringify(axisBrief),
+      }),
+      maxOutputTokens: traceAgent.maxOutputTokens,
+      temperature: traceAgent.temperature,
     });
     return traceAgentSchema.parse(output);
   })();
@@ -199,10 +222,14 @@ export async function POST(request: Request) {
         description: "Retrieval metadata, mismatch risks, claim template, and high-value context questions for fixed dimensions.",
         schema: contextAgentOutputSchema,
       }),
-      system: contextAgentInstructions,
-      prompt: `SUBMITTED QUESTION\n${prompt}\n\nFIXED DIMENSIONS\n${JSON.stringify(axisBrief)}\n\nKNOWN DECISION CONTEXT\n${decisionContext || "None supplied. Ask only facts with high pruning or evidence-matching value."}`,
-      maxOutputTokens: 6500,
-      temperature: 0.1,
+      system: contextAgent.instructions,
+      prompt: renderAgentPrompt(contextAgent.taskTemplate, {
+        question: prompt,
+        dimensionsJson: JSON.stringify(axisBrief),
+        decisionContext: decisionContext || "None supplied. Ask only facts with high pruning or evidence-matching value.",
+      }),
+      maxOutputTokens: contextAgent.maxOutputTokens,
+      temperature: contextAgent.temperature,
     });
     return contextAgentSchema.parse(output);
   })();

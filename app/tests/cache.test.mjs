@@ -41,10 +41,11 @@ test("live research and model extraction use a bypassable shared cache", async (
 
 test("decomposition reuses an exact browser result before requiring a model key", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /epistack:decomposition-operation-cache:v2/);
+  assert.match(page, /epistack:decomposition-operation-cache:v3/);
   assert.match(page, /cached\.prompt === normalizedPrompt/);
   assert.match(page, /cached\.decisionContext === contextForRequest/);
   assert.match(page, /cached\.model === normalizedModel/);
+  assert.match(page, /cached\.promptSignature === promptSignature/);
   assert.match(page, /cache: \{ status: "browser", layer: "browser"/);
   assert.match(page, /if \(!openRouterKey\.trim\(\)\)/);
   assert.match(page, /Recompute/);

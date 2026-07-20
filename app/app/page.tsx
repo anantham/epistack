@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { StageNav } from "./components/case-navigation";
 import type {
   DecompositionResponse,
   QuestionHighlight,
 } from "../lib/decomposition";
 import { decompositionSessionKey, interpretationMapStorageKey } from "../lib/decomposition";
+import {
+  agentPromptStorageKey,
+  promptOverridesSignature,
+  sanitizeAgentPromptOverrides,
+  type AgentPromptOverrides,
+} from "../lib/agent-prompts";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
 const previousDefaultOpenRouterModel = "anthropic/claude-sonnet-4.6";
@@ -15,8 +22,8 @@ const analysisDurationsKey = "epistack:analysis-durations:v1";
 const legacyAnalysisDurationsKey = "epistack_decomp_ms";
 const preferencesStorageKey = "epistack:preferences:v1";
 const workspaceStorageKey = "epistack:workspace:v1";
-const decompositionBrowserCacheKey = "epistack:decomposition-operation-cache:v2";
-const decompositionBrowserCacheContract = "question-decomposition-orchestrator-v2";
+const decompositionBrowserCacheKey = "epistack:decomposition-operation-cache:v3";
+const decompositionBrowserCacheContract = "question-decomposition-orchestrator-v3";
 const provisionalEstimateMs = 90_000;
 const loadingSteps = [
   "scouting substantive dimensions",
@@ -47,6 +54,7 @@ type BrowserDecompositionCache = {
   prompt: string;
   decisionContext: string;
   model: string;
+  promptSignature: string;
   savedAt: string;
   result: DecompositionResponse;
 };
@@ -106,6 +114,14 @@ function decompositionCacheLabel(result: DecompositionResponse) {
   if (result.cache.status === "hit") return "reused · no model call";
   if (result.cache.status === "bypass") return "recomputed live";
   return result.mode === "ai" ? "orchestrated live" : "editable fallback";
+}
+
+function storedAgentPromptOverrides(): AgentPromptOverrides {
+  try {
+    return sanitizeAgentPromptOverrides(JSON.parse(window.localStorage.getItem(agentPromptStorageKey) || "{}"));
+  } catch {
+    return {};
+  }
 }
 
 export default function Home() {
@@ -398,6 +414,8 @@ export default function Home() {
     const contextForRequest = typeof contextOverride === "string" ? contextOverride : decisionContext;
     const normalizedPrompt = prompt.trim();
     const normalizedModel = openRouterModel.trim() || defaultOpenRouterModel;
+    const promptOverrides = storedAgentPromptOverrides();
+    const promptSignature = promptOverridesSignature(promptOverrides);
     setError("");
     setResult(null);
     setActiveCluster(-1);
@@ -420,6 +438,7 @@ export default function Home() {
           && cached.prompt === normalizedPrompt
           && cached.decisionContext === contextForRequest
           && cached.model === normalizedModel
+          && cached.promptSignature === promptSignature
           && cached.result?.decomposition) {
           const browserResult: DecompositionResponse = {
             ...cached.result,
@@ -456,6 +475,7 @@ export default function Home() {
           decisionContext: contextForRequest,
           openRouterApiKey: openRouterKey.trim() || undefined,
           openRouterModel: normalizedModel,
+          promptOverrides,
           refresh,
         }),
       });
@@ -484,6 +504,7 @@ export default function Home() {
           prompt: normalizedPrompt,
           decisionContext: contextForRequest,
           model: normalizedModel,
+          promptSignature,
           savedAt: new Date().toISOString(),
           result: payload,
         };
@@ -672,6 +693,10 @@ export default function Home() {
                   spellCheck={false}
                 />
               </label>
+              <Link className="settings-prompt-link" href="/prompts">
+                <span><strong>AI agent prompts</strong><small>Inspect and edit the instructions driving every model call.</small></span>
+                <b aria-hidden="true">→</b>
+              </Link>
               <div className="settings-footer">
                 <p className={`connection-status ${connectionStatus.state}`} role="status">
                   <i aria-hidden="true" />{connectionStatus.message}

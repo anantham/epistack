@@ -2,18 +2,24 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, Output } from "ai";
 import { env } from "cloudflare:workers";
 import {
-  deepDiveInstructions,
   deepDiveOutputSchema,
   deepDiveSchema,
   type DeepDiveResponse,
   type DeepDiveSource,
 } from "../../../lib/deep-dive";
+import {
+  promptOverridesSignature,
+  renderAgentPrompt,
+  resolveAgentPrompt,
+  sanitizeAgentPromptOverrides,
+  type AgentPromptOverrides,
+} from "../../../lib/agent-prompts";
 import { operationCacheKey, readOperationCache, writeOperationCache } from "../../../db/cache";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
 const openRouterBaseURL = "https://openrouter.ai/api/v1";
-const deepDiveCacheContract = "abstract-result-extraction-v1";
+const deepDiveCacheContract = "abstract-result-extraction-v2";
 const deepDiveCacheTtlMs = 30 * 24 * 60 * 60 * 1000;
 type CachedDeepDive = Omit<DeepDiveResponse, "cache">;
 
@@ -21,6 +27,7 @@ type DeepDiveRequest = {
   record?: Partial<Omit<DeepDiveSource, "abstract">>;
   openRouterApiKey?: unknown;
   openRouterModel?: unknown;
+  promptOverrides?: unknown;
   refresh?: unknown;
 };
 
@@ -64,12 +71,17 @@ export async function POST(request: Request) {
 
   const suppliedKey = typeof body.openRouterApiKey === "string" ? body.openRouterApiKey.trim() : "";
   const suppliedModel = typeof body.openRouterModel === "string" ? body.openRouterModel.trim() : "";
+  if (body.promptOverrides && JSON.stringify(body.promptOverrides).length > 120_000) {
+    return Response.json({ error: "Prompt overrides are too large." }, { status: 400 });
+  }
+  const promptOverrides: AgentPromptOverrides = sanitizeAgentPromptOverrides(body.promptOverrides);
   const runtimeEnvironment = env as unknown as DeepDiveEnvironment;
   const openRouterModel = suppliedModel || runtimeEnvironment.EPISTACK_OPENROUTER_MODEL || process.env.EPISTACK_OPENROUTER_MODEL || defaultOpenRouterModel;
   const refresh = body.refresh === true;
   const cacheKey = await operationCacheKey("abstract-result-extraction", deepDiveCacheContract, {
     pmid,
     model: openRouterModel,
+    promptConfig: promptOverridesSignature(promptOverrides),
   });
   if (!refresh) {
     const cached = await readOperationCache<CachedDeepDive>(cacheKey);
@@ -115,6 +127,7 @@ export async function POST(request: Request) {
         "X-OpenRouter-Metadata": "enabled",
       },
     });
+    const extractionAgent = resolveAgentPrompt("abstract-extractor", promptOverrides);
     const { output } = await generateText({
       model: openRouter(openRouterModel),
       output: Output.object({
@@ -122,10 +135,18 @@ export async function POST(request: Request) {
         description: "Proposed study, analysis, result, and claim-relation records extracted from one PubMed abstract.",
         schema: deepDiveOutputSchema,
       }),
-      system: deepDiveInstructions,
-      prompt: `CITATION\n${source.title}\n${source.authors}\n${source.journal} · ${source.published}\nPMID ${source.pmid}${source.doi ? ` · DOI ${source.doi}` : ""}\n\nABSTRACT\n${source.abstract}`,
-      maxOutputTokens: 8000,
-      temperature: 0.1,
+      system: extractionAgent.instructions,
+      prompt: renderAgentPrompt(extractionAgent.taskTemplate, {
+        title: source.title,
+        authors: source.authors,
+        journal: source.journal,
+        published: source.published,
+        pmid: source.pmid,
+        doiLine: source.doi ? ` · DOI ${source.doi}` : "",
+        abstract: source.abstract,
+      }),
+      maxOutputTokens: extractionAgent.maxOutputTokens,
+      temperature: extractionAgent.temperature,
     });
     const parsed = deepDiveSchema.safeParse(output);
     if (!parsed.success) {

@@ -211,31 +211,11 @@ OUTPUT RULES
 - Label each question's main effect: "prune" removes scope, "branch" creates a materially different claim, and "match" changes evidence inclusion or transportability.
 - Be concise, methodologically neutral, and domain-general.`;
 
-export const dimensionScoutInstructions = `You are the DIMENSION SCOUT in a question-compilation team.
-
-Do one job only: turn a vague paragraph into 4–7 substantive dimensions that would change the answer or the evidence search. Do not answer the question, retrieve evidence, write provenance metadata, or design the context interview.
-
-Ground dimensions in the submitted language, then check the useful recurring lenses: outcome/value, exact object, dose/frequency, feasible counterfactual, population, setting, time horizon, implementation, downside, and personal fit. Always include a real comparator for causal or decision questions. Options are bundles, not isolated word senses. Trace constraint cascades. Prefer concrete or quantitative resolutions over labels such as “moderation.”
-
-Each dimension needs 2–5 short, mutually distinct resolutions. Use stable lowercase kebab-case ids. Keep the output compact.
-
-Worked calibration:
-“Are eggs good to eat?” can separate: good for which outcome; what kind/preparation of egg; how many and how often; replacing what; and for which population. “Is it better to rent or buy?” must compare two different home-location-rights-cost bundles, not the same house with a payment-method swap.`;
-
-export const traceAgentInstructions = `You are the TRACE SPECIALIST in a question-compilation team.
-
-Given a submitted paragraph and a fixed list of dimensions, map only the exact words that make each dimension relevant. Every quote must be an exact, case-sensitive substring of the paragraph. Use short non-overlapping quotes where possible. Do not invent new dimensions, branches, evidence, or context questions.
-
-For each trace, name the observable latent variable and give a concise audit rationale. This is an inspectable derivation trace, not private chain-of-thought. Return traces only for supplied axis ids.`;
-
-export const contextAgentInstructions = `You are the CONTEXT AND RETRIEVAL SPECIALIST in a question-compilation team.
-
-Given a submitted paragraph, fixed dimensions, and any known decision context, do three jobs only:
-1. Specify the metadata an evidence collector must capture for each dimension, useful search concepts, and construct-mismatch risks.
-2. Write a readable scoped claim template using placeholders exactly as {{axis-id}}.
-3. Ask 3–5 high-value questions about the asker, ordered by how much they prune the search, create a materially different claim, or change evidence applicability.
-
-Do not answer the substantive question. Do not re-ask facts already present in known context. Keep answer options short and concrete while allowing free text. Treat context as an applicability constraint, never as evidence. Preserve both pruning and newly relevant branches.`;
+export {
+  defaultContextRetrievalInstructions as contextAgentInstructions,
+  defaultDimensionScoutInstructions as dimensionScoutInstructions,
+  defaultTraceSpecialistInstructions as traceAgentInstructions,
+} from "./agent-prompts.ts";
 
 function slug(value: string) {
   return value

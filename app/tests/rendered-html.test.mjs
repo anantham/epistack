@@ -10,11 +10,12 @@ test("build emits the Epistack application", async () => {
 });
 
 test("question compiler stages AI reading before the editable map", async () => {
-  const [frame, styles, map, api, packageJson] = await Promise.all([
+  const [frame, styles, map, api, promptRegistry, packageJson] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/globals.css", root), "utf8"),
     readFile(new URL("app/map/page.tsx", root), "utf8"),
     readFile(new URL("app/api/decompose/route.ts", root), "utf8"),
+    readFile(new URL("lib/agent-prompts.ts", root), "utf8"),
     readFile(new URL("package.json", root), "utf8"),
   ]);
 
@@ -82,11 +83,11 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(api, /openRouterFailureFromThrown/);
   assert.match(frame, /anthropic\/claude-opus-4\.8/);
   assert.match(api, /anthropic\/claude-opus-4\.8/);
-  assert.match(api, /maxOutputTokens: 5000/);
-  assert.match(api, /maxOutputTokens: 3500/);
-  assert.match(api, /maxOutputTokens: 6500/);
+  assert.match(promptRegistry, /maxOutputTokens: 5000/);
+  assert.match(promptRegistry, /maxOutputTokens: 3500/);
+  assert.match(promptRegistry, /maxOutputTokens: 6500/);
   assert.match(api, /for \(let attempt = 0; attempt < 2 && !scout; attempt \+= 1\)/);
-  assert.match(api, /REPAIR: Return every required field/);
+  assert.match(promptRegistry, /REPAIR: Return every required field/);
   assert.match(api, /No reusable decomposition is cached/);
   assert.match(api, /status: 401/);
   assert.match(api, /mode: "local-fallback"/);
