@@ -359,10 +359,25 @@ body{margin:0}
 .mx-claim-meta{ display:block; font-family:var(--font-mono); font-size:10.5px; color:var(--ink-3); margin-top:4px }
 .matrix tr.mx-conflict .mx-claim{ box-shadow:inset 3px 0 0 var(--flag) }
 .matrix td{ text-align:center; padding:6px; vertical-align:middle }
-.mcell{ display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; font-size:14px; font-weight:600 }
+.mx-src-dd{ display:inline-block; margin-left:4px; color:var(--accent); font-size:9px; vertical-align:top }
+.mcell{ display:inline-flex; align-items:center; justify-content:center; gap:2px; min-width:26px; height:26px; padding:0 5px; border-radius:6px; font-size:14px; font-weight:600; border:1px solid transparent; background:transparent; cursor:default; font-family:inherit }
+button.mcell{ cursor:pointer }
+button.mcell:hover{ border-color:var(--line) }
+.mcell.open{ outline:2px solid var(--accent); outline-offset:-1px }
+.mc-n{ font-family:var(--font-mono); font-size:10px; font-weight:600 }
 .m-sup{ color:var(--accent-strong); background:var(--accent-wash) }
 .m-dis{ color:var(--flag); background:var(--flag-wash) }
+.m-qual{ color:var(--ink-2); background:var(--surface-2) }
+.m-mix{ color:var(--flag); background:var(--flag-wash) }
 .m-sil{ color:var(--ink-3) }
+.mx-hint{ font-family:var(--font-mono); font-size:11px; color:var(--ink-3); margin:2px 0 10px }
+.mx-detail{ margin-top:12px; border:1px solid var(--accent-line); border-radius:8px; background:var(--surface-2); padding:12px 14px }
+.mxd-head{ font-size:13px; color:var(--ink-2); line-height:1.5 }
+.mxd-head b{ color:var(--ink) }
+.mxd-v{ font-family:var(--font-mono); font-size:10.5px; padding:2px 8px; border-radius:5px }
+.mx-detail ul{ margin:9px 0 0; padding-left:18px; display:flex; flex-direction:column; gap:6px }
+.mx-detail li{ font-size:13px; color:var(--ink); line-height:1.45 }
+.mxd-empty{ font-size:12.5px; color:var(--ink-3); font-style:italic; margin-top:8px }
 .mx-legend{ font-family:var(--font-mono); font-size:11px; color:var(--ink-3); margin-top:10px; line-height:1.5 }
 
 /* the caring graph — uncertainty overview */

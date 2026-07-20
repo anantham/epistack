@@ -663,31 +663,39 @@ function GraphState({ axes, statsById }) {
 }
 
 // claim × source matrix — the cross-examined, mergeable structure (dedup sources by url, claims by meaning)
-function MatrixCell({ stance }) {
-  const s = norm(stance)
-  const kind = s === 'supports' ? 'sup' : s === 'disputes' ? 'dis' : 'sil'
-  const sym = s === 'supports' ? '✚' : s === 'disputes' ? '✕' : '·'
+const MX_GLYPH = { supports: '✚', disputes: '✕', qualifies: '≈', mixed: '±' }
+const MX_CLS = { supports: 'sup', disputes: 'dis', qualifies: 'qual', mixed: 'mix' }
+function MatrixCell({ cell, open, onOpen }) {
+  const v = norm(cell?.verdict)
+  if (!cell || !MX_GLYPH[v]) return <span className="mcell m-sil">·</span>
+  const n = (cell.results || []).length
   return (
-    <span className={`mcell m-${kind}`} title={s || 'silent'}>
-      {sym}
-    </span>
+    <button className={`mcell m-${MX_CLS[v]}${open ? ' open' : ''}`} onClick={onOpen} title={(cell.results || []).join(' · ') || v}>
+      <span className="mc-glyph">{MX_GLYPH[v]}</span>
+      {n > 1 && <span className="mc-n">{n}</span>}
+    </button>
   )
 }
 
-function AxisMatrix({ axis, findings, question }) {
+function AxisMatrix({ axis, findings, ledgers, question }) {
   const [m, setM] = useState(null) // null | 'loading' | result | {error}
+  const [openCell, setOpenCell] = useState(null) // { c, s }
+  const ddCount = findings.filter((f, i) => (ledgers?.[`${axis.id}#${i}`]?.results || []).length > 0).length
   async function build() {
     setM('loading')
+    setOpenCell(null)
     try {
+      const sources = findings.map((f, i) => {
+        const led = ledgers?.[`${axis.id}#${i}`]
+        const results = led && Array.isArray(led.results)
+          ? led.results.slice(0, 8).map((r) => ({ statement: r.statement, relation: r.relation, status: r.status, estimate: r.estimate }))
+          : undefined
+        return { name: f.source, url: f.url, kind: f.kind, year: f.year, supports: f.supports, ...(results ? { results } : {}) }
+      })
       const r = await fetch('/api/matrix', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          question,
-          dimensionName: axis.name,
-          resolutions: axis.resolutions || [],
-          findings: findings.map((f) => ({ claim: f.claim, source: f.source, url: f.url, supports: f.supports, kind: f.kind, year: f.year })),
-        }),
+        body: JSON.stringify({ question, dimensionName: axis.name, resolutions: axis.resolutions || [], sources }),
       })
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
@@ -700,6 +708,7 @@ function AxisMatrix({ axis, findings, question }) {
     const t = String(s || '').replace(/\(.*?\)/g, '').trim()
     return t.length > 24 ? t.slice(0, 22) + '…' : t
   }
+  const cellOf = (cid, sid) => (m?.cells || []).find((x) => x.claim === cid && x.source === sid)
   return (
     <div className="axmatrix" style={{ '--c': axis.color || 'var(--accent)' }}>
       <div className="axm-head">
@@ -709,10 +718,13 @@ function AxisMatrix({ axis, findings, question }) {
           {m === 'loading' ? 'cross-examining…' : m && !m.error ? '↻ redo' : `⚖ cross-examine ${findings.length}`}
         </button>
       </div>
+      {ddCount > 0 && (
+        <div className="mx-hint">reading {ddCount} deep-dived source{ddCount > 1 ? 's' : ''} at the result level · the rest source-level (deep-dive more for richer cells)</div>
+      )}
       {m === 'loading' && (
         <div className="lane-working">
           <span className="scan" />
-          <span>merging same-claim-different-form, deduping sources, judging each source's stance…</span>
+          <span>projecting results onto claims — merging same-claim forms, deduping sources, per-cell result verdicts…</span>
         </div>
       )}
       {m && m !== 'loading' && m.error && <div className="dd-err">{m.error}</div>}
@@ -727,15 +739,17 @@ function AxisMatrix({ axis, findings, question }) {
                     <a href={s.url} target="_blank" rel="noreferrer" title={s.name}>
                       {shorten(s.name)}
                     </a>
-                    {s.year && <span className="mx-src-meta">{s.year}</span>}
+                    {s.deepDived && <span className="mx-src-dd" title="deep-dived to result level">◆</span>}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {(m.claims || []).map((c) => {
-                const sup = (m.sources || []).filter((s) => norm(c.stances?.[s.id]) === 'supports').length
-                const dis = (m.sources || []).filter((s) => norm(c.stances?.[s.id]) === 'disputes').length
+                const cells = (m.sources || []).map((s) => cellOf(c.id, s.id))
+                const sup = cells.filter((x) => norm(x?.verdict) === 'supports').length
+                const dis = cells.filter((x) => norm(x?.verdict) === 'disputes').length
+                const mix = cells.filter((x) => ['mixed', 'qualifies'].includes(norm(x?.verdict))).length
                 return (
                   <tr key={c.id} className={dis > 0 && sup > 0 ? 'mx-conflict' : ''}>
                     <th className="mx-claim">
@@ -744,33 +758,59 @@ function AxisMatrix({ axis, findings, question }) {
                         {c.resolution}
                         {sup ? ` · ${sup}✚` : ''}
                         {dis ? ` · ${dis}✕` : ''}
+                        {mix ? ` · ${mix}±` : ''}
                       </span>
                     </th>
-                    {(m.sources || []).map((s) => (
-                      <td key={s.id}>
-                        <MatrixCell stance={c.stances?.[s.id]} />
-                      </td>
-                    ))}
+                    {(m.sources || []).map((s) => {
+                      const isOpen = openCell && openCell.c === c.id && openCell.s === s.id
+                      return (
+                        <td key={s.id}>
+                          <MatrixCell cell={cellOf(c.id, s.id)} open={isOpen} onOpen={() => setOpenCell(isOpen ? null : { c: c.id, s: s.id })} />
+                        </td>
+                      )
+                    })}
                   </tr>
                 )
               })}
             </tbody>
           </table>
-          <div className="mx-legend">✚ supports · ✕ disputes · · silent — a row with both ✚ and ✕ is a live contradiction across sources</div>
+          {openCell &&
+            (() => {
+              const cell = cellOf(openCell.c, openCell.s)
+              const src = (m.sources || []).find((s) => s.id === openCell.s)
+              const clm = (m.claims || []).find((c) => c.id === openCell.c)
+              if (!cell) return null
+              const v = norm(cell.verdict)
+              return (
+                <div className="mx-detail">
+                  <div className="mxd-head">
+                    <b>{src?.name}</b> on “{clm?.text}” — <span className={`mxd-v m-${MX_CLS[v] || 'sil'}`}>{cell.verdict}</span>
+                  </div>
+                  {(cell.results || []).length > 0 ? (
+                    <ul>{cell.results.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                  ) : (
+                    <div className="mxd-empty">source-level stance — this source wasn't deep-dived into results</div>
+                  )}
+                </div>
+              )
+            })()}
+          <div className="mx-legend">
+            ✚ supports · ✕ disputes · ≈ qualifies · ± mixed · · silent — a number = # of results behind the cell. Click a cell to open its results; a row with both ✚ and ✕ is a live contradiction. ◆ = source read at result level.
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function MatrixView({ axes, lanes, question }) {
+function MatrixView({ axes, lanes, ledgers, question }) {
   const withFindings = axes.filter((a) => (lanes[a.id]?.findings || []).length > 0)
   if (!withFindings.length)
     return <div className="mx-empty">Dispatch the agents first — then cross-examine their findings into a claim × source matrix.</div>
   return (
     <div className="matrices">
       {withFindings.map((a) => (
-        <AxisMatrix key={a.id} axis={a} findings={lanes[a.id].findings} question={question} />
+        <AxisMatrix key={a.id} axis={a} findings={lanes[a.id].findings} ledgers={ledgers} question={question} />
       ))}
     </div>
   )
@@ -1091,7 +1131,7 @@ function ResearchStage({ question, data, pdata, context }) {
       )}
 
       {view === 'matrix' ? (
-        <MatrixView axes={axes} lanes={lanes} question={question} />
+        <MatrixView axes={axes} lanes={lanes} ledgers={ledgers} question={question} />
       ) : (
         <div className="lanes">
           {axes.map((a) => (

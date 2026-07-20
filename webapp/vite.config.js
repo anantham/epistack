@@ -194,21 +194,28 @@ Return ONLY JSON, no prose, no fences:
 Rules: every source must belong to exactly one family. A family may have one member (genuinely standalone). independentCount = number of families. Be conservative about calling things independent — if two share a major cohort, they are the SAME family. Valid JSON only.`
 }
 
-// CROSS-EXAMINE — structure disparate findings into a CLAIM × SOURCE matrix (agreement/contradiction)
+// CROSS-EXAMINE — a CLAIM × SOURCE matrix as a PROJECTION over result-level evidence (not one vote per paper)
 function matrixPrompt(p) {
-  return `You are structuring disparate research findings into a CLAIM × SOURCE matrix so a human can see at a glance where the sources AGREE and where they CONTRADICT. First MERGE findings that assert the SAME claim in different forms into one claim. Then, for EACH source, decide its stance on EACH claim: "supports", "disputes", or "silent" (the source did not address that claim).
+  // accept result-aware `sources` (deep-dived ones carry results[]); fall back to legacy `findings`
+  const sources = p.sources || (Array.isArray(p.findings) ? p.findings.map((f) => ({ name: f.source, url: f.url, kind: f.kind, year: f.year, supports: f.supports })) : [])
+  return `You are building a CLAIM × SOURCE matrix as a PROJECTION over RESULT-LEVEL evidence — reason at the result level, never a single blanket stance per paper. A deep-dived source carries multiple RESULTS (each with its own typed relation); a shallow source carries one finding. For each CLAIM (row) × SOURCE (column) cell, classify how that source's evidence bears on the claim, using its results where present.
 
 QUESTION: ${JSON.stringify(p.question)}
 DIMENSION: ${JSON.stringify(p.dimensionName)}
 CANDIDATE RESOLUTIONS: ${JSON.stringify(p.resolutions || [])}
-FINDINGS (each is one claim from one source): ${JSON.stringify(p.findings || [])}
+SOURCES (deep-dived ones carry results[]): ${JSON.stringify(sources)}
+
+DEDUPE sources (same study = one). Derive the distinct CLAIMS (merge same-claim-different-form; map each to a resolution). For EACH (claim, source) cell classify the bearing:
+- source HAS results → assign each RELEVANT result to the claim; verdict = 'supports' (all toward it), 'disputes' (against), 'qualifies' (conditions it), 'mixed' (some support + some dispute/qualify), or 'silent' (none bear on it). List the relevant result statements, each ending "→ <relation>".
+- source has only a shallow finding → verdict = supports | disputes | silent; results = [].
 
 Return ONLY JSON, no prose, no fences:
 {
-  "sources": [ { "id": "s1", "name": "short source label", "url": "real url", "kind": "study kind", "year": "YYYY" } ],
-  "claims": [ { "id": "c1", "text": "the distinct claim in one line", "resolution": "which candidate resolution it maps to (verbatim, or 'other')", "stances": { "s1": "supports|disputes|silent", "s2": "..." } } ]
+  "sources": [ { "id": "s1", "name": "short source label", "url": "real url", "deepDived": true } ],
+  "claims": [ { "id": "c1", "text": "the distinct claim in one line", "resolution": "which candidate resolution (verbatim, or 'other')" } ],
+  "cells": [ { "claim": "c1", "source": "s1", "verdict": "supports|disputes|qualifies|mixed|silent", "results": ["result statement → relation"] } ]
 }
-Rules: DEDUPE sources (the same study cited twice = ONE source). MERGE the same claim stated in different forms. A source "supports" a claim only if its finding actually asserts it; "disputes" if it argues against it; otherwise "silent". Every source id referenced in any stances map MUST appear in sources. Valid JSON only.`
+Rules: every source id in cells MUST appear in sources. OMIT silent cells that have no results (the renderer treats a missing cell as silent) to keep it compact. Valid JSON only.`
 }
 
 // The ORCHESTRATOR — plans the research: assigns each open axis its own specialised agent + brief
@@ -362,7 +369,7 @@ function apiPlugin() {
         handleCustom((p) => (p.claim ? deepDiveRun(p) : Promise.reject({ error: 'missing fields' }))),
       )
       server.middlewares.use('/api/plan', handle((p) => (p.question && p.axes ? orchestratorPrompt(p) : null)))
-      server.middlewares.use('/api/matrix', handle((p) => (p.dimensionName && p.findings ? matrixPrompt(p) : null)))
+      server.middlewares.use('/api/matrix', handle((p) => (p.dimensionName && (p.sources || p.findings) ? matrixPrompt(p) : null)))
       server.middlewares.use('/api/decide', handle((p) => (p.question && p.dimensions ? decidePrompt(p) : null)))
       server.middlewares.use('/api/dependence', handle((p) => (p.dimensionName && p.findings ? dependencePrompt(p) : null)))
     },
