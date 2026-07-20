@@ -16,10 +16,11 @@ import {
 } from "../../../lib/agent-prompts";
 import { operationCacheKey, readOperationCache, writeOperationCache } from "../../../db/cache";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
+import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
 const openRouterBaseURL = "https://openrouter.ai/api/v1";
-const deepDiveCacheContract = "abstract-result-extraction-v2";
+const deepDiveCacheContract = "abstract-result-extraction-v3";
 const deepDiveCacheTtlMs = 30 * 24 * 60 * 60 * 1000;
 type CachedDeepDive = Omit<DeepDiveResponse, "cache">;
 
@@ -28,6 +29,8 @@ type DeepDiveRequest = {
   openRouterApiKey?: unknown;
   openRouterModel?: unknown;
   promptOverrides?: unknown;
+  claimFrames?: unknown;
+  applicabilityProfile?: unknown;
   refresh?: unknown;
 };
 
@@ -75,12 +78,21 @@ export async function POST(request: Request) {
     return Response.json({ error: "Prompt overrides are too large." }, { status: 400 });
   }
   const promptOverrides: AgentPromptOverrides = sanitizeAgentPromptOverrides(body.promptOverrides);
+  const parsedClaimFrames = researchClaimFrameSchema.array().min(1).max(7).safeParse(body.claimFrames);
+  if (!parsedClaimFrames.success) {
+    return Response.json({ error: "The extraction request is missing the compiled claim frames. Return to Contextualize and compile a research brief first." }, { status: 400 });
+  }
+  const applicabilityProfile = body.applicabilityProfile && typeof body.applicabilityProfile === "object"
+    ? body.applicabilityProfile
+    : { summary: "No structured applicability profile supplied." };
   const runtimeEnvironment = env as unknown as DeepDiveEnvironment;
   const openRouterModel = suppliedModel || runtimeEnvironment.EPISTACK_OPENROUTER_MODEL || process.env.EPISTACK_OPENROUTER_MODEL || defaultOpenRouterModel;
   const refresh = body.refresh === true;
   const cacheKey = await operationCacheKey("abstract-result-extraction", deepDiveCacheContract, {
     pmid,
     model: openRouterModel,
+    claimFrames: parsedClaimFrames.data,
+    applicabilityProfile,
     promptConfig: promptOverridesSignature(promptOverrides),
   });
   if (!refresh) {
@@ -128,6 +140,7 @@ export async function POST(request: Request) {
       },
     });
     const extractionAgent = resolveAgentPrompt("abstract-extractor", promptOverrides);
+    const claimFramesText = formatClaimFrames(parsedClaimFrames.data);
     const { output } = await generateText({
       model: openRouter(openRouterModel),
       output: Output.object({
@@ -137,6 +150,8 @@ export async function POST(request: Request) {
       }),
       system: extractionAgent.instructions,
       prompt: renderAgentPrompt(extractionAgent.taskTemplate, {
+        claimFrames: claimFramesText,
+        applicabilityProfile: JSON.stringify(applicabilityProfile, null, 2).slice(0, 20_000),
         title: source.title,
         authors: source.authors,
         journal: source.journal,
@@ -182,4 +197,17 @@ export async function POST(request: Request) {
     const detail = error instanceof Error ? error.message : "Unknown deep-dive error";
     return Response.json({ error: "The source could not be extracted from PubMed and the selected model.", detail }, { status: 502 });
   }
+}
+
+function formatClaimFrames(claimFrames: ResearchClaimFrame[]) {
+  return claimFrames.map((frame) => [
+    frame.id,
+    frame.statement,
+    `Population: ${frame.population}`,
+    `Exposure: ${frame.exposure}`,
+    `Comparator: ${frame.comparator}`,
+    `Outcome: ${frame.outcome}`,
+    `Time horizon: ${frame.timeHorizon}`,
+    `Applicability fields: ${frame.applicabilityFields.join(", ")}`,
+  ].join("\n")).join("\n\n");
 }

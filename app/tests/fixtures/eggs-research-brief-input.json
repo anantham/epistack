@@ -1,0 +1,84 @@
+{
+  "caseId": "eggs-local-decision-smoke",
+  "originalQuestion": "Are eggs good to eat, bad to eat, or best in moderation, and how does the answer vary across people?",
+  "compiledQuestion": "For a 31-year-old resistance-trained man, does replacing his current breakfast with two whole eggs six days per week improve body composition over twelve weeks without materially worsening cardiometabolic risk?",
+  "decisionContext": "I am 31, male, live in Muttichur, Kerala, and do weight training six days a week. I can buy twelve eggs from a local farmer next week and realistically eat two with breakfast on training days. I care about body fat, strength, energy, sleep, resting heart rate, cost, and whether the available eggs create a material safety tradeoff. The farmer does not provide detailed feed or certification records.",
+  "prior": 0.5,
+  "dimensionRoles": {
+    "object": "decision-active",
+    "exposure": "decision-active",
+    "comparator": "decision-active",
+    "outcome": "decision-active",
+    "population": "applicability-only",
+    "production": "monitored-unknown"
+  },
+  "knownUnknowns": [
+    "Baseline LDL and ApoB are not supplied",
+    "The farmer's feed and certification are unknown",
+    "The exact current breakfast comparator is incompletely specified"
+  ],
+  "axes": [
+    {
+      "id": "object",
+      "label": "What counts as an egg?",
+      "question": "Which food object is actually under investigation?",
+      "branches": [
+        { "id": "whole-hen", "label": "Whole hen eggs", "value": "two whole hen eggs", "detail": "Yolk and white consumed together.", "why": "This matches the available food.", "status": "kept", "relevance": "high", "origin": "human" },
+        { "id": "whites", "label": "Egg whites", "value": "egg whites only", "detail": "A different exposure.", "why": "The nutrient profile differs.", "status": "parked", "relevance": "medium", "origin": "ai" }
+      ]
+    },
+    {
+      "id": "exposure",
+      "label": "Dose and cadence",
+      "question": "How much, how often, and for how long?",
+      "branches": [
+        { "id": "two-six", "label": "Two eggs, six days", "value": "two eggs with breakfast six days per week", "detail": "The feasible planned habit.", "why": "This is the action under consideration.", "status": "kept", "relevance": "high", "origin": "human" },
+        { "id": "one-daily", "label": "One daily", "value": "one egg per day", "detail": "A lower dose.", "why": "Useful if evidence does not match the planned dose.", "status": "candidate", "relevance": "medium", "origin": "ai" }
+      ]
+    },
+    {
+      "id": "comparator",
+      "label": "Replacing what?",
+      "question": "What realistic breakfast happens instead?",
+      "branches": [
+        { "id": "current-breakfast", "label": "Current breakfast", "value": "instead of the current egg-free breakfast", "detail": "The real choice, though its composition needs clarification.", "why": "Food addition and substitution answer different questions.", "status": "kept", "relevance": "high", "origin": "human" },
+        { "id": "added", "label": "Added to diet", "value": "in addition to the usual diet", "detail": "Adds energy.", "why": "This is not the intended action.", "status": "parked", "relevance": "high", "origin": "ai" }
+      ]
+    },
+    {
+      "id": "outcome",
+      "label": "Good for what?",
+      "question": "Which benefits and harms would change the decision?",
+      "branches": [
+        { "id": "composition", "label": "Body composition", "value": "lower body fat without loss of strength or energy", "detail": "The primary objective.", "why": "This is more decision-relevant than a general health label.", "status": "kept", "relevance": "high", "origin": "human" },
+        { "id": "lipids", "label": "Cardiometabolic risk", "value": "no material worsening of LDL or ApoB", "detail": "An important harm boundary.", "why": "A benefit may not justify a meaningful lipid harm.", "status": "candidate", "relevance": "high", "origin": "human" }
+      ]
+    },
+    {
+      "id": "population",
+      "label": "For whom?",
+      "question": "Which characteristics determine transportability?",
+      "branches": [
+        { "id": "actor", "label": "Resistance-trained adult man", "value": "a 31-year-old resistance-trained man", "detail": "The local stakeholder.", "why": "Training and baseline risk may modify applicability.", "status": "kept", "relevance": "high", "origin": "human" },
+        { "id": "general-adults", "label": "General adults", "value": "generally healthy adults", "detail": "Broader population.", "why": "Likely evidence source if direct studies are absent.", "status": "candidate", "relevance": "medium", "origin": "ai" }
+      ]
+    },
+    {
+      "id": "production",
+      "label": "Local egg provenance",
+      "question": "Could feed, certification, or handling materially change the decision?",
+      "branches": [
+        { "id": "local-unknown", "label": "Local farmer, unknown feed", "value": "locally farmed eggs with unknown feed and certification", "detail": "The available source.", "why": "Keep visible as a mismatch or gap, not an assumed causal modifier.", "status": "kept", "relevance": "medium", "origin": "human" },
+        { "id": "certified", "label": "Certified commercial", "value": "certified commercial eggs", "detail": "A possible comparator source.", "why": "May matter only if production differences are load-bearing.", "status": "candidate", "relevance": "low", "origin": "ai" }
+      ]
+    }
+  ],
+  "clusters": [
+    { "id": "object-trace", "label": "Food object", "axisId": "object", "highlightQuotes": ["eggs"], "latentVariable": "Whole egg versus component", "rationale": "The object determines the nutrient exposure.", "ingestionRequirements": { "requiredFields": ["whole egg or component", "species"], "searchConcepts": ["whole egg", "hen egg"], "mismatchRisks": ["Evidence about egg whites may be generalized to whole eggs."] } },
+    { "id": "exposure-trace", "label": "Dose", "axisId": "exposure", "highlightQuotes": ["moderation"], "latentVariable": "Dose and frequency", "rationale": "Moderation is not a measurable exposure.", "ingestionRequirements": { "requiredFields": ["eggs per day", "days per week", "duration"], "searchConcepts": ["egg intake", "dose response"], "mismatchRisks": ["Incompatible doses may be treated as identical."] } },
+    { "id": "comparator-trace", "label": "Counterfactual", "axisId": "comparator", "highlightQuotes": ["eat"], "latentVariable": "What food eggs replace", "rationale": "The causal effect depends on the alternative meal.", "ingestionRequirements": { "requiredFields": ["comparator meal", "energy matching", "protein matching"], "searchConcepts": ["egg breakfast comparator"], "mismatchRisks": ["Adding eggs may be confused with substitution."] } },
+    { "id": "outcome-trace", "label": "Decision outcomes", "axisId": "outcome", "highlightQuotes": ["good", "bad"], "latentVariable": "Benefit and harm outcomes", "rationale": "Benefits and harms can move independently.", "ingestionRequirements": { "requiredFields": ["body composition", "strength", "LDL", "ApoB"], "searchConcepts": ["body composition", "lipids"], "mismatchRisks": ["Short-term satiety may be treated as body-fat evidence."] } },
+    { "id": "population-trace", "label": "Transportability", "axisId": "population", "highlightQuotes": ["across people"], "latentVariable": "Effect modifiers and applicability", "rationale": "The question asks who the result applies to.", "ingestionRequirements": { "requiredFields": ["age", "sex", "training status", "baseline lipids"], "searchConcepts": ["adults", "resistance training"], "mismatchRisks": ["Average results may not transport to the actor."] } },
+    { "id": "production-trace", "label": "Source provenance", "axisId": "production", "highlightQuotes": ["eggs"], "latentVariable": "Production and handling", "rationale": "Local sourcing is preserved as an unresolved applicability question.", "ingestionRequirements": { "requiredFields": ["feed", "certification", "handling"], "searchConcepts": ["egg production nutrient composition"], "mismatchRisks": ["Unmeasured production details may be overclaimed as causal."] } }
+  ]
+}

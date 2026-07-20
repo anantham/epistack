@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { deepDiveResultSchema, deepDiveSchema, type DeepDiveCandidate, type DeepDiveResult, type DeepDiveSource } from "./deep-dive.ts";
 
-export const dualReviewPolicyId = "dual-model-pmc-full-text-v1" as const;
+export const dualReviewPolicyId = "dual-model-pmc-full-text-v2" as const;
 
 export const fullPaperExtractionSchema = deepDiveSchema.extend({
   sourceInspection: z.object({

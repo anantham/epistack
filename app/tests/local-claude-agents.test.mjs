@@ -27,6 +27,14 @@ function result(overrides = {}) {
     claimFrameId: "weight-superiority",
     relation: "supports",
     scopeMatch: "direct",
+    applicability: {
+      matched: ["adults with overweight", "egg breakfast", "energy-matched comparator"],
+      mismatched: [],
+      unknown: ["local egg preparation"],
+      constraintRelaxations: [],
+      distance: "near",
+      rationale: "The core population and exposure match, while local preparation is unreported.",
+    },
     rationale: "This is the prespecified between-group comparison under energy restriction.",
     ...overrides,
   };

@@ -2,10 +2,12 @@ import { claimFrames } from "../../../data/eggs-result-ledger";
 import { ensureEvidenceGraphTables, getD1 } from "../../../db";
 import { deepDiveSchema, type DeepDiveSource } from "../../../lib/deep-dive";
 import { adversarialReviewSchema, dualReviewPolicyId, reviewDecisionSchema, type SourceArtifact } from "../../../lib/dual-review";
+import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
 
 type PromoteRequest = {
   caseId?: unknown;
   originalPrompt?: unknown;
+  compiledQuestion?: unknown;
   source?: unknown;
   candidate?: unknown;
   model?: unknown;
@@ -14,6 +16,7 @@ type PromoteRequest = {
   verificationStatus?: unknown;
   artifact?: unknown;
   adversarialReview?: unknown;
+  claimFrames?: unknown;
 };
 
 function safeId(value: string) {
@@ -60,6 +63,26 @@ export async function POST(request: Request) {
     return Response.json({ error: "The proposed extraction no longer matches the canonical result contract." }, { status: 400 });
   }
   const rawSource = body.source as Partial<DeepDiveSource> | null;
+  const suppliedClaimFrames = researchClaimFrameSchema.array().min(1).max(7).safeParse(body.claimFrames);
+  const promotableClaimFrames: ResearchClaimFrame[] = suppliedClaimFrames.success
+    ? suppliedClaimFrames.data
+    : claimFrames.map((claim) => ({
+        ...claim,
+        kind: "effectiveness" as const,
+        priority: 3,
+        budgetShare: 25,
+        decisionLeverage: "Legacy egg fixture claim retained for backward-compatible promotion.",
+        axisIds: ["legacy-eggs-fixture"],
+        queryUsesAxisIds: ["legacy-eggs-fixture"],
+        applicabilityUsesAxisIds: [],
+        retrieval: {
+          searchQuery: "egg breakfast randomized trial",
+          inclusionRule: "Human comparative evidence that directly bears on this scoped egg claim.",
+          exclusionSignals: ["No explicit egg exposure or comparator"],
+          relaxationOrder: ["Broaden the study duration while preserving exposure and comparator"],
+        },
+        applicabilityFields: ["population", "exposure", "comparator", "outcome", "time horizon"],
+      }));
   const pmid = typeof rawSource?.pmid === "string" ? rawSource.pmid.trim() : "";
   if (!/^\d{5,12}$/.test(pmid) || typeof rawSource?.title !== "string" || typeof rawSource?.url !== "string") {
     return Response.json({ error: "Source provenance is incomplete." }, { status: 400 });
@@ -129,6 +152,9 @@ export async function POST(request: Request) {
     const originalPrompt = typeof body.originalPrompt === "string" && body.originalPrompt.trim()
       ? body.originalPrompt.trim()
       : "Are eggs good to eat for my next breakfast decision?";
+    const compiledQuestion = typeof body.compiledQuestion === "string" && body.compiledQuestion.trim()
+      ? body.compiledQuestion.trim().slice(0, 5_000)
+      : null;
     const sourceId = `pubmed-${pmid}`;
     const recordPrefix = `${caseId}-${sourceId}`;
     const studyId = `${recordPrefix}-study`;
@@ -140,11 +166,15 @@ export async function POST(request: Request) {
     const relationAssessor = autoPromotion ? `${primaryModel}+${adversaryModel}` : "human-checked-ai-extraction";
     const relationStatus = autoPromotion ? "accepted-by-dual-model-review" : "accepted-pending-full-text";
     const usedClaimIds = new Set(candidate.results.map((result) => result.claimFrameId));
+    const missingClaimIds = [...usedClaimIds].filter((claimId) => !promotableClaimFrames.some((claim) => claim.id === claimId));
+    if (missingClaimIds.length) {
+      return Response.json({ error: `The extraction references claim frames absent from the compiled research brief: ${missingClaimIds.join(", ")}.` }, { status: 400 });
+    }
     const statements = [
       d1.prepare(`INSERT INTO cases (id, slug, title, original_prompt, active_question, status, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`)
-        .bind(caseId, `case-${caseId}`, "Egg investigation · live MVP", originalPrompt, null, "evidence-promoted", now, now),
+        ON CONFLICT(id) DO UPDATE SET original_prompt = excluded.original_prompt, active_question = excluded.active_question, status = excluded.status, updated_at = excluded.updated_at`)
+        .bind(caseId, `case-${caseId}`, "Epistack investigation · live MVP", originalPrompt, compiledQuestion, "evidence-promoted", now, now),
       d1.prepare(`INSERT INTO sources (id, canonical_url, doi, pmid, title, authors_json, issued_at, publisher, source_type, csl_json, content_hash, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET title = excluded.title, canonical_url = excluded.canonical_url, authors_json = excluded.authors_json, source_type = excluded.source_type, content_hash = excluded.content_hash`)
@@ -173,7 +203,7 @@ export async function POST(request: Request) {
     ];
 
     for (const claimId of usedClaimIds) {
-      const claim = claimFrames.find((candidateClaim) => candidateClaim.id === claimId);
+      const claim = promotableClaimFrames.find((candidateClaim) => candidateClaim.id === claimId);
       if (!claim) continue;
       statements.push(
         d1.prepare(`INSERT INTO claim_frames (id, case_id, statement, population_json, exposure_json, comparator_json, outcome_json, time_horizon, modality, status, created_at, updated_at)
@@ -238,6 +268,7 @@ export async function POST(request: Request) {
               policyId: autoPromotion ? dualReviewPolicyId : null,
               sourceArtifact: autoPromotion ? rawArtifact : null,
               extractionCaveat: candidate.extractionCaveat,
+              applicability: result.applicability,
             }),
             now,
           ),
@@ -293,7 +324,7 @@ export async function POST(request: Request) {
           null,
           autoPromotion ? "claude-dual-model-policy" : "human-ai-workflow",
           autoPromotion ? "autopromote-full-text-results" : "promote-abstract-results",
-          JSON.stringify({ source: rawSource, candidate, model, artifact: autoPromotion ? rawArtifact : null, adversarialReview: autoPromotion ? reviewEnvelope : null }),
+          JSON.stringify({ source: rawSource, candidate, claimFrames: promotableClaimFrames, model, artifact: autoPromotion ? rawArtifact : null, adversarialReview: autoPromotion ? reviewEnvelope : null }),
           now,
         ),
     );

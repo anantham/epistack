@@ -115,6 +115,7 @@ export default function PromptLabPage() {
       window.localStorage.removeItem("epistack:decomposition-operation-cache:v2");
       window.localStorage.removeItem("epistack:decomposition-operation-cache:v3");
       window.localStorage.removeItem("epistack:research-ui-cache:v1");
+      window.localStorage.removeItem("epistack:research-ui-cache:v2");
       setSaveState("saved");
     } catch {
       setSaveState("error");

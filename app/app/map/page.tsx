@@ -17,7 +17,20 @@ import {
   type InterpretationAxis as Axis,
   type InterpretationBranch as Branch,
 } from "../../lib/decomposition";
+import {
+  agentPromptStorageKey,
+  sanitizeAgentPromptOverrides,
+} from "../../lib/agent-prompts";
+import {
+  completeDimensionRoles,
+  researchBriefSchema,
+  researchBriefStorageKey,
+  type DimensionRole,
+  type ResearchBrief,
+} from "../../lib/research-brief";
 import { CaseHeader } from "../components/case-navigation";
+
+const localClaudeCompanionUrl = "http://127.0.0.1:4317";
 
 const initialAxes: Axis[] = [
   {
@@ -427,7 +440,15 @@ type PersistedInterpretationMap = {
   newBranches: Record<string, string>;
   claimCreated: boolean;
   prior: number;
+  dimensionRoles?: Record<string, DimensionRole>;
 };
+
+const dimensionRoleOptions: Array<{ id: DimensionRole; label: string; detail: string }> = [
+  { id: "decision-active", label: "Drives a claim", detail: "Changes the proposition, outcome, action, or comparator the agents must investigate." },
+  { id: "applicability-only", label: "Checks applicability", detail: "Used to judge whether evidence transports here without over-narrowing every search." },
+  { id: "monitored-unknown", label: "Monitor as a gap", detail: "Preserved, but receives agent work only if it could change the decision." },
+  { id: "parked", label: "No budget", detail: "Kept in the artifact and reactivated only by a declared trigger." },
+];
 
 export default function InterpretationMapPage() {
   const branchSequence = useRef(0);
@@ -447,7 +468,11 @@ export default function InterpretationMapPage() {
   const [newBranches, setNewBranches] = useState<Record<string, string>>({});
   const [claimCreated, setClaimCreated] = useState(false);
   const [prior, setPrior] = useState(50);
+  const [dimensionRoles, setDimensionRoles] = useState<Record<string, DimensionRole>>(() => completeDimensionRoles(initialAxes));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [compileState, setCompileState] = useState<"idle" | "compiling" | "complete" | "error">("idle");
+  const [compileProgress, setCompileProgress] = useState("");
+  const [compileError, setCompileError] = useState("");
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -471,6 +496,7 @@ export default function InterpretationMapPage() {
             setNewBranches(workspace.newBranches);
             setClaimCreated(workspace.claimCreated);
             setPrior(workspace.prior);
+            setDimensionRoles(completeDimensionRoles(workspace.axes, workspace.dimensionRoles));
             setReady(true);
             return;
           }
@@ -495,6 +521,7 @@ export default function InterpretationMapPage() {
           setCaseId(response.caseId);
           setCaseSummary(response.decomposition.summary);
           setSourceMode(response.mode === "ai" ? response.model : "local fallback");
+          setDimensionRoles(completeDimensionRoles(nextAxes));
           setFocused({
             axisId: nextAxes[0].id,
             branchId: (selectedBranch(nextAxes[0]) ?? nextAxes[0].branches[0]).id,
@@ -529,6 +556,7 @@ export default function InterpretationMapPage() {
           newBranches,
           claimCreated,
           prior,
+          dimensionRoles,
         };
         window.localStorage.setItem(interpretationMapStorageKey, JSON.stringify(workspace));
       } catch {
@@ -545,6 +573,7 @@ export default function InterpretationMapPage() {
     clusters,
     contextQuestions,
     decisionContext,
+    dimensionRoles,
     focused,
     knownUnknowns,
     newBranches,
@@ -582,6 +611,7 @@ export default function InterpretationMapPage() {
     );
     setFocused({ axisId, branchId });
     setClaimCreated(false);
+    setCompileState("idle");
   }
 
   function updateFocusedBranch(patch: Partial<Branch>) {
@@ -597,6 +627,7 @@ export default function InterpretationMapPage() {
           : axis,
       ),
     );
+    setCompileState("idle");
   }
 
   function addBranch(axisId: string) {
@@ -628,6 +659,88 @@ export default function InterpretationMapPage() {
     );
     setNewBranches((current) => ({ ...current, [axisId]: "" }));
     setFocused({ axisId, branchId: id });
+    setCompileState("idle");
+  }
+
+  function promptOverrides() {
+    try {
+      return sanitizeAgentPromptOverrides(JSON.parse(window.localStorage.getItem(agentPromptStorageKey) || "{}"));
+    } catch {
+      return {};
+    }
+  }
+
+  async function compileResearchBrief(refresh = false) {
+    setCompileState("compiling");
+    setCompileProgress("Preparing the edited scope for the research compiler");
+    setCompileError("");
+    try {
+      const response = await fetch(`${localClaudeCompanionUrl}/compile-brief`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          caseId,
+          originalQuestion: prompt,
+          compiledQuestion: activeQuestion,
+          decisionContext,
+          axes,
+          clusters,
+          knownUnknowns,
+          dimensionRoles: completeDimensionRoles(axes, dimensionRoles),
+          prior: prior / 100,
+          promptOverrides: promptOverrides(),
+          refresh,
+        }),
+      });
+      if (!response.ok || !response.body) throw new Error("The local research compiler did not start.");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffered = "";
+      let completed: { brief?: ResearchBrief; cache?: { status?: string } } | null = null;
+      let compilerError = "";
+      const consumeLine = (line: string) => {
+        if (!line.trim()) return;
+        const event = JSON.parse(line) as {
+          type?: string;
+          label?: string;
+          payload?: { brief?: unknown; cache?: { status?: string } };
+          message?: string;
+        };
+        if (event.type === "status") setCompileProgress(event.label || "Compiling the research contract");
+        if (event.type === "error") compilerError = event.message || "The local research compiler failed.";
+        if (event.type === "complete" && event.payload) {
+          const parsed = researchBriefSchema.safeParse(event.payload.brief);
+          if (!parsed.success) compilerError = "The compiler returned a brief that failed the persistent contract.";
+          else completed = { brief: parsed.data, cache: event.payload.cache };
+        }
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        buffered += decoder.decode(value, { stream: !done });
+        const lines = buffered.split("\n");
+        buffered = lines.pop() || "";
+        lines.forEach(consumeLine);
+        if (done) break;
+      }
+      if (buffered.trim()) consumeLine(buffered);
+      if (compilerError) throw new Error(compilerError);
+      const finalPayload = completed as { brief?: ResearchBrief; cache?: { status?: string } } | null;
+      if (!finalPayload?.brief) throw new Error("The local research compiler ended without a complete brief.");
+      window.localStorage.setItem(researchBriefStorageKey, JSON.stringify(finalPayload.brief));
+      window.localStorage.removeItem("epistack:research-ui-cache:v1");
+      window.localStorage.removeItem("epistack:research-ui-cache:v2");
+      setClaimCreated(true);
+      setCompileState("complete");
+      setCompileProgress(finalPayload.cache?.status === "hit" ? "Exact research brief restored from local cache" : "Research brief compiled and stored locally");
+      window.setTimeout(() => window.location.assign("/research"), 450);
+    } catch (error) {
+      const offline = error instanceof TypeError && /fetch/i.test(error.message);
+      setCompileState("error");
+      setCompileProgress("");
+      setCompileError(offline
+        ? "The local Claude companion is offline. Start “npm run agents” in the app directory, then compile again."
+        : error instanceof Error ? error.message : "The research brief could not be compiled.");
+    }
   }
 
   function artifact() {
@@ -646,6 +759,7 @@ export default function InterpretationMapPage() {
         unselectedBehavior: "parked, never silently deleted",
       },
       axes,
+      dimensionRoles: completeDimensionRoles(axes, dimensionRoles),
       decompositionTrace: clusters,
       compiledClaim: claimCreated
         ? {
@@ -845,6 +959,27 @@ export default function InterpretationMapPage() {
                     <option value="low">Low</option>
                   </select>
                 </div>
+                <div className="dimension-role-control">
+                  <span>How research uses this dimension</span>
+                  <div>
+                    {dimensionRoleOptions.map((option) => (
+                      <button
+                        type="button"
+                        key={option.id}
+                        className={dimensionRoles[activeAxis.id] === option.id ? "active" : ""}
+                        aria-pressed={dimensionRoles[activeAxis.id] === option.id}
+                        title={option.detail}
+                        onClick={() => {
+                          setDimensionRoles((current) => ({ ...current, [activeAxis.id]: option.id }));
+                          setCompileState("idle");
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <small>{dimensionRoleOptions.find((option) => option.id === (dimensionRoles[activeAxis.id] ?? "decision-active"))?.detail}</small>
+                </div>
                 <div className="inspector-actions">
                   <button
                     className={activeBranch.status === "kept" ? "keep active" : "keep"}
@@ -930,12 +1065,16 @@ export default function InterpretationMapPage() {
               <div className="eyebrow">Next workspace</div>
               <h2>Now direct research against this framing.</h2>
               <p>
-                Your selected frame and known unknowns remain explicit. Start with human-editable retrieval lanes; discovery stays separate from evidence that earns promotion into the artifact.
+                Your selected frame now becomes 3–7 claim-level agent briefs. Personal context stays local for applicability checks; only compact research concepts enter outbound searches.
               </p>
             </div>
-            <a className="primary-link" href="/research">
-              Proceed to research →
-            </a>
+            <div className="research-compile-action">
+              <button className="primary-link" type="button" onClick={() => void compileResearchBrief()} disabled={compileState === "compiling"}>
+                {compileState === "compiling" ? "Compiling research brief…" : compileState === "complete" ? "Opening investigation…" : "Compile & proceed →"}
+              </button>
+              {compileProgress && <span className="compile-progress"><i aria-hidden="true" />{compileProgress}</span>}
+              {compileError && <p role="alert">{compileError}</p>}
+            </div>
           </section>
         </>
       )}

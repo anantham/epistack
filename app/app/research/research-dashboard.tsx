@@ -9,13 +9,19 @@ import {
   researchLanes,
   verticalSliceAudit,
   type ResearchLane,
-  type ResearchLaneId,
 } from "../../data/eggs-investigation";
-import { atomicResults } from "../../data/eggs-result-ledger";
+import { atomicResults, claimFrames as legacyClaimFrames } from "../../data/eggs-result-ledger";
 import type { DeepDiveResponse } from "../../lib/deep-dive";
 import type { DualReviewResponse } from "../../lib/dual-review";
 import type { PublicationFilter, PubmedDiscovery, ResearchResponse } from "../../lib/research";
 import { agentPromptStorageKey, sanitizeAgentPromptOverrides } from "../../lib/agent-prompts";
+import {
+  researchBriefSchema,
+  researchBriefStorageKey,
+  researchLanesFromBrief,
+  type ResearchBrief,
+  type ResearchClaimFrame,
+} from "../../lib/research-brief";
 
 type LaneRun = {
   status: "ready" | "running" | "complete" | "error";
@@ -56,30 +62,31 @@ type PromotionRecord = {
 };
 
 type CachedDashboardState = {
-  version: 1;
+  version: 2;
+  briefId: string;
   savedAt: string;
-  queries: Record<ResearchLaneId, string>;
+  queries: Record<string, string>;
   filters: PublicationFilter[];
-  runs: Record<ResearchLaneId, LaneRun>;
+  runs: Record<string, LaneRun>;
   deepDives: Record<string, DeepDiveRun>;
-  openLane: ResearchLaneId;
+  openLane: string;
 };
 
-const dashboardCacheKey = "epistack:research-ui-cache:v1";
+const dashboardCacheKey = "epistack:research-ui-cache:v2";
 const localClaudeCompanionUrl = "http://127.0.0.1:4317";
 
 function isDualReviewPayload(payload: DeepDiveResponse | DualReviewResponse): payload is DualReviewResponse {
   return payload.verificationStatus === "ai-cross-checked-full-text";
 }
 
-function defaultQueries() {
-  return Object.fromEntries(researchLanes.map((lane) => [lane.id, lane.defaultQuery])) as Record<ResearchLaneId, string>;
+function defaultQueries(lanes: ResearchLane[] = researchLanes) {
+  return Object.fromEntries(lanes.map((lane) => [lane.id, lane.defaultQuery])) as Record<string, string>;
 }
 
-function freshRuns() {
+function freshRuns(lanes: ResearchLane[] = researchLanes) {
   return Object.fromEntries(
-    researchLanes.map((lane) => [lane.id, { status: "ready", response: null, error: "" }]),
-  ) as Record<ResearchLaneId, LaneRun>;
+    lanes.map((lane) => [lane.id, { status: "ready", response: null, error: "" }]),
+  ) as Record<string, LaneRun>;
 }
 
 function cacheLabel(cache: ResearchResponse["cache"]) {
@@ -114,12 +121,14 @@ function statusLabel(status: LaneRun["status"]) {
 }
 
 export function ResearchDashboard() {
-  const [queries, setQueries] = useState<Record<ResearchLaneId, string>>(defaultQueries);
+  const [brief, setBrief] = useState<ResearchBrief | null>(null);
+  const activeLanes = useMemo(() => brief ? researchLanesFromBrief(brief) : researchLanes, [brief]);
+  const [queries, setQueries] = useState<Record<string, string>>(defaultQueries);
   const [filters, setFilters] = useState<PublicationFilter[]>(["trials", "reviews"]);
-  const [runs, setRuns] = useState<Record<ResearchLaneId, LaneRun>>(freshRuns);
+  const [runs, setRuns] = useState<Record<string, LaneRun>>(freshRuns);
   const [deepDives, setDeepDives] = useState<Record<string, DeepDiveRun>>({});
   const [promotionRecords, setPromotionRecords] = useState<PromotionRecord[]>([]);
-  const [openLane, setOpenLane] = useState<ResearchLaneId>(researchLanes[0].id);
+  const [openLane, setOpenLane] = useState<string>(researchLanes[0].id);
   const [storageReady, setStorageReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionHealth>({ status: "checking", models: null, detail: "Checking the local Claude companion…" });
 
@@ -129,6 +138,7 @@ export function ResearchDashboard() {
   );
 
   function currentCaseId() {
+    if (brief?.caseId) return brief.caseId;
     try {
       const workspace = JSON.parse(window.localStorage.getItem("epistack:workspace:v1") || "{}") as { result?: { caseId?: string } | null };
       return workspace.result?.caseId || "eggs-live-mvp";
@@ -138,11 +148,20 @@ export function ResearchDashboard() {
   }
 
   function currentWorkspace() {
+    if (brief) {
+      return {
+        prompt: brief.originalQuestion,
+        compiledQuestion: brief.compiledQuestion,
+        decisionContext: brief.decisionContext,
+        result: { caseId: brief.caseId, decisionContext: brief.decisionContext },
+      };
+    }
     try {
       return JSON.parse(window.localStorage.getItem("epistack:workspace:v1") || "{}") as {
         prompt?: string;
         decisionContext?: string;
         result?: { caseId?: string; decisionContext?: string } | null;
+        compiledQuestion?: string;
       };
     } catch {
       return {};
@@ -180,21 +199,32 @@ export function ResearchDashboard() {
   }
 
   useEffect(() => {
-    void loadPromotionRegister();
     void checkCompanion();
-    // The register is case-scoped at mount; a new framing navigation remounts this page.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     try {
+      let loadedBrief: ResearchBrief | null = null;
+      const rawBrief = window.localStorage.getItem(researchBriefStorageKey);
+      if (rawBrief) {
+        const parsedBrief = researchBriefSchema.safeParse(JSON.parse(rawBrief));
+        if (parsedBrief.success) loadedBrief = parsedBrief.data;
+        else window.localStorage.removeItem(researchBriefStorageKey);
+      }
+      const lanes = loadedBrief ? researchLanesFromBrief(loadedBrief) : researchLanes;
+      setBrief(loadedBrief);
+      setQueries(defaultQueries(lanes));
+      setRuns(freshRuns(lanes));
+      setOpenLane(lanes[0]?.id ?? researchLanes[0].id);
+
       const raw = window.localStorage.getItem(dashboardCacheKey);
       if (!raw) return;
       const cached = JSON.parse(raw) as Partial<CachedDashboardState>;
-      if (cached.version !== 1 || !cached.savedAt) return;
+      const briefId = loadedBrief?.briefId ?? "legacy-eggs-fixture";
+      if (cached.version !== 2 || !cached.savedAt || cached.briefId !== briefId) return;
 
-      const restoredQueries = defaultQueries();
-      for (const lane of researchLanes) {
+      const restoredQueries = defaultQueries(lanes);
+      for (const lane of lanes) {
         const cachedQuery = cached.queries?.[lane.id];
         if (typeof cachedQuery === "string") restoredQueries[lane.id] = cachedQuery;
       }
@@ -204,8 +234,8 @@ export function ResearchDashboard() {
         setFilters(cached.filters.filter((filter): filter is PublicationFilter => publicationOptions.some((option) => option.id === filter)));
       }
 
-      const restoredRuns = freshRuns();
-      for (const lane of researchLanes) {
+      const restoredRuns = freshRuns(lanes);
+      for (const lane of lanes) {
         const cachedRun = cached.runs?.[lane.id];
         if (cachedRun?.response) {
           restoredRuns[lane.id] = {
@@ -236,7 +266,7 @@ export function ResearchDashboard() {
       }
       setDeepDives(restoredDeepDives);
 
-      if (researchLanes.some((lane) => lane.id === cached.openLane)) setOpenLane(cached.openLane as ResearchLaneId);
+      if (typeof cached.openLane === "string" && lanes.some((lane) => lane.id === cached.openLane)) setOpenLane(cached.openLane);
     } catch {
       window.localStorage.removeItem(dashboardCacheKey);
     } finally {
@@ -246,13 +276,20 @@ export function ResearchDashboard() {
 
   useEffect(() => {
     if (!storageReady) return;
+    void loadPromotionRegister();
+    // The register is reloaded when a newly compiled brief changes the case scope.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brief?.caseId, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
     const timer = window.setTimeout(() => {
-      const reusableRuns = Object.fromEntries(researchLanes.map((lane) => {
+      const reusableRuns = Object.fromEntries(activeLanes.map((lane) => {
         const run = runs[lane.id];
         return [lane.id, run.response
           ? { status: "complete", response: run.response, error: "" }
           : { status: "ready", response: null, error: "" }];
-      })) as Record<ResearchLaneId, LaneRun>;
+      })) as Record<string, LaneRun>;
       const reusableDeepDives = Object.fromEntries(
         Object.entries(deepDives)
           .filter(([, dive]) => dive.payload !== null)
@@ -266,7 +303,8 @@ export function ResearchDashboard() {
           }]),
       ) as Record<string, DeepDiveRun>;
       const cache: CachedDashboardState = {
-        version: 1,
+        version: 2,
+        briefId: brief?.briefId ?? "legacy-eggs-fixture",
         savedAt: new Date().toISOString(),
         queries,
         filters,
@@ -277,15 +315,15 @@ export function ResearchDashboard() {
       window.localStorage.setItem(dashboardCacheKey, JSON.stringify(cache));
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [deepDives, filters, openLane, queries, runs, storageReady]);
+  }, [activeLanes, brief?.briefId, deepDives, filters, openLane, queries, runs, storageReady]);
 
   function clearDashboardCache() {
     window.localStorage.removeItem(dashboardCacheKey);
-    setQueries(defaultQueries());
+    setQueries(defaultQueries(activeLanes));
     setFilters(["trials", "reviews"]);
-    setRuns(freshRuns());
+    setRuns(freshRuns(activeLanes));
     setDeepDives({});
-    setOpenLane(researchLanes[0].id);
+    setOpenLane(activeLanes[0]?.id ?? researchLanes[0].id);
   }
 
   function toggleFilter(filter: PublicationFilter) {
@@ -327,7 +365,7 @@ export function ResearchDashboard() {
   async function runAll() {
     // PubMed asks unauthenticated clients to stay below three requests/second.
     // Each lane performs a search and summary request, so run lanes in series.
-    for (const lane of researchLanes) await runLane(lane);
+    for (const lane of activeLanes) await runLane(lane);
   }
 
   function modelPreferences() {
@@ -347,6 +385,38 @@ export function ResearchDashboard() {
     }
   }
 
+  function compiledClaimFrames(): ResearchClaimFrame[] {
+    if (brief) return brief.claims;
+    return legacyClaimFrames.map((claim, index) => ({
+      ...claim,
+      kind: index === 2 ? "mechanism" : index === 3 ? "harm" : "effectiveness",
+      priority: index + 1,
+      budgetShare: 25,
+      decisionLeverage: "Legacy egg fixture claim retained until a human-edited ResearchBrief is compiled.",
+      axisIds: ["legacy-eggs-fixture"],
+      queryUsesAxisIds: ["legacy-eggs-fixture"],
+      applicabilityUsesAxisIds: [],
+      retrieval: {
+        searchQuery: "egg breakfast randomized trial",
+        inclusionRule: "Human comparative evidence with an explicit egg exposure and comparator.",
+        exclusionSignals: ["No explicit egg exposure or comparison"],
+        relaxationOrder: ["Broaden duration while preserving exposure, comparator, and outcome"],
+      },
+      applicabilityFields: ["population", "exposure", "comparator", "outcome", "time horizon"],
+    } satisfies ResearchClaimFrame));
+  }
+
+  function applicabilityProfile() {
+    if (!brief) return { summary: "Legacy egg fixture; no compiled stakeholder profile is available." };
+    return {
+      stakeholder: brief.stakeholderProfile,
+      actionSpace: brief.actionSpace,
+      applicabilityDimensions: brief.dimensionAssignments.filter((assignment) => assignment.role === "applicability-only"),
+      monitoredUnknowns: brief.dimensionAssignments.filter((assignment) => assignment.role === "monitored-unknown"),
+      privacy: brief.privacy,
+    };
+  }
+
   async function extractAbstractRecord(record: PubmedDiscovery, refresh = false) {
     setDeepDives((current) => ({
       ...current,
@@ -359,6 +429,8 @@ export function ResearchDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           record,
+          claimFrames: compiledClaimFrames(),
+          applicabilityProfile: applicabilityProfile(),
           openRouterApiKey: preferences.apiKey,
           openRouterModel: preferences.model,
           promptOverrides: promptOverrides(),
@@ -391,9 +463,11 @@ export function ResearchDashboard() {
         body: JSON.stringify({
           caseId: workspace.result?.caseId,
           originalPrompt: workspace.prompt,
+          compiledQuestion: workspace.compiledQuestion,
           source: dive.payload.source,
           candidate: dive.payload.candidate,
           model: dive.payload.model,
+          claimFrames: compiledClaimFrames(),
           humanChecked: true,
         }),
       });
@@ -435,9 +509,11 @@ export function ResearchDashboard() {
       body: JSON.stringify({
         caseId: workspace.result?.caseId,
         originalPrompt: workspace.prompt,
+        compiledQuestion: workspace.compiledQuestion,
         source: payload.source,
         candidate: payload.candidate,
         model: payload.models.primary,
+        claimFrames: compiledClaimFrames(),
         humanChecked: false,
         reviewMode: "adversarial-auto",
         verificationStatus: payload.verificationStatus,
@@ -473,6 +549,8 @@ export function ResearchDashboard() {
           record,
           question: workspace.prompt,
           decisionContext: workspace.decisionContext || workspace.result?.decisionContext,
+          claimFrames: compiledClaimFrames(),
+          applicabilityProfile: applicabilityProfile(),
           promptOverrides: promptOverrides(),
           refresh,
         }),
@@ -514,7 +592,8 @@ export function ResearchDashboard() {
         if (done) break;
       }
       if (buffered.trim()) consumeLine(buffered);
-      if (companionError) throw Object.assign(new Error(companionError.message || "The local Claude investigation failed."), { code: companionError.code });
+      const finalCompanionError = companionError as { code?: string; message?: string } | null;
+      if (finalCompanionError) throw Object.assign(new Error(finalCompanionError.message || "The local Claude investigation failed."), { code: finalCompanionError.code });
       if (!completed) throw new Error("The local Claude companion ended without a completed review.");
       await autoPromoteDualReview(record, completed);
     } catch (error) {
@@ -539,24 +618,56 @@ export function ResearchDashboard() {
     <>
       <header className="page-hero research-hero">
         <div>
-          <div className="eyebrow">Investigation cockpit · Egg MVP</div>
+          <div className="eyebrow">Investigation cockpit · {brief ? "Compiled research contract" : "Egg fixture fallback"}</div>
           <h1>Direct the search. Let independent agents do the first audit.</h1>
           <p className="lede">
-            Each lane runs a real, editable PubMed sweep. A local Claude companion preserves full text, extracts atomic results, attacks them with a different model, and auto-promotes only the records that survive every gate.
+            Each lane is traced to the human-edited scope, runs a real editable PubMed sweep, and keeps personal context local for applicability checks. A local Claude companion preserves full text, extracts atomic results, and attacks them with a different model.
           </p>
         </div>
         <button className="primary-button run-all" onClick={runAll} disabled={activeCount > 0}>
-          {activeCount > 0 ? `${activeCount} lanes searching` : "Run all three lanes"}
+          {activeCount > 0 ? `${activeCount} lanes searching` : `Run all ${activeLanes.length} lanes`}
         </button>
       </header>
+
+      {brief && (
+        <section className="research-brief-contract" aria-labelledby="research-contract-title">
+          <header>
+            <div><span>Compiled from Decompose + Contextualize</span><h2 id="research-contract-title">The contract every agent receives.</h2></div>
+            <small>{brief.compiledBy} · {brief.claims.reduce((sum, claim) => sum + claim.budgetShare, 0)} budget points</small>
+          </header>
+          <div className="research-contract-grid">
+            <article>
+              <span>Stakeholder and objective</span>
+              <p>{brief.stakeholderProfile.summary}</p>
+            </article>
+            <article>
+              <span>Concrete action</span>
+              <p>{brief.actionSpace.decision}</p>
+              <div>{brief.actionSpace.options.map((option) => <em key={option.id}>{option.label} · {option.feasibility}</em>)}</div>
+            </article>
+            <article>
+              <span>Dimension routing</span>
+              <div className="role-counts">
+                {(["decision-active", "applicability-only", "monitored-unknown", "parked"] as const).map((role) => (
+                  <em key={role}><b>{brief.dimensionAssignments.filter((assignment) => assignment.role === role).length}</b>{role}</em>
+                ))}
+              </div>
+            </article>
+            <article>
+              <span>Privacy boundary</span>
+              <p>{brief.privacy.outboundQueryPolicy}</p>
+            </article>
+          </div>
+        </section>
+      )}
 
       <section className="research-boundary" aria-label="MVP evidence boundary">
         <div>
           <span>Working vertical slice</span>
-          <strong>{verticalSliceAudit.lanes} live queries → {verticalSliceAudit.results} atomic result relationships</strong>
+          <strong>{brief ? `${brief.claims.length} compiled claims → live discovery → atomic results` : `${verticalSliceAudit.lanes} live queries → ${verticalSliceAudit.results} atomic result relationships`}</strong>
         </div>
         <p>
-          Search rank is not evidential weight. A new record must be scoped, decomposed, checked, and assigned to one of {verticalSliceAudit.families} current evidence families—or a justified new family—before it can affect the decision.
+          Search rank is not evidential weight. A new record must be scoped, decomposed, checked, given an applicability-distance vector, and assigned to a justified dependence family before it can affect the decision.
         </p>
       </section>
 
@@ -603,7 +714,7 @@ export function ResearchDashboard() {
       </section>
 
       <div className="research-lanes">
-        {researchLanes.map((lane, index) => {
+        {activeLanes.map((lane, index) => {
           const run = runs[lane.id];
           const audit = laneAudit(lane);
           const expanded = openLane === lane.id;
@@ -625,6 +736,8 @@ export function ResearchDashboard() {
                     <div><span>Agent brief</span><p>{lane.focus}</p></div>
                     <div><span>Crux</span><p>{lane.crux}</p></div>
                     <div><span>Inclusion rule</span><p>{lane.inclusionRule}</p></div>
+                    {lane.budgetShare && <div><span>Token budget</span><p>{lane.budgetShare}% of this investigation portfolio.</p></div>}
+                    {lane.relaxationOrder?.length ? <div><span>Constraint relaxation</span><ol>{lane.relaxationOrder.map((step) => <li key={step}>{step}</li>)}</ol></div> : null}
                   </div>
                   <label className="query-editor">
                     <span>Editable PubMed query</span>
@@ -643,7 +756,7 @@ export function ResearchDashboard() {
                         Refresh live
                       </button>
                     )}
-                    <span>{audit.resultCount} reviewed results from {audit.familyCount} independent families already anchor this lane.</span>
+                    <span>{audit.resultCount > 0 ? `${audit.resultCount} reviewed results from ${audit.familyCount} independent families already anchor this lane.` : "No result is pre-promoted for this generated lane; discovery begins as leads, not evidence."}</span>
                   </div>
 
                   {run.error && <p className="lane-error" role="alert">{run.error}</p>}
@@ -737,6 +850,15 @@ export function ResearchDashboard() {
                                         <strong>{result.resultText}</strong>
                                         {result.estimate && <b>{result.estimate}</b>}
                                         <p>{result.rationale}</p>
+                                        <div className={`applicability-vector ${result.applicability.distance}`}>
+                                          <span>Applicability · {result.applicability.distance}</span>
+                                          <dl>
+                                            <div><dt>Matched</dt><dd>{result.applicability.matched.join(", ") || "none established"}</dd></div>
+                                            <div><dt>Mismatch</dt><dd>{result.applicability.mismatched.join(", ") || "none identified"}</dd></div>
+                                            <div><dt>Unknown</dt><dd>{result.applicability.unknown.join(", ") || "none recorded"}</dd></div>
+                                          </dl>
+                                          {result.applicability.constraintRelaxations.length > 0 && <small>Relaxed: {result.applicability.constraintRelaxations.join(" → ")}</small>}
+                                        </div>
                                         <blockquote>“{result.exactExcerpt}”</blockquote>
                                         <small>{result.locator} · quotation checked against preserved full text</small>
                                       </article>
@@ -775,6 +897,10 @@ export function ResearchDashboard() {
                                         <strong>{result.resultText}</strong>
                                         {result.estimate && <b>{result.estimate}</b>}
                                         <p>{result.rationale}</p>
+                                        <div className={`applicability-vector ${result.applicability.distance}`}>
+                                          <span>Applicability · {result.applicability.distance}</span>
+                                          <small>{result.applicability.rationale}</small>
+                                        </div>
                                         <small>{result.locator} · proposed from abstract</small>
                                       </article>
                                     ))}

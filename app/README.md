@@ -1,6 +1,6 @@
 # Epistack Question Compiler
 
-A browser prototype of the first Epistack operator: collaborative decomposition of a vague question into a human-approved, probabilistically assessable claim.
+A browser prototype of an Epistack investigation loop: collaboratively decompose a vague question, ground it in a real stakeholder and action space, compile a typed research brief, and feed live evidence agents without losing provenance or scope.
 
 The included evidence case uses the competition prompt about whether eggs are good to eat, while the framing operator can now decompose arbitrary submitted questions.
 
@@ -21,9 +21,9 @@ npm run dev
 
 Open the local URL printed by the development server.
 
-`npm run agents` starts a localhost-only companion on `127.0.0.1:4317`. It requires an installed and authenticated Claude Code CLI. By default, a fresh `claude -p` Opus process extracts result-level records from preserved PMC full text and a fresh Sonnet process adversarially reviews them. Override the aliases or cost ceilings with `EPISTACK_PRIMARY_CLAUDE_MODEL`, `EPISTACK_ADVERSARY_CLAUDE_MODEL`, `EPISTACK_PRIMARY_MAX_USD`, and `EPISTACK_ADVERSARY_MAX_USD`.
+`npm run agents` starts a localhost-only companion on `127.0.0.1:4317`. It requires an installed and authenticated Claude Code CLI. Opus first compiles the edited interpretation map into a durable research brief. During ingestion, a fresh Opus process extracts result-level records from preserved PMC full text and a fresh Sonnet process adversarially reviews them. Override aliases or cost ceilings with `EPISTACK_PRIMARY_CLAUDE_MODEL`, `EPISTACK_ADVERSARY_CLAUDE_MODEL`, `EPISTACK_COMPILER_MAX_USD`, `EPISTACK_PRIMARY_MAX_USD`, and `EPISTACK_ADVERSARY_MAX_USD`.
 
-For decomposition, open the settings icon and paste an OpenRouter API key. It is sent through Epistack for the request and is never written to browser storage, the case artifact, or the database. You can also copy `.env.example` to `.env.local` and set `OPENROUTER_API_KEY` for a server-configured connection. Without a key, decomposition stops with an explicit settings error.
+For decomposition, open the settings icon and paste an OpenRouter API key. The bring-your-own key is cached only in that browser so reloads do not require retyping; it is excluded from case artifacts and the database. You can instead copy `.env.example` to `.env.local` and set `OPENROUTER_API_KEY` for a server-configured connection. Without a key or an exact reusable cache hit, decomposition stops with an explicit settings error.
 
 ## What to try
 
@@ -36,12 +36,12 @@ For decomposition, open the settings icon and paste an OpenRouter API key. It is
 7. Select any interpretation branch to inspect the model's rationale.
 8. Keep a different branch, park one, or edit its meaning.
 9. Add an interpretation the model missed and watch the claim template recompile.
-10. Create an explicitly labeled probability placeholder.
-11. For the eggs fixture, continue to Evidence and inspect atomic results inside each source.
-12. Open the Claim Matrix to cross-examine scoped claims without treating multiple endpoints as independent votes.
-13. Use Assess for the 32-study inventory and the Discovery Queue for unassessed matches.
-14. Open Decide to inspect the conditional policy, outcome coverage, next information, and draft observation protocol.
-15. Save a revision or export the complete framing artifact as JSON.
+10. Route each dimension: claim-driving, applicability-only, monitored unknown, or parked/no-budget.
+11. Create an explicitly labeled probability placeholder, then compile the research brief with the local companion.
+12. Inspect the generated 3–7 claim portfolio, realistic action space, budget shares, privacy boundary, editable PubMed queries, and constraint-relaxation order.
+13. Run a lane, acquire full text, and inspect each atomic result's applicability-distance vector and adversarial verdict.
+14. Open the Claim Matrix to cross-examine scoped claims without treating multiple endpoints as independent votes.
+15. Open Decide to inspect the conditional policy, outcome coverage, next information, and draft observation protocol.
 
 ## Current boundary
 
@@ -66,6 +66,10 @@ It currently implements:
 - human selection, editing, addition, and reversible parking;
 - authorship and rationale;
 - question compilation;
+- four-way human routing of dimensions into claims, applicability checks, monitored gaps, or parked scope;
+- a typed, locally persisted `ResearchBrief` containing stakeholder profile, feasible actions, 3–7 prioritized claims, retrieval contracts, relaxation order, gap triggers, and a 100-point research budget;
+- dynamic research lanes generated from that brief rather than from the curated eggs fixture;
+- privacy-minimized discovery that sends only the editable query and publication filters to PubMed while retaining the full personal context locally;
 - probability semantics;
 - JSON export;
 - D1-backed artifact snapshots;
@@ -82,13 +86,14 @@ The interface is organized as a case workspace rather than one long report:
 
 - `/` — submit the question and inspect its ambiguous wording;
 - `/map` — edit the generated interpretation map and compile the claim;
+- `/research` — direct the generated claim portfolio, retrieval queries, full-text agents, applicability checks, and promotion gate;
 - `/evidence` — inspect result-level relationships, locators, scope, and dependence inside each source;
 - `/matrix` — cross-examine scoped claims against source containers without vote-counting;
 - `/inventory` — search and assess the controlled-trial inventory;
 - `/discoveries` — screen the unassessed PubMed intake queue; and
 - `/synthesis` — use the evidence graph for a concrete, reversible decision and measurement plan.
 
-Discovery is intentionally not treated as evidence. For a PubMed record linked to open PMC full text, the local companion saves JATS XML and plain text under `.epistack/sources`, records the source hash, runs specialized extraction and adversarial-review processes, literally checks accepted excerpts against the saved text, and caches the full run by source hash, prompts, question context, and model pair. Only results that pass the declared `dual-model-pmc-full-text-v1` policy are auto-promoted; rejected proposals remain in the review snapshot. Abstract-only extraction is an explicit fallback and still requires human promotion.
+Discovery is intentionally not treated as evidence. For a PubMed record linked to open PMC full text, the local companion saves JATS XML and plain text under `.epistack/sources`, records the source hash, runs specialized extraction and adversarial-review processes, literally checks accepted excerpts against the saved text, and caches the full run by source hash, compiled claims, applicability profile, prompts, question context, and model pair. Only results that pass the declared `dual-model-pmc-full-text-v2` policy are auto-promoted; rejected proposals remain in the review snapshot. Abstract-only extraction is an explicit fallback and still requires human promotion.
 
 “AI cross-checked full text” is deliberately not labeled human-verified. The current local trust boundary assumes the browser, companion, and app server belong to one investigator; the companion payload is not yet cryptographically signed against a malicious local client. The app also does not yet acquire paywalled PDFs, independently reproduce statistical analyses, subscribe to retractions, or aggregate contributed personal observations.
 
@@ -107,6 +112,8 @@ npm run evidence:discover
 
 - `app/page.tsx` — animated phrase-highlighting and transition flow
 - `app/map/page.tsx` — editable interpretation map and claim compilation
+- `lib/research-brief.ts` — Stage 2→3 contract, role routing, claim portfolio schema, budget normalization, and dynamic lanes
+- `app/research/research-dashboard.tsx` — generated investigation cockpit and local-agent control surface
 - `app/api/decompose/route.ts` — AI SDK structured decomposition endpoint
 - `scripts/local-claude-agents.mjs` — local PMC acquisition, two-process Claude orchestration, cache, and passage checks
 - `lib/dual-review.ts` — adversarial-review contracts and deterministic promotion policy

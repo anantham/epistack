@@ -4,6 +4,7 @@ export type AgentPromptId =
   | "dimension-scout"
   | "trace-specialist"
   | "context-retrieval"
+  | "research-brief-compiler"
   | "abstract-extractor"
   | "full-paper-extractor"
   | "adversarial-reviewer";
@@ -51,15 +52,35 @@ Given a submitted paragraph, fixed dimensions, and any known decision context, d
 
 Do not answer the substantive question. Do not re-ask facts already present in known context. Keep answer options short and concrete while allowing free text. Treat context as an applicability constraint, never as evidence. Preserve both pruning and newly relevant branches.`;
 
+export const defaultResearchBriefCompilerInstructions = `You are the RESEARCH BRIEF COMPILER between a human-edited interpretation map and an evidence-investigation team.
+
+Convert the supplied scope into a small, decision-relevant research portfolio. Do not answer the question, retrieve evidence, or treat stakeholder context as evidence.
+
+The human has assigned every dimension one of four roles. Obey those assignments:
+- decision-active: may define the proposition, counterfactual, outcome, or a separate research claim;
+- applicability-only: should normally become evidence-matching fields, not extra words in every query;
+- monitored-unknown: preserve as a gap and launch work only under a high-value trigger;
+- parked: give it no token budget unless a clear reactivation trigger is met.
+
+Avoid a Cartesian product. Produce 3–7 claim frames that jointly cover the load-bearing decision: direct effectiveness, important harms, the realistic comparator, and—only when decision-relevant—mechanism, heterogeneity, or implementation. Each claim must be atomic enough that one result can support it while another result from the same source can contradict or qualify another claim.
+
+For every claim:
+- specify population, exposure/action, comparator, outcome, horizon, and modality;
+- name the decision leverage: what would change if this claim moved;
+- make axis traceability explicit;
+- produce a compact PubMed query from shareable research concepts only;
+- do not put a person's name, exact address, employer, free-text rant, or other local-only facts in an outbound query;
+- use personal facts as applicability fields unless they are standard scientific population terms needed for retrieval;
+- begin with a close scope match, then relax one constraint at a time and record the relaxation order;
+- name exclusion signals and the fields later agents must capture to measure applicability distance.
+
+In actionSpace, currentAction means the status quo if the actor makes no change. Include only options the actor can take now or plausibly make available within the stated horizon. Put attractive-but-currently-infeasible alternatives in parked scopes with a reactivation trigger instead of inflating the actionable menu.
+
+Allocate more budget to claims with greater expected effect on the realistic action, not to claims that are merely easy to search. Preserve genuine uncertainty and missing context. Return structured data only and never expose private chain-of-thought.`;
+
 export const defaultAbstractExtractorInstructions = `You extract proposed atomic evidence records from one PubMed abstract.
 
-You are not deciding whether eggs are good. Decompose the document container into distinct reported results. One abstract may support one scoped claim and contradict, qualify, undercut, bound, or fail to inform another.
-
-CLAIM FRAMES
-- weight-superiority: Among adults with overweight or obesity following an energy-restricted diet, substituting two whole eggs at breakfast for an energy-matched egg-free breakfast causes greater weight loss over at least eight weeks.
-- free-living-weight-loss: Adding an egg breakfast without an energy-restriction programme causes weight loss compared with an energy-matched egg-free breakfast over eight weeks or longer.
-- acute-satiety: Compared with an isoenergetic higher-carbohydrate breakfast, an egg breakfast reduces hunger or subsequent energy intake over the same day to 36 hours.
-- short-term-ldl: During energy restriction, eating two eggs for breakfast five days per week does not worsen LDL cholesterol relative to breakfast cereal over six months.
+You are not deciding the overall question. Decompose the document container into distinct reported results. One abstract may support one scoped claim and contradict, qualify, undercut, bound, or fail to inform another. Use only the claim frames supplied in the task.
 
 RULES
 - Use only facts present in the supplied citation and abstract. Never fill a missing number from memory.
@@ -69,6 +90,7 @@ RULES
 - Keep primary, secondary, exploratory, methodological, and author-interpretation records distinct.
 - If a reported result does not answer a claim, use not-informative; do not force polarity.
 - relation and scopeMatch are proposed assessment judgments, so give an inspectable rationale.
+- Fill the applicability vector against the supplied local profile: exact matches, mismatches, unknowns, and each scope constraint that had to be relaxed. Do not infer an unreported match.
 - One evidence family contains all results from this source unless the abstract explicitly reports distinct participant samples.
 - extractionCaveat must name what cannot be verified without full text.
 - Be concise. Return complete structured data, not prose outside the schema.`;
@@ -84,6 +106,7 @@ RULES
 - Separate within-arm change from between-group effects. Separate primary, secondary, exploratory, methodological, and author-interpretation records.
 - Preserve population, intervention, comparator, outcome, time horizon, analysis type, estimate, and uncertainty as reported. Never fill a missing value from memory.
 - Map each result to the closest supplied claim frame. Use not-informative when it does not bear on that claim.
+- Fill the applicability vector against the supplied profile. Record direct matches, mismatches, unknowns, and every scope relaxation; do not silently treat a neighboring population or intervention as direct.
 - Put correlated results from this source in one evidence family unless genuinely distinct participant samples justify otherwise.
 - The sourceInspection booleans are attestations, not aspirations. Set them false if the relevant material was not actually read.
 - Return structured data only. Do not reveal private chain-of-thought; give concise audit rationales.`;
@@ -155,6 +178,39 @@ KNOWN DECISION CONTEXT
 {{decisionContext}}`,
   },
   {
+    id: "research-brief-compiler",
+    name: "Research brief compiler",
+    stage: "2–3 · Contextualize / Investigate",
+    role: "Turns human-edited scope into an agent contract",
+    description: "Builds a non-combinatorial claim portfolio, action space, privacy-safe retrieval briefs, applicability fields, and budget allocation.",
+    outputContract: "Stakeholder/action profile, 3–7 traced claim frames, queries, relaxation order, and gap triggers",
+    maxOutputTokens: 14000,
+    temperature: 0.05,
+    instructions: defaultResearchBriefCompilerInstructions,
+    taskTemplate: `ORIGINAL QUESTION
+{{question}}
+
+HUMAN-COMPILED QUESTION
+{{compiledQuestion}}
+
+LOCAL DECISION CONTEXT
+{{decisionContext}}
+
+EDITED DIMENSIONS AND HUMAN ROLE ASSIGNMENTS
+{{dimensionAssignmentsJson}}
+
+FEASIBLE BRANCHES AND PARKED ALTERNATIVES
+{{axesJson}}
+
+KNOWN UNKNOWNS
+{{knownUnknownsJson}}
+
+The local context may be summarized in the stakeholder profile, but outbound searchQuery fields must contain only the minimum shareable scientific concepts needed for retrieval.`,
+    repairTemplate: `{{basePrompt}}
+
+REPAIR: Return the complete structured research brief draft. Produce 3–7 unique atomic claim frames, preserve the human role assignments, keep queries privacy-minimized, and ensure every claim names its axis links. Previous validation: {{validation}}.`,
+  },
+  {
     id: "abstract-extractor",
     name: "Abstract result extractor",
     stage: "3 · Investigate",
@@ -164,7 +220,13 @@ KNOWN DECISION CONTEXT
     maxOutputTokens: 8000,
     temperature: 0.1,
     instructions: defaultAbstractExtractorInstructions,
-    taskTemplate: `CITATION
+    taskTemplate: `CLAIM FRAMES
+{{claimFrames}}
+
+LOCAL APPLICABILITY PROFILE
+{{applicabilityProfile}}
+
+CITATION
 {{title}}
 {{authors}}
 {{journal}} · {{published}}
@@ -200,6 +262,9 @@ SHA-256: {{artifactHash}}
 CLAIM FRAMES
 {{claimFrames}}
 
+LOCAL APPLICABILITY PROFILE
+{{applicabilityProfile}}
+
 Read the preserved artifact before producing the structured extraction. Copy exactExcerpt exactly from the plain-text artifact and repeat the supplied SHA-256 in sourceInspection.artifactHash.`,
   },
   {
@@ -225,6 +290,12 @@ PRESERVED SOURCE ARTIFACT
 Plain text: {{artifactTextPath}}
 JATS XML: {{artifactXmlPath}}
 SHA-256: {{artifactHash}}
+
+CLAIM FRAMES
+{{claimFrames}}
+
+LOCAL APPLICABILITY PROFILE
+{{applicabilityProfile}}
 
 INDEXED PRIMARY EXTRACTION
 {{candidateJson}}

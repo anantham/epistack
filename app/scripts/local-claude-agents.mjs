@@ -7,7 +7,6 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { claimFrames } from "../data/eggs-result-ledger.ts";
 import { renderAgentPrompt, resolveAgentPrompt, sanitizeAgentPromptOverrides } from "../lib/agent-prompts.ts";
 import {
   adversarialReviewSchema,
@@ -15,27 +14,42 @@ import {
   dualReviewPolicyId,
   fullPaperExtractionSchema,
 } from "../lib/dual-review.ts";
+import {
+  buildDimensionAssignments,
+  completeDimensionRoles,
+  normalizeResearchBriefDraft,
+  researchBriefDraftSchema,
+  researchBriefSchema,
+  researchClaimFrameSchema,
+} from "../lib/research-brief.ts";
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const storeRoot = process.env.EPISTACK_AGENT_STORE || join(appRoot, ".epistack");
 const sourceRoot = join(storeRoot, "sources");
 const cacheRoot = join(storeRoot, "agent-cache");
+const briefCacheRoot = join(storeRoot, "brief-cache");
 const port = Number(process.env.EPISTACK_AGENT_PORT || 4317);
 const claudeBinary = process.env.EPISTACK_CLAUDE_BIN || "claude";
 const primaryModel = process.env.EPISTACK_PRIMARY_CLAUDE_MODEL || "opus";
 const adversaryModel = process.env.EPISTACK_ADVERSARY_CLAUDE_MODEL || "sonnet";
 const primaryBudget = process.env.EPISTACK_PRIMARY_MAX_USD || "8";
 const adversaryBudget = process.env.EPISTACK_ADVERSARY_MAX_USD || "6";
+const compilerBudget = process.env.EPISTACK_COMPILER_MAX_USD || "5";
+const researchBriefCompilerCacheContract = "research-brief-compiler-v1";
 
-const claimFrameText = claimFrames.map((frame) => [
-  frame.id,
-  frame.statement,
-  `Population: ${frame.population}`,
-  `Exposure: ${frame.exposure}`,
-  `Comparator: ${frame.comparator}`,
-  `Outcome: ${frame.outcome}`,
-  `Time horizon: ${frame.timeHorizon}`,
-].join("\n")).join("\n\n");
+function claimFramesText(claimFrames) {
+  return claimFrames.map((frame) => [
+    frame.id,
+    frame.statement,
+    `Kind: ${frame.kind}`,
+    `Population: ${frame.population}`,
+    `Exposure: ${frame.exposure}`,
+    `Comparator: ${frame.comparator}`,
+    `Outcome: ${frame.outcome}`,
+    `Time horizon: ${frame.timeHorizon}`,
+    `Applicability fields: ${frame.applicabilityFields.join(", ")}`,
+  ].join("\n")).join("\n\n");
+}
 
 function hash(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -216,6 +230,8 @@ function validateInput(value) {
   const record = value.record;
   if (!record || typeof record !== "object" || !/^\d{5,12}$/.test(String(record.pmid || ""))) throw new Error("A valid PubMed record is required.");
   if (typeof record.title !== "string" || record.title.trim().length < 4) throw new Error("The PubMed title is missing.");
+  const parsedClaimFrames = z.array(researchClaimFrameSchema).min(1).max(7).safeParse(value.claimFrames);
+  if (!parsedClaimFrames.success) throw new Error("The investigation request is missing the compiled claim frames. Return to Contextualize and compile a research brief first.");
   return {
     record: {
       pmid: String(record.pmid),
@@ -228,6 +244,10 @@ function validateInput(value) {
     },
     question: typeof value.question === "string" && value.question.trim() ? value.question.trim().slice(0, 4_000) : "Are eggs good to eat?",
     decisionContext: typeof value.decisionContext === "string" && value.decisionContext.trim() ? value.decisionContext.trim().slice(0, 8_000) : "No personal decision context supplied.",
+    claimFrames: parsedClaimFrames.data,
+    applicabilityProfile: value.applicabilityProfile && typeof value.applicabilityProfile === "object"
+      ? JSON.stringify(value.applicabilityProfile, null, 2).slice(0, 20_000)
+      : "No structured applicability profile supplied.",
     promptOverrides: sanitizeAgentPromptOverrides(value.promptOverrides),
     refresh: value.refresh === true,
   };
@@ -247,6 +267,8 @@ export async function investigateWithClaude(inputValue, emit = () => {}) {
     artifactHash: artifact.contentHash,
     question: input.question,
     decisionContext: input.decisionContext,
+    claimFrames: input.claimFrames,
+    applicabilityProfile: input.applicabilityProfile,
     primaryModel,
     adversaryModel,
     extractorPrompt,
@@ -270,8 +292,10 @@ export async function investigateWithClaude(inputValue, emit = () => {}) {
     artifactTextPath: artifact.localTextPath,
     artifactXmlPath: artifact.localXmlPath,
     artifactHash: artifact.contentHash,
+    claimFrames: claimFramesText(input.claimFrames),
+    applicabilityProfile: input.applicabilityProfile,
   };
-  const primaryPrompt = `${extractorPrompt.instructions}\n\n${renderAgentPrompt(extractorPrompt.taskTemplate, { ...commonValues, claimFrames: claimFrameText })}`;
+  const primaryPrompt = `${extractorPrompt.instructions}\n\n${renderAgentPrompt(extractorPrompt.taskTemplate, commonValues)}`;
   emit({ type: "status", phase: "extracting", label: `${primaryModel} is decomposing methods, tables, and results` });
   const primaryRaw = await runClaudeAgent({
     name: `epistack-primary-${input.record.pmid}`,
@@ -322,6 +346,117 @@ export async function investigateWithClaude(inputValue, emit = () => {}) {
   return response;
 }
 
+function cleanCompilerInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Request body must be a JSON object.");
+  const axes = Array.isArray(value.axes) ? value.axes : [];
+  const clusters = Array.isArray(value.clusters) ? value.clusters : [];
+  if (!axes.length || !axes.every((axis) => axis && typeof axis.id === "string" && typeof axis.label === "string" && Array.isArray(axis.branches))) {
+    throw new Error("The edited interpretation map is missing its dimensions.");
+  }
+  const originalQuestion = typeof value.originalQuestion === "string" ? value.originalQuestion.trim().slice(0, 5_000) : "";
+  const compiledQuestion = typeof value.compiledQuestion === "string" ? value.compiledQuestion.trim().slice(0, 5_000) : "";
+  if (originalQuestion.length < 8 || compiledQuestion.length < 8) throw new Error("Both the original and compiled questions are required.");
+  const dimensionRoles = completeDimensionRoles(axes, value.dimensionRoles && typeof value.dimensionRoles === "object" ? value.dimensionRoles : {});
+  return {
+    caseId: typeof value.caseId === "string" && value.caseId.trim() ? value.caseId.trim().slice(0, 120) : `case-${hash(originalQuestion).slice(0, 12)}`,
+    originalQuestion,
+    compiledQuestion,
+    decisionContext: typeof value.decisionContext === "string" ? value.decisionContext.trim().slice(0, 8_000) : "",
+    axes,
+    clusters,
+    knownUnknowns: Array.isArray(value.knownUnknowns) ? value.knownUnknowns.filter((item) => typeof item === "string").slice(0, 20) : [],
+    dimensionRoles,
+    dimensionAssignments: buildDimensionAssignments({ axes, clusters, dimensionRoles }),
+    prior: Number.isFinite(value.prior) ? Math.max(0.01, Math.min(0.99, Number(value.prior))) : 0.5,
+    promptOverrides: sanitizeAgentPromptOverrides(value.promptOverrides),
+    refresh: value.refresh === true,
+  };
+}
+
+export async function compileResearchBriefWithClaude(inputValue, emit = () => {}) {
+  const input = cleanCompilerInput(inputValue);
+  await mkdir(briefCacheRoot, { recursive: true });
+  const compilerPrompt = resolveAgentPrompt("research-brief-compiler", input.promptOverrides);
+  const basePrompt = renderAgentPrompt(compilerPrompt.taskTemplate, {
+    question: input.originalQuestion,
+    compiledQuestion: input.compiledQuestion,
+    decisionContext: input.decisionContext || "No personal context supplied. Preserve this as an explicit limitation.",
+    dimensionAssignmentsJson: JSON.stringify(input.dimensionAssignments, null, 2),
+    axesJson: JSON.stringify(input.axes, null, 2),
+    knownUnknownsJson: JSON.stringify(input.knownUnknowns, null, 2),
+  });
+  const cacheKey = hash(JSON.stringify({
+    contract: researchBriefCompilerCacheContract,
+    model: primaryModel,
+    input: {
+      caseId: input.caseId,
+      originalQuestion: input.originalQuestion,
+      compiledQuestion: input.compiledQuestion,
+      decisionContext: input.decisionContext,
+      axes: input.axes,
+      dimensionAssignments: input.dimensionAssignments,
+      knownUnknowns: input.knownUnknowns,
+      prior: input.prior,
+    },
+    compilerPrompt,
+  }));
+  const cachePath = join(briefCacheRoot, `${cacheKey}.json`);
+  if (!input.refresh) {
+    try {
+      const cached = researchBriefSchema.parse(JSON.parse(await readFile(cachePath, "utf8")));
+      emit({ type: "status", phase: "cache-hit", label: "Reusing the exact compiled research brief" });
+      return { brief: cached, model: primaryModel, cache: { status: "hit", key: cacheKey, createdAt: cached.generatedAt } };
+    } catch {
+      // A cache miss or stale schema proceeds to a fresh compiler run.
+    }
+  }
+
+  let draft = null;
+  let validation = "";
+  for (let attempt = 0; attempt < 2 && !draft; attempt += 1) {
+    emit({
+      type: "status",
+      phase: attempt === 0 ? "compiling" : "repairing",
+      label: attempt === 0 ? `${primaryModel} is allocating claims and retrieval budgets` : "Repairing the structured research contract",
+    });
+    const task = attempt === 0
+      ? basePrompt
+      : renderAgentPrompt(compilerPrompt.repairTemplate || "{{basePrompt}}", { basePrompt, validation });
+    const raw = await runClaudeAgent({
+      name: `epistack-brief-${hash(input.originalQuestion).slice(0, 10)}-${attempt + 1}`,
+      model: primaryModel,
+      budget: compilerBudget,
+      prompt: `${compilerPrompt.instructions}\n\n${task}`,
+      schema: researchBriefDraftSchema,
+    });
+    const parsed = researchBriefDraftSchema.safeParse(raw);
+    if (parsed.success) draft = normalizeResearchBriefDraft(parsed.data, input.axes.map((axis) => axis.id));
+    else validation = parsed.error.issues.slice(0, 6).map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
+  }
+  if (!draft) throw new Error(`The research brief compiler returned an incomplete contract after two attempts${validation ? `: ${validation}` : "."}`);
+
+  emit({ type: "status", phase: "validating", label: "Checking traceability, privacy boundaries, and token allocation" });
+  const generatedAt = new Date().toISOString();
+  const brief = researchBriefSchema.parse({
+    ...draft,
+    schemaVersion: "0.2.0",
+    briefId: `brief-${cacheKey.slice(0, 24)}`,
+    caseId: input.caseId,
+    originalQuestion: input.originalQuestion,
+    compiledQuestion: input.compiledQuestion,
+    decisionContext: input.decisionContext,
+    dimensionAssignments: input.dimensionAssignments,
+    privacy: {
+      localContextPolicy: "The full decision context stays in this device-local brief and may be read by the local Claude companion; it is not sent to PubMed.",
+      outboundQueryPolicy: "Only each claim's compact searchQuery and publication filters leave the local workflow during discovery.",
+    },
+    generatedAt,
+    compiledBy: `local Claude · ${primaryModel}`,
+  });
+  await writeFile(cachePath, JSON.stringify(brief, null, 2), "utf8");
+  return { brief, model: primaryModel, cache: { status: input.refresh ? "bypass" : "miss", key: cacheKey, createdAt: generatedAt } };
+}
+
 function localOrigin(origin) {
   return !origin || /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(origin);
 }
@@ -365,8 +500,26 @@ export function createLocalAgentServer() {
         service: "epistack-local-claude",
         policyId: dualReviewPolicyId,
         models: { primary: primaryModel, adversary: adversaryModel },
+        capabilities: ["research-brief-compiler", "full-paper-extraction", "adversarial-review"],
         store: relative(appRoot, storeRoot),
       }));
+      return;
+    }
+    if (request.method === "POST" && request.url === "/compile-brief") {
+      response.writeHead(200, { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" });
+      const emit = (event) => response.write(`${JSON.stringify(event)}\n`);
+      try {
+        const payload = await compileResearchBriefWithClaude(await readBody(request), emit);
+        emit({ type: "complete", payload });
+      } catch (error) {
+        emit({
+          type: "error",
+          code: "RESEARCH_BRIEF_FAILURE",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        response.end();
+      }
       return;
     }
     if (request.method === "POST" && request.url === "/investigate") {

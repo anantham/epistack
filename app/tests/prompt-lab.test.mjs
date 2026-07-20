@@ -14,6 +14,7 @@ test("the prompt registry enumerates every live model specialist", () => {
     "dimension-scout",
     "trace-specialist",
     "context-retrieval",
+    "research-brief-compiler",
     "abstract-extractor",
     "full-paper-extractor",
     "adversarial-reviewer",

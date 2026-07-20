@@ -1,7 +1,7 @@
 import { atomicResults, evidenceFamilies } from "./eggs-result-ledger.ts";
 import { evidenceSources } from "./eggs-weight-corpus.ts";
 
-export type ResearchLaneId = "effectiveness" | "satiety" | "safety";
+export type ResearchLaneId = string;
 
 export type ResearchLane = {
   id: ResearchLaneId;
@@ -12,6 +12,10 @@ export type ResearchLane = {
   crux: string;
   inclusionRule: string;
   knownSourceIds: string[];
+  claimFrameId?: string;
+  budgetShare?: number;
+  relaxationOrder?: string[];
+  applicabilityFields?: string[];
 };
 
 export const researchLanes: ResearchLane[] = [

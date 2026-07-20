@@ -59,6 +59,10 @@ test("research route keeps discovery separate from evidence promotion", async ()
   assert.match(dashboard, /Use abstract-only fallback/);
   assert.match(dashboard, /Promote checked results/);
   assert.match(dashboard, /Persistent graph · Live promotions only/);
+  assert.match(dashboard, /researchBriefStorageKey/);
+  assert.match(dashboard, /researchLanesFromBrief/);
+  assert.match(dashboard, /claimFrames: compiledClaimFrames\(\)/);
+  assert.match(dashboard, /applicabilityProfile: applicabilityProfile\(\)/);
   assert.match(api, /eutils\.ncbi\.nlm\.nih\.gov/);
   assert.match(api, /compilePubmedQuery/);
   assert.match(deepDiveApi, /deepDiveSchema\.safeParse/);

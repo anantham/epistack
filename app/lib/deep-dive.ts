@@ -12,9 +12,17 @@ export const deepDiveResultSchema = z.object({
   estimate: z.string().max(220),
   exactExcerpt: z.string().max(420),
   locator: z.string().min(3).max(180),
-  claimFrameId: z.enum(["weight-superiority", "free-living-weight-loss", "acute-satiety", "short-term-ldl"]),
+  claimFrameId: z.string().min(2).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   relation: z.enum(["supports", "contradicts", "qualifies", "undercuts", "bounds", "not-informative"]),
   scopeMatch: z.enum(["direct", "partial", "indirect"]),
+  applicability: z.object({
+    matched: z.array(z.string().min(2).max(180)).max(10),
+    mismatched: z.array(z.string().min(2).max(180)).max(10),
+    unknown: z.array(z.string().min(2).max(180)).max(10),
+    constraintRelaxations: z.array(z.string().min(2).max(220)).max(8),
+    distance: z.enum(["exact", "near", "far", "indeterminate"]),
+    rationale: z.string().min(8).max(420),
+  }),
   rationale: z.string().min(8).max(420),
 });
 
