@@ -71,6 +71,17 @@ const saveInvestigationPatch = (q, patch) => {
     localStorage.setItem(STORE_KEY, JSON.stringify(s))
   } catch {}
 }
+// record a steering action (edit / prune / add / dispatch / deep-dive / decide …) into the artifact's timeline
+const logInteraction = (q, actor, event, detail) => {
+  if (!q) return
+  try {
+    const s = getStore()
+    const rec = s[q] || {}
+    rec.interactions = [...(rec.interactions || []), { t: new Date().toISOString(), actor, event, ...(detail !== undefined ? { detail } : {}) }].slice(-1000)
+    s[q] = { ...rec, question: q, updatedAt: Date.now() }
+    localStorage.setItem(STORE_KEY, JSON.stringify(s))
+  } catch {}
+}
 // model preference for claude -p (global; '' / undefined = the CLI default). Injected into every API call.
 const MODEL_KEY = 'epistack_model'
 const MODELS = [
@@ -96,7 +107,32 @@ const setModelPref = (m) => {
 const exportInvestigation = (q) => {
   const inv = loadInvestigation(q)
   if (!inv) return
-  const payload = { schema: 'epistack.investigation/v1', question: q, exportedAt: new Date().toISOString(), ...inv }
+  const r = inv.research || {}
+  const payload = {
+    schema: 'epistack.investigation/v1',
+    question: q,
+    exportedAt: new Date().toISOString(),
+    model: getModel() || 'default',
+    // everything the HUMAN did — inputs, edits, and the full steering timeline
+    human: {
+      dimensionsAsShaped: inv.data?.clusters || [], // after your renames / prunes / additions
+      elicitAnswers: inv.elicitAns || {},
+      contextRant: inv.ctxText || '',
+      contextSummary: inv.context || '',
+      interactions: inv.interactions || [],
+    },
+    // everything the AI produced
+    ai: {
+      wordAssignments: inv.data?.assignments || [],
+      elicitationQuestions: inv.data?.elicit || [],
+      personalization: inv.pdata || null,
+      findings: r.lanes || {},
+      resultLedgers: r.ledgers || {},
+      evidenceFamilies: r.families || {},
+    },
+    decision: r.decision || null,
+    _record: inv, // the raw store record, so the file round-trips back into the tool
+  }
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -484,6 +520,7 @@ function FindingCard({ f, question, axisName, rkey, onLedger, initialLedger }) {
   const [dd, setDd] = useState(initialLedger || null) // null | 'loading' | result | {error}
   async function deepdive() {
     setDd('loading')
+    logInteraction(question, 'human', 'deep-dive', { source: f.source, claim: f.claim })
     try {
       const r = await fetch('/api/deepdive', {
         method: 'POST',
@@ -540,6 +577,7 @@ function DependencePanel({ axis, findings, question, onFamilies, initialDep }) {
   const [dep, setDep] = useState(initialDep || null) // null | 'loading' | result | {error}
   async function run() {
     setDep('loading')
+    logInteraction(question, 'human', 'group-evidence-families', { axis: axis.name })
     try {
       const r = await fetch('/api/dependence', {
         method: 'POST',
@@ -747,6 +785,7 @@ function AxisMatrix({ axis, findings, ledgers, question }) {
   async function build() {
     setM('loading')
     setOpenCell(null)
+    logInteraction(question, 'human', 'cross-examine', { axis: axis.name })
     try {
       const sources = findings.map((f, i) => {
         const led = ledgers?.[`${axis.id}#${i}`]
@@ -953,6 +992,7 @@ function ResearchStage({ question, data, pdata, context }) {
 
   async function research(axis) {
     setLanes((l) => ({ ...l, [axis.id]: { status: 'searching', findings: [], t0: Date.now() } }))
+    logInteraction(question?.trim(), 'human', 'dispatch-agent', { axis: axis.name })
     try {
       const r = await fetch('/api/research', {
         method: 'POST',
@@ -990,6 +1030,7 @@ function ResearchStage({ question, data, pdata, context }) {
 
   async function decide() {
     setDecision('deciding')
+    logInteraction(question?.trim(), 'human', 'synthesize-decision')
     try {
       const dimensions = axes
         .filter((a) => (lanes[a.id]?.findings || []).length > 0)
@@ -1521,6 +1562,7 @@ export default function App() {
     setFromCache(false)
     setData(null)
     setPhase('loading')
+    logInteraction(q, 'human', 'ask-question', { question: q, model: getModel() || 'default' })
     const t0 = performance.now()
     try {
       const r = await fetch('/api/decompose', {
@@ -1554,6 +1596,7 @@ export default function App() {
       return
     }
     setCtxSummary(context)
+    logInteraction(question.trim(), 'human', 'submit-context', { context })
     try {
       const r = await fetch('/api/personalize', {
         method: 'POST',
@@ -1614,14 +1657,15 @@ export default function App() {
     setData((d) => ({ ...d, clusters: d.clusters.map((c) => (c.id === id ? { ...c, ...patch } : c)) }))
   const mapRes = (id, fn) =>
     setData((d) => ({ ...d, clusters: d.clusters.map((c) => (c.id === id ? { ...c, resolutions: fn(c.resolutions || []) } : c)) }))
+  const iq = () => question.trim()
   const editHandlers = {
-    name: (id, name) => updateCluster(id, { name }),
-    prompt: (id, prompt) => updateCluster(id, { prompt }),
-    res: (id, idx, text) => mapRes(id, (rs) => rs.map((r, i) => (i === idx ? text : r))),
-    addRes: (id) => mapRes(id, (rs) => [...rs, '']),
-    addResWith: (id, text) => mapRes(id, (rs) => [...rs, text]),
-    delRes: (id, idx) => mapRes(id, (rs) => rs.filter((_, i) => i !== idx)),
-    delDim: (id) => setData((d) => ({ ...d, clusters: d.clusters.filter((c) => c.id !== id) })),
+    name: (id, name) => { updateCluster(id, { name }); logInteraction(iq(), 'human', 'rename-dimension', { id, to: name }) },
+    prompt: (id, prompt) => { updateCluster(id, { prompt }); logInteraction(iq(), 'human', 'edit-dimension-prompt', { id }) },
+    res: (id, idx, text) => { mapRes(id, (rs) => rs.map((r, i) => (i === idx ? text : r))); logInteraction(iq(), 'human', 'edit-resolution', { id, idx }) },
+    addRes: (id) => { mapRes(id, (rs) => [...rs, '']); logInteraction(iq(), 'human', 'add-resolution', { id }) },
+    addResWith: (id, text) => { mapRes(id, (rs) => [...rs, text]); logInteraction(iq(), 'human', 'accept-ai-resolution', { id, text }) },
+    delRes: (id, idx) => { mapRes(id, (rs) => rs.filter((_, i) => i !== idx)); logInteraction(iq(), 'human', 'delete-resolution', { id, idx }) },
+    delDim: (id) => { setData((d) => ({ ...d, clusters: d.clusters.filter((c) => c.id !== id) })); logInteraction(iq(), 'human', 'prune-dimension', { id }) },
   }
   function addCluster() {
     const palette = ['#E0574E', '#2E86DE', '#17A398', '#B5179E', '#E8A32B', '#8A72E0']
@@ -1631,6 +1675,7 @@ export default function App() {
       clusters: [...(d.clusters || []), { id, name: '', color: palette[(d.clusters?.length || 0) % palette.length], prompt: '', resolutions: [''] }],
     }))
     setActivated((a) => (a.includes(id) ? a : [...a, id]))
+    logInteraction(iq(), 'human', 'add-dimension', { id })
   }
 
   const estMs = median(durations)
@@ -1658,6 +1703,7 @@ export default function App() {
                   onClick={() => {
                     setModelPref(m.v)
                     setModelPrefState(m.v)
+                    logInteraction(question.trim(), 'human', 'set-model', { model: m.v || 'default' })
                   }}
                 >
                   <span className="sp-name">{m.label}</span>
@@ -1716,7 +1762,7 @@ export default function App() {
                 </button>
                 {fromCache && <span className="cached-chip" title="cached">⚡</span>}
                 {phase === 'clustered' && data && (
-                  <button className="dq-icon dq-export" onClick={() => exportInvestigation(question.trim())} title="export this investigation as JSON" aria-label="export investigation">⤓</button>
+                  <button className="dq-icon dq-export" onClick={() => exportInvestigation(question.trim())} title="Export the whole investigation as JSON — your question, your edits/prunes/context + full interaction timeline (human), and every finding, deep-dive result record, evidence family & the decision (AI)." aria-label="export investigation">⤓</button>
                 )}
                 {phase === 'clustered' && data && (
                   <div className="stepper">
