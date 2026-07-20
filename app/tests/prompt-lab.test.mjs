@@ -15,6 +15,8 @@ test("the prompt registry enumerates every live model specialist", () => {
     "trace-specialist",
     "context-retrieval",
     "abstract-extractor",
+    "full-paper-extractor",
+    "adversarial-reviewer",
   ]);
   for (const prompt of agentPromptDefinitions) {
     assert.ok(prompt.instructions.length > 100);
@@ -54,4 +56,5 @@ test("the settings link opens an editable Prompt Lab wired into model requests",
     assert.match(source, /promptConfig/);
   }
   assert.match(dashboard, /promptOverrides: promptOverrides\(\)/);
+  assert.match(dashboard, /localClaudeCompanionUrl/);
 });

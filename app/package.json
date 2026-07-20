@@ -12,7 +12,8 @@
     "test": "npm run build && node --experimental-strip-types --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "evidence:discover": "node scripts/discover-pubmed.mjs"
+    "evidence:discover": "node scripts/discover-pubmed.mjs",
+    "agents": "node --experimental-strip-types scripts/local-claude-agents.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.16",

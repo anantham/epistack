@@ -10,10 +10,18 @@ Requires Node.js 22.13 or newer.
 
 ```bash
 npm install
+npm run agents
+```
+
+In a second terminal:
+
+```bash
 npm run dev
 ```
 
 Open the local URL printed by the development server.
+
+`npm run agents` starts a localhost-only companion on `127.0.0.1:4317`. It requires an installed and authenticated Claude Code CLI. By default, a fresh `claude -p` Opus process extracts result-level records from preserved PMC full text and a fresh Sonnet process adversarially reviews them. Override the aliases or cost ceilings with `EPISTACK_PRIMARY_CLAUDE_MODEL`, `EPISTACK_ADVERSARY_CLAUDE_MODEL`, `EPISTACK_PRIMARY_MAX_USD`, and `EPISTACK_ADVERSARY_MAX_USD`.
 
 For decomposition, open the settings icon and paste an OpenRouter API key. It is sent through Epistack for the request and is never written to browser storage, the case artifact, or the database. You can also copy `.env.example` to `.env.local` and set `OPENROUTER_API_KEY` for a server-configured connection. Without a key, decomposition stops with an explicit settings error.
 
@@ -80,12 +88,15 @@ The interface is organized as a case workspace rather than one long report:
 - `/discoveries` — screen the unassessed PubMed intake queue; and
 - `/synthesis` — use the evidence graph for a concrete, reversible decision and measurement plan.
 
-Discovery is intentionally not treated as evidence. Result relationships are attributed and carry verification status; abstract-only records remain visibly incomplete. The app does not yet automatically verify every full text, perform scope-entailment checks, independently reproduce the meta-analysis, subscribe to retractions, or aggregate contributed personal observations. Those steps require model assistance plus human review.
+Discovery is intentionally not treated as evidence. For a PubMed record linked to open PMC full text, the local companion saves JATS XML and plain text under `.epistack/sources`, records the source hash, runs specialized extraction and adversarial-review processes, literally checks accepted excerpts against the saved text, and caches the full run by source hash, prompts, question context, and model pair. Only results that pass the declared `dual-model-pmc-full-text-v1` policy are auto-promoted; rejected proposals remain in the review snapshot. Abstract-only extraction is an explicit fallback and still requires human promotion.
+
+“AI cross-checked full text” is deliberately not labeled human-verified. The current local trust boundary assumes the browser, companion, and app server belong to one investigator; the companion payload is not yet cryptographically signed against a malicious local client. The app also does not yet acquire paywalled PDFs, independently reproduce statistical analyses, subscribe to retractions, or aggregate contributed personal observations.
 
 ## Commands
 
 ```bash
 npm run dev
+npm run agents
 npm run build
 npm test
 npm run db:generate
@@ -97,6 +108,8 @@ npm run evidence:discover
 - `app/page.tsx` — animated phrase-highlighting and transition flow
 - `app/map/page.tsx` — editable interpretation map and claim compilation
 - `app/api/decompose/route.ts` — AI SDK structured decomposition endpoint
+- `scripts/local-claude-agents.mjs` — local PMC acquisition, two-process Claude orchestration, cache, and passage checks
+- `lib/dual-review.ts` — adversarial-review contracts and deterministic promotion policy
 - `lib/decomposition-server.ts` — schema, elicitation method prompt, sanitization, and test fixture fallback
 - `app/components/case-navigation.tsx` — persistent stage and evidence-view navigation
 - `app/evidence/` — deep source review

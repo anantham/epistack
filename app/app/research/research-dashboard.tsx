@@ -13,6 +13,7 @@ import {
 } from "../../data/eggs-investigation";
 import { atomicResults } from "../../data/eggs-result-ledger";
 import type { DeepDiveResponse } from "../../lib/deep-dive";
+import type { DualReviewResponse } from "../../lib/dual-review";
 import type { PublicationFilter, PubmedDiscovery, ResearchResponse } from "../../lib/research";
 import { agentPromptStorageKey, sanitizeAgentPromptOverrides } from "../../lib/agent-prompts";
 
@@ -23,10 +24,18 @@ type LaneRun = {
 };
 
 type DeepDiveRun = {
-  status: "idle" | "extracting" | "review" | "promoting" | "persisted" | "error";
-  payload: DeepDiveResponse | null;
+  status: "idle" | "acquiring" | "extracting" | "reviewing" | "adjudicating" | "review" | "promoting" | "persisted" | "error";
+  payload: DeepDiveResponse | DualReviewResponse | null;
   checked: boolean;
   error: string;
+  progress: string;
+  fallbackAvailable: boolean;
+};
+
+type CompanionHealth = {
+  status: "checking" | "online" | "offline";
+  models: { primary: string; adversary: string } | null;
+  detail: string;
 };
 
 type PromotionRecord = {
@@ -57,6 +66,11 @@ type CachedDashboardState = {
 };
 
 const dashboardCacheKey = "epistack:research-ui-cache:v1";
+const localClaudeCompanionUrl = "http://127.0.0.1:4317";
+
+function isDualReviewPayload(payload: DeepDiveResponse | DualReviewResponse): payload is DualReviewResponse {
+  return payload.verificationStatus === "ai-cross-checked-full-text";
+}
 
 function defaultQueries() {
   return Object.fromEntries(researchLanes.map((lane) => [lane.id, lane.defaultQuery])) as Record<ResearchLaneId, string>;
@@ -107,6 +121,7 @@ export function ResearchDashboard() {
   const [promotionRecords, setPromotionRecords] = useState<PromotionRecord[]>([]);
   const [openLane, setOpenLane] = useState<ResearchLaneId>(researchLanes[0].id);
   const [storageReady, setStorageReady] = useState(false);
+  const [companion, setCompanion] = useState<CompanionHealth>({ status: "checking", models: null, detail: "Checking the local Claude companion…" });
 
   const activeCount = useMemo(
     () => Object.values(runs).filter((run) => run.status === "running").length,
@@ -122,6 +137,38 @@ export function ResearchDashboard() {
     }
   }
 
+  function currentWorkspace() {
+    try {
+      return JSON.parse(window.localStorage.getItem("epistack:workspace:v1") || "{}") as {
+        prompt?: string;
+        decisionContext?: string;
+        result?: { caseId?: string; decisionContext?: string } | null;
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  async function checkCompanion() {
+    setCompanion((current) => ({ ...current, status: "checking", detail: "Checking the local Claude companion…" }));
+    try {
+      const response = await fetch(`${localClaudeCompanionUrl}/health`, { cache: "no-store" });
+      const payload = await response.json() as { ok?: boolean; models?: { primary?: string; adversary?: string } };
+      if (!response.ok || !payload.ok || !payload.models?.primary || !payload.models.adversary) throw new Error("Health check failed.");
+      setCompanion({
+        status: "online",
+        models: { primary: payload.models.primary, adversary: payload.models.adversary },
+        detail: "Full-text acquisition, dual-model review, and local run cache are ready.",
+      });
+    } catch {
+      setCompanion({
+        status: "offline",
+        models: null,
+        detail: "Start npm run agents in the app directory, then retry this check.",
+      });
+    }
+  }
+
   async function loadPromotionRegister() {
     try {
       const response = await fetch(`/api/promote?caseId=${encodeURIComponent(currentCaseId())}`);
@@ -134,6 +181,7 @@ export function ResearchDashboard() {
 
   useEffect(() => {
     void loadPromotionRegister();
+    void checkCompanion();
     // The register is case-scoped at mount; a new framing navigation remounts this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -177,12 +225,13 @@ export function ResearchDashboard() {
         if (!dive?.payload) continue;
         restoredDeepDives[pmid] = {
           status: dive.status === "persisted" ? "persisted" : "review",
-          payload: {
-            ...dive.payload,
-            cache: { status: "browser", layer: "browser", createdAt: cached.savedAt, expiresAt: null },
-          },
+          payload: isDualReviewPayload(dive.payload)
+            ? dive.payload
+            : { ...dive.payload, cache: { status: "browser", layer: "browser", createdAt: cached.savedAt, expiresAt: null } },
           checked: dive.checked === true,
           error: "",
+          progress: "Restored from this browser",
+          fallbackAvailable: false,
         };
       }
       setDeepDives(restoredDeepDives);
@@ -212,6 +261,8 @@ export function ResearchDashboard() {
             payload: dive.payload,
             checked: dive.checked,
             error: "",
+            progress: dive.progress,
+            fallbackAvailable: dive.fallbackAvailable,
           }]),
       ) as Record<string, DeepDiveRun>;
       const cache: CachedDashboardState = {
@@ -296,10 +347,10 @@ export function ResearchDashboard() {
     }
   }
 
-  async function extractRecord(record: PubmedDiscovery, refresh = false) {
+  async function extractAbstractRecord(record: PubmedDiscovery, refresh = false) {
     setDeepDives((current) => ({
       ...current,
-      [record.pmid]: { status: "extracting", payload: null, checked: false, error: "" },
+      [record.pmid]: { status: "extracting", payload: null, checked: false, error: "", progress: "Extracting the PubMed abstract", fallbackAvailable: false },
     }));
     try {
       const preferences = modelPreferences();
@@ -318,27 +369,22 @@ export function ResearchDashboard() {
       if (!response.ok) throw new Error(payload.error || "The abstract extraction failed.");
       setDeepDives((current) => ({
         ...current,
-        [record.pmid]: { status: "review", payload, checked: false, error: "" },
+        [record.pmid]: { status: "review", payload, checked: false, error: "", progress: "Abstract-only proposal ready", fallbackAvailable: false },
       }));
     } catch (error) {
       setDeepDives((current) => ({
         ...current,
-        [record.pmid]: { status: "error", payload: null, checked: false, error: error instanceof Error ? error.message : "The abstract extraction failed." },
+        [record.pmid]: { status: "error", payload: null, checked: false, error: error instanceof Error ? error.message : "The abstract extraction failed.", progress: "Abstract fallback failed", fallbackAvailable: true },
       }));
     }
   }
 
-  async function promoteRecord(record: PubmedDiscovery) {
+  async function promoteAbstractRecord(record: PubmedDiscovery) {
     const dive = deepDives[record.pmid];
-    if (!dive?.payload || !dive.checked) return;
+    if (!dive?.payload || isDualReviewPayload(dive.payload) || !dive.checked) return;
     setDeepDives((current) => ({ ...current, [record.pmid]: { ...dive, status: "promoting", error: "" } }));
     try {
-      let workspace: { prompt?: string; result?: { caseId?: string } | null } = {};
-      try {
-        workspace = JSON.parse(window.localStorage.getItem("epistack:workspace:v1") || "{}") as typeof workspace;
-      } catch {
-        workspace = {};
-      }
+      const workspace = currentWorkspace();
       const response = await fetch("/api/promote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -363,14 +409,140 @@ export function ResearchDashboard() {
     }
   }
 
+  async function autoPromoteDualReview(record: PubmedDiscovery, payload: DualReviewResponse) {
+    if (!payload.promotion.eligible) {
+      setDeepDives((current) => ({
+        ...current,
+        [record.pmid]: {
+          status: "review",
+          payload,
+          checked: false,
+          error: payload.promotion.reasons.join(" "),
+          progress: "Adversarial review finished without automatic promotion",
+          fallbackAvailable: false,
+        },
+      }));
+      return;
+    }
+    setDeepDives((current) => ({
+      ...current,
+      [record.pmid]: { status: "promoting", payload, checked: false, error: "", progress: "Writing accepted results and review provenance", fallbackAvailable: false },
+    }));
+    const workspace = currentWorkspace();
+    const response = await fetch("/api/promote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        caseId: workspace.result?.caseId,
+        originalPrompt: workspace.prompt,
+        source: payload.source,
+        candidate: payload.candidate,
+        model: payload.models.primary,
+        humanChecked: false,
+        reviewMode: "adversarial-auto",
+        verificationStatus: payload.verificationStatus,
+        artifact: payload.artifact,
+        adversarialReview: {
+          policyId: payload.promotion.policyId,
+          models: payload.models,
+          review: payload.review,
+          decisions: payload.decisions,
+        },
+      }),
+    });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) throw new Error(result.error || "The dual-reviewed results could not be auto-promoted.");
+    setDeepDives((current) => ({
+      ...current,
+      [record.pmid]: { status: "persisted", payload, checked: false, error: "", progress: "Accepted results persisted with adversarial provenance", fallbackAvailable: false },
+    }));
+    await loadPromotionRegister();
+  }
+
+  async function investigateFullText(record: PubmedDiscovery, refresh = false) {
+    setDeepDives((current) => ({
+      ...current,
+      [record.pmid]: { status: "acquiring", payload: null, checked: false, error: "", progress: "Contacting the local Claude companion", fallbackAvailable: false },
+    }));
+    try {
+      const workspace = currentWorkspace();
+      const response = await fetch(`${localClaudeCompanionUrl}/investigate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          record,
+          question: workspace.prompt,
+          decisionContext: workspace.decisionContext || workspace.result?.decisionContext,
+          promptOverrides: promptOverrides(),
+          refresh,
+        }),
+      });
+      if (!response.ok || !response.body) throw new Error("The local Claude companion did not start the investigation stream.");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffered = "";
+      let completed: DualReviewResponse | null = null;
+      let companionError: { code?: string; message?: string } | null = null;
+      const consumeLine = (line: string) => {
+        if (!line.trim()) return;
+        const event = JSON.parse(line) as {
+          type?: string;
+          phase?: DeepDiveRun["status"] | "cache-hit";
+          label?: string;
+          payload?: DualReviewResponse;
+          code?: string;
+          message?: string;
+        };
+        if (event.type === "status") {
+          const status: DeepDiveRun["status"] = event.phase === "cache-hit" ? "adjudicating" : event.phase === "reviewing" ? "reviewing" : event.phase === "adjudicating" ? "adjudicating" : event.phase === "extracting" ? "extracting" : "acquiring";
+          setDeepDives((current) => ({
+            ...current,
+            [record.pmid]: { status, payload: null, checked: false, error: "", progress: event.label || "Local agents are working", fallbackAvailable: false },
+          }));
+        } else if (event.type === "complete" && event.payload) {
+          completed = event.payload;
+        } else if (event.type === "error") {
+          companionError = { code: event.code, message: event.message };
+        }
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        buffered += decoder.decode(value, { stream: !done });
+        const lines = buffered.split("\n");
+        buffered = lines.pop() || "";
+        lines.forEach(consumeLine);
+        if (done) break;
+      }
+      if (buffered.trim()) consumeLine(buffered);
+      if (companionError) throw Object.assign(new Error(companionError.message || "The local Claude investigation failed."), { code: companionError.code });
+      if (!completed) throw new Error("The local Claude companion ended without a completed review.");
+      await autoPromoteDualReview(record, completed);
+    } catch (error) {
+      const code = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "";
+      const offline = error instanceof TypeError && /fetch/i.test(error.message);
+      if (offline) setCompanion({ status: "offline", models: null, detail: "Start npm run agents in the app directory, then retry this check." });
+      setDeepDives((current) => ({
+        ...current,
+        [record.pmid]: {
+          status: "error",
+          payload: current[record.pmid]?.payload ?? null,
+          checked: false,
+          error: error instanceof Error ? error.message : "The full-paper investigation failed.",
+          progress: "Full-paper run stopped",
+          fallbackAvailable: code === "NO_OPEN_FULL_TEXT" || offline,
+        },
+      }));
+    }
+  }
+
   return (
     <>
       <header className="page-hero research-hero">
         <div>
           <div className="eyebrow">Investigation cockpit · Egg MVP</div>
-          <h1>Direct the search. Inspect what earns promotion.</h1>
+          <h1>Direct the search. Let independent agents do the first audit.</h1>
           <p className="lede">
-            Each specialist lane runs a real, editable PubMed sweep. Returned records remain discovery leads until a human verifies their full result structure.
+            Each lane runs a real, editable PubMed sweep. A local Claude companion preserves full text, extracts atomic results, attacks them with a different model, and auto-promotes only the records that survive every gate.
           </p>
         </div>
         <button className="primary-button run-all" onClick={runAll} disabled={activeCount > 0}>
@@ -386,6 +558,13 @@ export function ResearchDashboard() {
         <p>
           Search rank is not evidential weight. A new record must be scoped, decomposed, checked, and assigned to one of {verticalSliceAudit.families} current evidence families—or a justified new family—before it can affect the decision.
         </p>
+      </section>
+
+      <section className={`local-companion-status ${companion.status}`} aria-label="Local Claude companion status">
+        <div><i aria-hidden="true" /><span>{companion.status}</span></div>
+        <p><strong>Local Claude companion</strong>{companion.models ? ` · ${companion.models.primary} extracts, ${companion.models.adversary} challenges` : ""}</p>
+        <small>{companion.detail}</small>
+        <button type="button" onClick={() => void checkCompanion()} disabled={companion.status === "checking"}>{companion.status === "checking" ? "Checking…" : "Check again"}</button>
       </section>
 
       <section className="capability-rail" aria-label="Investigation capability status">
@@ -483,7 +662,21 @@ export function ResearchDashboard() {
                         {run.response.records.map((record) => {
                           const known = knownSourceByPmid.get(record.pmid);
                           const resultId = known ? firstResultForSource(known.id) : undefined;
-                          const deepDive = deepDives[record.pmid] ?? { status: "idle", payload: null, checked: false, error: "" };
+                          const deepDive = deepDives[record.pmid] ?? { status: "idle", payload: null, checked: false, error: "", progress: "", fallbackAvailable: false };
+                          const dualPayload = deepDive.payload && isDualReviewPayload(deepDive.payload) ? deepDive.payload : null;
+                          const abstractPayload = deepDive.payload && !isDualReviewPayload(deepDive.payload) ? deepDive.payload : null;
+                          const agentBusy = ["acquiring", "extracting", "reviewing", "adjudicating", "promoting"].includes(deepDive.status);
+                          const actionLabel = deepDive.status === "persisted"
+                            ? "Persisted with provenance"
+                            : deepDive.status === "acquiring" || deepDive.status === "extracting"
+                              ? "Reading full paper…"
+                              : deepDive.status === "reviewing"
+                                ? "Adversarial pass…"
+                                : deepDive.status === "adjudicating"
+                                  ? "Checking quotations…"
+                                  : deepDive.status === "promoting"
+                                    ? "Auto-promoting…"
+                                    : "Run full-paper cross-check";
                           return (
                             <article className={known ? "promoted" : "unreviewed"} key={record.pmid}>
                               <div className="record-status">
@@ -494,34 +687,89 @@ export function ResearchDashboard() {
                               <p>{record.authors}</p>
                               <small>{record.journal} · {record.published}</small>
                               <footer>
-                                {known && resultId ? (
-                                  <Link href={`/evidence?result=${resultId}`}>Inspect atomic results <span aria-hidden="true">→</span></Link>
-                                ) : (
-                                  <button onClick={() => extractRecord(record)} disabled={deepDive.status === "extracting" || deepDive.status === "promoting" || deepDive.status === "persisted"}>
-                                    {deepDive.status === "extracting" ? "Extracting abstract…" : deepDive.status === "persisted" ? "Persisted in graph" : "Extract abstract results"}
-                                  </button>
-                                )}
+                                {known && resultId && <Link href={`/evidence?result=${resultId}`}>Inspect atomic results <span aria-hidden="true">→</span></Link>}
+                                <button onClick={() => investigateFullText(record)} disabled={agentBusy || deepDive.status === "persisted"}>{actionLabel}</button>
                                 <a href={record.url} target="_blank" rel="noreferrer">Open PubMed ↗</a>
                               </footer>
+                              {agentBusy && <div className="local-agent-progress"><i aria-hidden="true" /><span>{deepDive.progress}</span></div>}
                               {deepDive.error && (
                                 <p className="deep-dive-error" role="alert">{deepDive.error} {deepDive.error.includes("bring-your-own") && <Link href="/">Open Settings on the Frame page.</Link>}</p>
                               )}
-                              {deepDive.payload && (
-                                <div className="candidate-extraction">
+                              {deepDive.fallbackAvailable && (
+                                <div className="candidate-actions fallback-actions">
+                                  <button className="cache-refresh-button" onClick={() => void checkCompanion()}>Retry local companion</button>
+                                  <button className="cache-refresh-button" onClick={() => extractAbstractRecord(record)}>Use abstract-only fallback</button>
+                                </div>
+                              )}
+                              {dualPayload && (
+                                <div className="candidate-extraction dual-review-extraction">
                                   <header>
-                                    <div><span>Proposed typed records</span><strong>{deepDive.payload.candidate.results.length} atomic results · abstract only</strong></div>
+                                    <div>
+                                      <span>Dual-model full-text review</span>
+                                      <strong>{dualPayload.promotion.acceptedCount} promoted · {dualPayload.promotion.rejectedCount} rejected</strong>
+                                    </div>
                                     <div className="candidate-cache-meta">
-                                      <em title={cacheTitle(deepDive.payload.cache)}>{cacheLabel(deepDive.payload.cache)}</em>
-                                      <small>{deepDive.payload.model}</small>
+                                      <em>{dualPayload.cache.status === "hit" ? "reused local agent cache" : dualPayload.cache.status === "bypass" ? "recomputed locally" : "fresh local run"}</em>
+                                      <small>{dualPayload.models.primary} → {dualPayload.models.adversary}</small>
                                     </div>
                                   </header>
                                   <dl className="candidate-study">
-                                    <div><dt>Design</dt><dd>{deepDive.payload.candidate.study.design}</dd></div>
-                                    <div><dt>Population</dt><dd>{deepDive.payload.candidate.study.population}</dd></div>
-                                    <div><dt>Evidence family</dt><dd>{deepDive.payload.candidate.evidenceFamily.label}</dd></div>
+                                    <div><dt>Design</dt><dd>{dualPayload.candidate.study.design}</dd></div>
+                                    <div><dt>Population</dt><dd>{dualPayload.candidate.study.population}</dd></div>
+                                    <div><dt>Preserved source</dt><dd>{dualPayload.artifact.pmcid} · SHA-256 {dualPayload.artifact.contentHash.slice(0, 12)}…</dd></div>
+                                  </dl>
+                                  <div className="adversarial-decisions">
+                                    {dualPayload.decisions.map((decision) => (
+                                      <article className={decision.finalDecision} key={`${record.pmid}-review-${decision.resultIndex}`}>
+                                        <div>
+                                          <span>{decision.finalDecision === "promote" ? "survived" : "rejected"}</span>
+                                          <small>{decision.reviewerVerdict} · passage {decision.passageFound ? "found" : "not found"}</small>
+                                        </div>
+                                        <strong>{decision.analysisLabel}</strong>
+                                        <p>{decision.rationale}</p>
+                                      </article>
+                                    ))}
+                                  </div>
+                                  <div className="candidate-results">
+                                    {dualPayload.candidate.results.map((result, resultIndex) => (
+                                      <article key={`${record.pmid}-accepted-${resultIndex}`}>
+                                        <div><span className={`relation-chip ${result.relation}`}>{result.relation}</span><small>{result.claimFrameId} · {result.scopeMatch}</small></div>
+                                        <strong>{result.resultText}</strong>
+                                        {result.estimate && <b>{result.estimate}</b>}
+                                        <p>{result.rationale}</p>
+                                        <blockquote>“{result.exactExcerpt}”</blockquote>
+                                        <small>{result.locator} · quotation checked against preserved full text</small>
+                                      </article>
+                                    ))}
+                                  </div>
+                                  <p className="extraction-caveat">
+                                    <strong>{deepDive.status === "persisted" ? "Auto-promoted:" : "Promotion policy:"}</strong>{" "}
+                                    {deepDive.status === "persisted"
+                                      ? "Only records accepted by the adversarial model and the deterministic passage check entered the graph."
+                                      : dualPayload.promotion.reasons.join(" ") || "Eligible records are being written with both agents' provenance."}
+                                  </p>
+                                  <div className="candidate-actions">
+                                    <a className="cache-refresh-button" href={dualPayload.source.url} target="_blank" rel="noreferrer">Open preserved full text ↗</a>
+                                    <button className="cache-refresh-button" onClick={() => investigateFullText(record, true)} disabled={agentBusy}>Re-run both models</button>
+                                  </div>
+                                </div>
+                              )}
+                              {abstractPayload && (
+                                <div className="candidate-extraction">
+                                  <header>
+                                    <div><span>Explicit fallback</span><strong>{abstractPayload.candidate.results.length} atomic results · abstract only</strong></div>
+                                    <div className="candidate-cache-meta">
+                                      <em title={cacheTitle(abstractPayload.cache)}>{cacheLabel(abstractPayload.cache)}</em>
+                                      <small>{abstractPayload.model}</small>
+                                    </div>
+                                  </header>
+                                  <dl className="candidate-study">
+                                    <div><dt>Design</dt><dd>{abstractPayload.candidate.study.design}</dd></div>
+                                    <div><dt>Population</dt><dd>{abstractPayload.candidate.study.population}</dd></div>
+                                    <div><dt>Evidence family</dt><dd>{abstractPayload.candidate.evidenceFamily.label}</dd></div>
                                   </dl>
                                   <div className="candidate-results">
-                                    {deepDive.payload.candidate.results.map((result, resultIndex) => (
+                                    {abstractPayload.candidate.results.map((result, resultIndex) => (
                                       <article key={`${record.pmid}-${resultIndex}`}>
                                         <div><span className={`relation-chip ${result.relation}`}>{result.relation}</span><small>{result.claimFrameId} · {result.scopeMatch}</small></div>
                                         <strong>{result.resultText}</strong>
@@ -531,7 +779,7 @@ export function ResearchDashboard() {
                                       </article>
                                     ))}
                                   </div>
-                                  <p className="extraction-caveat"><strong>Cannot yet verify:</strong> {deepDive.payload.candidate.extractionCaveat}</p>
+                                  <p className="extraction-caveat"><strong>Cannot yet verify:</strong> {abstractPayload.candidate.extractionCaveat}</p>
                                   <label className="human-promotion-check">
                                     <input
                                       type="checkbox"
@@ -544,11 +792,11 @@ export function ResearchDashboard() {
                                     <span>I checked the abstract, result boundaries, claim relations, and dependence-family proposal. Keep status “pending full text.”</span>
                                   </label>
                                   <div className="candidate-actions">
-                                    <button className="primary-button" onClick={() => promoteRecord(record)} disabled={!deepDive.checked || deepDive.status === "promoting" || deepDive.status === "persisted"}>
+                                    <button className="primary-button" onClick={() => promoteAbstractRecord(record)} disabled={!deepDive.checked || deepDive.status === "promoting" || deepDive.status === "persisted"}>
                                       {deepDive.status === "promoting" ? "Writing typed records…" : deepDive.status === "persisted" ? "Accepted · pending full text" : "Promote checked results"}
                                     </button>
                                     {deepDive.status !== "persisted" && (
-                                      <button className="cache-refresh-button" onClick={() => extractRecord(record, true)} disabled={deepDive.status === "extracting" || deepDive.status === "promoting"} title="Fetch the PubMed abstract and run the selected model again, replacing this reusable extraction.">
+                                      <button className="cache-refresh-button" onClick={() => extractAbstractRecord(record, true)} disabled={deepDive.status === "extracting" || deepDive.status === "promoting"} title="Fetch the PubMed abstract and run the selected model again, replacing this reusable extraction.">
                                         Re-extract live
                                       </button>
                                     )}
@@ -590,7 +838,7 @@ export function ResearchDashboard() {
 
       <section className="promotion-register" aria-labelledby="promotion-register-title">
         <header>
-          <div><span>Persistent graph · Live promotions only</span><h2 id="promotion-register-title">What crossed the human promotion gate.</h2></div>
+          <div><span>Persistent graph · Live promotions only</span><h2 id="promotion-register-title">What crossed a declared promotion policy.</h2></div>
           <strong>{promotionRecords.length} accepted result {promotionRecords.length === 1 ? "record" : "records"}</strong>
         </header>
         {promotionRecords.length > 0 ? (
@@ -606,15 +854,15 @@ export function ResearchDashboard() {
             ))}
           </div>
         ) : (
-          <p>No live discovery has crossed the gate in this case yet. The reviewed egg fixture remains separate; extract an unreviewed lead, check it, and promote it to create the first durable record.</p>
+          <p>No live discovery has crossed the gate in this case yet. The reviewed egg fixture remains separate; run a full-paper cross-check to create the first dual-model, provenance-bearing record.</p>
         )}
       </section>
 
       <section className="research-handoff">
         <div>
-          <span>Promotion gate</span>
-          <h2>The agent proposes. The evidence graph does not update silently.</h2>
-          <p>A human must verify the source locator, scope, estimate, relation, and dependence family. Only then may a result influence a claim matrix or decision episode.</p>
+          <span>Promotion policy</span>
+          <h2>Automation carries the routine attention. Humans inspect the cruxes.</h2>
+          <p>Automatic promotion requires a hashed PMC artifact, two different model processes, full review coverage, an affirmative adversarial verdict, and a literal passage match. Rejections stay visible; “AI cross-checked” never masquerades as human verification.</p>
         </div>
         <Link className="primary-button" href="/evidence">Inspect promoted results</Link>
       </section>

@@ -1,6 +1,7 @@
 import { claimFrames } from "../../../data/eggs-result-ledger";
 import { ensureEvidenceGraphTables, getD1 } from "../../../db";
 import { deepDiveSchema, type DeepDiveSource } from "../../../lib/deep-dive";
+import { adversarialReviewSchema, dualReviewPolicyId, reviewDecisionSchema, type SourceArtifact } from "../../../lib/dual-review";
 
 type PromoteRequest = {
   caseId?: unknown;
@@ -9,6 +10,10 @@ type PromoteRequest = {
   candidate?: unknown;
   model?: unknown;
   humanChecked?: unknown;
+  reviewMode?: unknown;
+  verificationStatus?: unknown;
+  artifact?: unknown;
+  adversarialReview?: unknown;
 };
 
 function safeId(value: string) {
@@ -50,9 +55,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
-  if (body.humanChecked !== true) {
-    return Response.json({ error: "A human must explicitly check the proposed extraction before promotion." }, { status: 400 });
-  }
   const parsed = deepDiveSchema.safeParse(body.candidate);
   if (!parsed.success) {
     return Response.json({ error: "The proposed extraction no longer matches the canonical result contract." }, { status: 400 });
@@ -61,6 +63,62 @@ export async function POST(request: Request) {
   const pmid = typeof rawSource?.pmid === "string" ? rawSource.pmid.trim() : "";
   if (!/^\d{5,12}$/.test(pmid) || typeof rawSource?.title !== "string" || typeof rawSource?.url !== "string") {
     return Response.json({ error: "Source provenance is incomplete." }, { status: 400 });
+  }
+  const autoRequested = body.reviewMode === "adversarial-auto";
+  const rawArtifact = body.artifact as Partial<SourceArtifact> | null;
+  const reviewEnvelope = body.adversarialReview as {
+    policyId?: unknown;
+    models?: { primary?: unknown; adversary?: unknown };
+    review?: unknown;
+    decisions?: unknown;
+  } | null;
+  const parsedReview = autoRequested ? adversarialReviewSchema.safeParse(reviewEnvelope?.review) : null;
+  const parsedDecisions = autoRequested ? reviewDecisionSchema.array().min(1).max(6).safeParse(reviewEnvelope?.decisions) : null;
+  const primaryModel = typeof reviewEnvelope?.models?.primary === "string" ? reviewEnvelope.models.primary.trim() : "";
+  const adversaryModel = typeof reviewEnvelope?.models?.adversary === "string" ? reviewEnvelope.models.adversary.trim() : "";
+  const artifactHash = typeof rawArtifact?.contentHash === "string" ? rawArtifact.contentHash : "";
+  const acceptedDecisions = parsedDecisions?.success
+    ? parsedDecisions.data.filter((decision) => decision.finalDecision === "promote" && decision.passageFound && decision.promotedResult)
+    : [];
+  const candidateMatchesAccepted = acceptedDecisions.length === parsed.data.results.length
+    && parsed.data.results.every((result) => acceptedDecisions.some((decision) => JSON.stringify(decision.promotedResult) === JSON.stringify(result)));
+  const reviewSupportsDecisions = parsedReview?.success === true && parsedDecisions?.success === true
+    && parsedReview.data.reviews.length === parsedDecisions.data.length
+    && parsedDecisions.data.every((decision) => {
+      const review = parsedReview.data.reviews.find((candidate) => candidate.resultIndex === decision.resultIndex);
+      if (!review) return false;
+      if (decision.finalDecision === "reject") return true;
+      return review.verdict !== "reject"
+        && review.quoteVerified
+        && review.locatorVerified
+        && review.scopeVerified
+        && review.relationVerified;
+    });
+  const autoGatePasses = autoRequested
+    && reviewEnvelope?.policyId === dualReviewPolicyId
+    && body.verificationStatus === "ai-cross-checked-full-text"
+    && rawArtifact?.kind === "pmc-jats"
+    && /^PMC\d{4,12}$/.test(rawArtifact.pmcid || "")
+    && /^[a-f0-9]{64}$/i.test(artifactHash)
+    && parsedReview?.success === true
+    && parsedDecisions?.success === true
+    && parsedReview.data.artifactHash === artifactHash
+    && parsedReview.data.independentlyReadFullText
+    && parsedReview.data.methodsAndResultsRead
+    && primaryModel.length > 0
+    && adversaryModel.length > 0
+    && primaryModel.toLowerCase() !== adversaryModel.toLowerCase()
+    && typeof body.model === "string"
+    && body.model.trim() === primaryModel
+    && reviewSupportsDecisions
+    && candidateMatchesAccepted;
+
+  if (body.humanChecked !== true && !autoGatePasses) {
+    return Response.json({
+      error: autoRequested
+        ? "Automatic promotion failed the declared dual-model full-text policy. The proposal remains reviewable but was not persisted."
+        : "A human must explicitly check an abstract-only extraction before promotion.",
+    }, { status: 400 });
   }
 
   try {
@@ -77,6 +135,10 @@ export async function POST(request: Request) {
     const familyId = `${recordPrefix}-family`;
     const model = typeof body.model === "string" ? body.model : "unspecified-model";
     const candidate = parsed.data;
+    const autoPromotion = autoGatePasses;
+    const verificationStatus = autoPromotion ? "ai-cross-checked-full-text" : "abstract-only";
+    const relationAssessor = autoPromotion ? `${primaryModel}+${adversaryModel}` : "human-checked-ai-extraction";
+    const relationStatus = autoPromotion ? "accepted-by-dual-model-review" : "accepted-pending-full-text";
     const usedClaimIds = new Set(candidate.results.map((result) => result.claimFrameId));
     const statements = [
       d1.prepare(`INSERT INTO cases (id, slug, title, original_prompt, active_question, status, created_at, updated_at)
@@ -85,7 +147,7 @@ export async function POST(request: Request) {
         .bind(caseId, `case-${caseId}`, "Egg investigation · live MVP", originalPrompt, null, "evidence-promoted", now, now),
       d1.prepare(`INSERT INTO sources (id, canonical_url, doi, pmid, title, authors_json, issued_at, publisher, source_type, csl_json, content_hash, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET title = excluded.title, canonical_url = excluded.canonical_url, authors_json = excluded.authors_json`)
+        ON CONFLICT(id) DO UPDATE SET title = excluded.title, canonical_url = excluded.canonical_url, authors_json = excluded.authors_json, source_type = excluded.source_type, content_hash = excluded.content_hash`)
         .bind(
           sourceId,
           rawSource.url,
@@ -95,9 +157,9 @@ export async function POST(request: Request) {
           JSON.stringify((rawSource.authors || "").split(",").map((name) => name.trim()).filter(Boolean)),
           rawSource.published ?? null,
           rawSource.journal ?? null,
-          "PubMed abstract",
+          autoPromotion ? "PMC JATS full text" : "PubMed abstract",
           JSON.stringify({ title: rawSource.title, DOI: rawSource.doi, PMID: pmid }),
-          null,
+          autoPromotion ? artifactHash : null,
           now,
         ),
       d1.prepare(`INSERT INTO studies (id, source_id, registration_id, design, payload_json, created_at)
@@ -154,7 +216,7 @@ export async function POST(request: Request) {
             result.timeHorizon,
             null,
             "{}",
-            "unknown-from-abstract",
+            autoPromotion ? "unknown-from-ai-full-text-extraction" : "unknown-from-abstract",
             now,
           ),
         d1.prepare(`INSERT INTO result_records (id, analysis_id, dependence_group_id, result_role, result_text, estimate_json, locator, excerpt, verification_status, payload_json, created_at)
@@ -169,8 +231,14 @@ export async function POST(request: Request) {
             JSON.stringify({ display: result.estimate || null }),
             result.locator,
             result.exactExcerpt || null,
-            "abstract-only",
-            JSON.stringify({ extractionModel: model, extractionCaveat: candidate.extractionCaveat }),
+            verificationStatus,
+            JSON.stringify({
+              extractionModel: model,
+              adversarialModel: autoPromotion ? adversaryModel : null,
+              policyId: autoPromotion ? dualReviewPolicyId : null,
+              sourceArtifact: autoPromotion ? rawArtifact : null,
+              extractionCaveat: candidate.extractionCaveat,
+            }),
             now,
           ),
         d1.prepare(`INSERT INTO evidence_relations (id, case_id, result_id, claim_frame_id, relation, scope_match, rationale, assessor, status, created_at)
@@ -184,18 +252,50 @@ export async function POST(request: Request) {
             result.relation,
             result.scopeMatch,
             result.rationale,
-            "human-checked-ai-extraction",
-            "accepted-pending-full-text",
+            relationAssessor,
+            relationStatus,
             now,
           ),
       );
     });
 
+    if (autoPromotion && parsedDecisions?.success) {
+      parsedDecisions.data.forEach((decision) => {
+        statements.push(
+          d1.prepare(`INSERT INTO assessments (id, case_id, target_type, target_id, policy_id, assessor, dimension, score, label, rationale, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET label = excluded.label, rationale = excluded.rationale, status = excluded.status`)
+            .bind(
+              `${recordPrefix}-adversarial-assessment-${decision.resultIndex + 1}`,
+              caseId,
+              "extraction-proposal",
+              `${recordPrefix}-proposal-${decision.resultIndex + 1}`,
+              dualReviewPolicyId,
+              adversaryModel,
+              "full-text-result-fidelity",
+              decision.finalDecision === "promote" ? 1 : 0,
+              decision.finalDecision,
+              decision.rationale,
+              "recorded",
+              now,
+            ),
+        );
+      });
+    }
+
     const snapshotId = crypto.randomUUID();
     statements.push(
       d1.prepare(`INSERT INTO snapshots (id, case_id, parent_id, actor, operation, artifact_json, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .bind(snapshotId, caseId, null, "human-ai-workflow", "promote-abstract-results", JSON.stringify({ source: rawSource, candidate, model }), now),
+        .bind(
+          snapshotId,
+          caseId,
+          null,
+          autoPromotion ? "claude-dual-model-policy" : "human-ai-workflow",
+          autoPromotion ? "autopromote-full-text-results" : "promote-abstract-results",
+          JSON.stringify({ source: rawSource, candidate, model, artifact: autoPromotion ? rawArtifact : null, adversarialReview: autoPromotion ? reviewEnvelope : null }),
+          now,
+        ),
     );
     await d1.batch(statements);
 
@@ -206,7 +306,7 @@ export async function POST(request: Request) {
       dependenceGroupId: familyId,
       resultCount: candidate.results.length,
       snapshotId,
-      status: "accepted-pending-full-text",
+      status: relationStatus,
     }, { status: 201 });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "The result graph could not be updated." }, { status: 500 });

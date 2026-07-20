@@ -130,5 +130,21 @@ export async function ensureEvidenceGraphTables() {
       status TEXT NOT NULL DEFAULT 'proposed',
       created_at TEXT NOT NULL
     )`),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS assessments (
+      id TEXT PRIMARY KEY,
+      case_id TEXT NOT NULL REFERENCES cases(id),
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      policy_id TEXT NOT NULL,
+      assessor TEXT NOT NULL,
+      dimension TEXT NOT NULL,
+      score REAL,
+      label TEXT,
+      rationale TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'proposed',
+      created_at TEXT NOT NULL
+    )`),
+    d1.prepare("CREATE INDEX IF NOT EXISTS assessments_target_idx ON assessments (target_type, target_id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS assessments_policy_idx ON assessments (policy_id)"),
   ]);
 }

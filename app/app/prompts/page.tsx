@@ -162,7 +162,7 @@ export default function PromptLabPage() {
           ))}
           <div className="prompt-index-note">
             <strong>What is not here?</strong>
-            <p>PubMed retrieval is deterministic and human-authored; it does not use an AI prompt. Deterministic merge and schema validation are code, not model instructions.</p>
+            <p>PubMed/PMC retrieval, hashing, literal passage checks, schema validation, and promotion adjudication are deterministic code rather than model instructions.</p>
           </div>
         </nav>
 

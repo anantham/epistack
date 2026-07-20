@@ -64,13 +64,13 @@ export const researchCapabilities = [
     id: "abstract-extraction",
     label: "Abstract result extraction",
     status: "live" as const,
-    detail: "Uses the saved frontier-model key to propose typed results for explicit human review and D1 promotion.",
+    detail: "Remains available only as an explicit fallback with a human promotion gate.",
   },
   {
     id: "full-text",
-    label: "Full-text extractor",
-    status: "placeholder" as const,
-    detail: "Next: fetch accessible papers to replace abstract-only candidates with table- and passage-checked records.",
+    label: "Dual-model full-text review",
+    status: "live" as const,
+    detail: "A local Opus process extracts from hashed PMC full text; a fresh Sonnet process attacks every result before policy-gated promotion.",
   },
   {
     id: "triangulation",
