@@ -279,6 +279,12 @@ function ClusterSection({ cluster, wordIdxs, tokens, wordRefs, active, onActivat
           </li>
         </ul>
       </div>
+      {cluster.prior && String(cluster.prior).trim() && (
+        <div className="section-prior">
+          <span className="prior-label">AI prior · to be tested, kept out of the research agents</span>
+          <span className="prior-text">{cluster.prior}</span>
+        </div>
+      )}
     </section>
   )
 }
@@ -1464,6 +1470,20 @@ export default function App() {
   const [qOpen, setQOpen] = useState(false) // the question paragraph is collapsed by default once docked
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [modelPref, setModelPrefState] = useState(() => getModel() || '')
+  const [promptsOpen, setPromptsOpen] = useState(false)
+  const [prompts, setPrompts] = useState(null)
+  async function openPrompts() {
+    setSettingsOpen(false)
+    setPromptsOpen(true)
+    if (!prompts) {
+      try {
+        const r = await fetch('/api/prompts')
+        setPrompts(await r.json())
+      } catch {
+        setPrompts([])
+      }
+    }
+  }
 
   const wordRefs = useRef({})
   const taRef = useRef(null)
@@ -1710,11 +1730,39 @@ export default function App() {
                   <span className="sp-note">{m.note}</span>
                 </button>
               ))}
+              <button className="sp-link" onClick={openPrompts}>⌗ inspect the prompts →</button>
               <div className="sp-foot">applies to every AI call, from the next one on</div>
             </div>
           </>
         )}
       </div>
+
+      {promptsOpen && (
+        <div className="prompts-overlay">
+          <div className="po-head">
+            <div>
+              <b>the prompts that drive every agent</b>
+              <div className="po-sub">rendered with «placeholder» inputs — the exact templates behind each AI call</div>
+            </div>
+            <button className="po-close" onClick={() => setPromptsOpen(false)}>✕ close</button>
+          </div>
+          <div className="po-body">
+            {!prompts && <div className="po-loading">loading…</div>}
+            {prompts && !prompts.length && <div className="po-loading">couldn't load the prompts.</div>}
+            {(prompts || []).map((p, i) => (
+              <div className="po-item" key={i}>
+                <div className="po-item-head">
+                  <b>{p.name}</b>
+                  <span className="po-route">{p.route}</span>
+                  <span className={`po-tools${p.tools !== 'none' ? ' web' : ''}`}>{p.tools === 'none' ? 'no tools' : `⟨${p.tools}⟩`}</span>
+                </div>
+                <pre className="po-text">{p.text}</pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className={`brand ${introMoved ? 'moved' : 'center'}`}>
         <b>{'epistack'.slice(0, charsShown)}</b>
         {charsShown < 8 && !prefersReduced && <span className="caret" aria-hidden="true" />}

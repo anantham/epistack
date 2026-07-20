@@ -96,13 +96,14 @@ Two worked examples — imitate this depth, each dimension grounded in a role:
 
 Return ONLY a single JSON object. No prose. No fences. Exact shape:
 {
-  "clusters": [ { "id": "snake_id", "name": "the dimension as a sharp sub-question", "color": "#RRGGBB", "prompt": "one line on what it turns on", "resolutions": ["concrete/quantitative option", "..."] } ],
+  "clusters": [ { "id": "snake_id", "name": "the dimension as a sharp sub-question", "color": "#RRGGBB", "prompt": "one line on what it turns on", "resolutions": ["a candidate position stated NEUTRALLY — no verdict", "..."], "prior": "OPTIONAL one line: your prior lean, explicitly a prior-to-be-TESTED, kept separate from the resolutions; use '' to stay uniform" } ],
   "assignments": ["cluster_id or null for EACH token, in order — MOST are null; only map a word that clearly belongs"],
   "elicit": [ { "id": "snake_id", "question": "a short question ABOUT THE ASKER", "why": "which dimension(s) it resolves", "options": ["short", "..."] } ]
 }
 Rules:
 - 4 to 6 dimensions. Cover the applicable lenses; ALWAYS include the counterfactual. Each "name" is a real sub-question a person weighs — NEVER a meta-label like "what 'should' weighs".
-- resolutions: 3-6 concrete, mutually distinct, quantitative where relevant.
+- resolutions: 3-6 concrete, mutually distinct, quantitative where relevant, and NEUTRAL — each is a candidate position to INVESTIGATE, never a verdict. Do NOT bake in what "the evidence / RCTs / epidemiology shows"; this stage maps the question space with an OPEN MIND, conclusions come from Stage-3 research. A parenthetical clarifying what a position MEANS is fine; one asserting whether it is TRUE is not. (Bad: "no CVD effect — near-neutral in RCTs"; good: "no effect on CVD".)
+- prior: keep your prior belief OUT of the resolutions. If you have a real one, put it in the separate "prior" field, explicitly framed as a prior to be tested — it is NOT shown to the research agents, so they stay unbiased. Prefer '' unless the prior is strong and worth stating.
 - assignments EXACTLY as long as TOKENS; most null.
 - elicit: 2-4 VOI-ranked asker-facts DERIVED FROM the dimensions (the fact that collapses the most first); "why" names them.
 - distinct vivid hex colors legible on light & dark. Valid JSON only.
@@ -311,6 +312,34 @@ async function deepDiveRun(p) {
   return { study: meta.study || {}, results, authorConclusion: meta.authorConclusion || {} }
 }
 
+// the prompt catalog — every prompt that drives an agent, rendered with «placeholder» inputs so it's inspectable
+function promptCatalog() {
+  const Q = '«the question»'
+  const P = (o) => ({
+    question: Q, axis: '«axis»', dimensionName: '«dimension»', dimensionPrompt: '«what it turns on»',
+    resolutions: ['«position A»', '«position B»'], context: '«the asker\'s context»', brief: '«orchestrator brief»',
+    claim: '«a claim»', source: '«a source»', url: '«a url»', kind: 'resolution', existing: ['«existing option»'],
+    findings: [{ claim: '«a claim»', source: '«source»', dataset: '«cohort»', supports: '«position A»' }],
+    sources: [{ name: '«source»', url: '«url»', results: [{ statement: '«a result»', relation: 'supports' }] }],
+    dimensions: [{ name: '«dimension»', findings: [{ claim: '«a claim»' }] }],
+    axes: [{ id: '«id»', name: '«axis»', resolutions: ['«A»', '«B»'] }],
+    ...o,
+  })
+  return [
+    { name: 'decompose', route: '/api/decompose', tools: 'none', text: decomposePrompt(Q, ['«token»', '«token»']) },
+    { name: 'personalize', route: '/api/personalize', tools: 'none', text: personalizePrompt(Q, [{ id: '«id»', name: '«dimension»', resolutions: ['«A»', '«B»'] }], '«context»') },
+    { name: 'suggest · resolution', route: '/api/suggest', tools: 'none', text: suggestPrompt(P({ kind: 'resolution' })) },
+    { name: 'suggest · dimension', route: '/api/suggest', tools: 'none', text: suggestPrompt(P({ kind: 'dimension' })) },
+    { name: 'research agent', route: '/api/research', tools: 'WebSearch, WebFetch', text: researchPrompt(P({})) },
+    { name: 'orchestrator · plan', route: '/api/plan', tools: 'none', text: orchestratorPrompt(P({})) },
+    { name: 'deep-dive · 1 enumerate', route: '/api/deepdive', tools: 'WebSearch, WebFetch', text: deepDiveEnumeratePrompt(P({})) },
+    { name: 'deep-dive · 2 detail', route: '/api/deepdive', tools: 'WebFetch', text: deepDiveDetailPrompt(P({}), { journal: '«journal»', dataset: '«cohort»' }, [{ statement: '«a result stub»', status: 'primary' }]) },
+    { name: 'dependence grouping', route: '/api/dependence', tools: 'none', text: dependencePrompt(P({})) },
+    { name: 'cross-examine · matrix', route: '/api/matrix', tools: 'none', text: matrixPrompt(P({})) },
+    { name: 'decide', route: '/api/decide', tools: 'none', text: decidePrompt(P({})) },
+  ]
+}
+
 function apiPlugin() {
   return {
     name: 'epistack-api',
@@ -397,6 +426,10 @@ function apiPlugin() {
       server.middlewares.use('/api/matrix', handle((p) => (p.dimensionName && (p.sources || p.findings) ? matrixPrompt(p) : null)))
       server.middlewares.use('/api/decide', handle((p) => (p.question && p.dimensions ? decidePrompt(p) : null)))
       server.middlewares.use('/api/dependence', handle((p) => (p.dimensionName && p.findings ? dependencePrompt(p) : null)))
+      server.middlewares.use('/api/prompts', (req, res) => {
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify(promptCatalog()))
+      })
     },
   }
 }
