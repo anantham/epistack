@@ -46,3 +46,21 @@ Every UI/behavior ask from the session, with status.
 ## Open calibration (not blocking)
 - per-stage height (62vh) — tune?
 - dark theme — not screenshotted yet
+
+## UX batch — 2026-07-20 (live-usage feedback)
+Done this pass:
+- ✅ **Stepper moved to top-right** of the sticky header (was a full-width row); compact pill tabs
+- ✅ **Question paragraph collapses by default** (icon + one-line preview + ⌄ toggle); expands to the full coloured sentence
+- ✅ **"ask another" is now icon-only** (`↺`, title tooltip)
+- ✅ **Click a coloured word in the question → auto-scroll to its dimension** (setStep(1)+activate+scrollIntoView)
+- ✅ **Next-button / add-dimension spacing** tightened (was 46vh/14vh bottom margins → 6vh/5vh)
+- ✅ **Removed** the "tip: deep-dive & group first…" line under the decide button
+- ✅ **Budget/affordability + preparation (cooking, which oil, eaten-with/instead-of)** added to the decompose lenses → those dimensions now surface
+- ✅ **Robustness floor** (tolerant JSON parse + retry + timeout) — fixes intermittent invalid-JSON
+- ✅ **Two-phase chunked deep-dive** (enumerate → detail) — reliable, source-checked results
+
+Tracked / pending (bigger builds):
+- ⏳ **Stage 4 · the final artifact** — a 4th stepper tab: navigable **typed graph** of the whole investigation (dimensions → claims → results → evidence families) with uncertainty, high-level claims, confidence intervals, the underlying data points, and **missing data**. (User: "at the end can I view the filtered graph… into a typed graph?")
+- ⏳ **Streaming + editable/approvable orchestrator plan** — see the orchestrator planning in real time (streaming stdout), and **edit / approve** the strategy + briefs before agents dispatch (right now it's read-only). Data-collection agents should visibly steer where to spend tokens.
+- ⏳ **Adaptive follow-up elicitation** — selecting an option asks a follow-up: "extra on top" → *on top of what?*; "weight" → *current weight, target weight, and why?*; budget → *can you afford eggs that often?*; cooking → *which oil?*
+- ⏳ **Fuzzy/normalized decompose cache** — near-identical questions hit cache (today: exact-string only, so a reworded question re-runs — working as designed, not a bug)

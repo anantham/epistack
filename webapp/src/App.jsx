@@ -134,7 +134,7 @@ function ClusterSection({ cluster, wordIdxs, tokens, wordRefs, active, onActivat
   }
 
   return (
-    <section className={`section ${active ? 'active' : ''}`} ref={secRef} style={{ '--c': cluster.color }}>
+    <section id={`sec-${cluster.id}`} className={`section ${active ? 'active' : ''}`} ref={secRef} style={{ '--c': cluster.color }}>
       <div className="section-head">
         <span className="dot" style={{ background: cluster.color }} />
         <input
@@ -1013,9 +1013,7 @@ function ResearchStage({ question, data, pdata, context }) {
                   reads {rc} result-level record{rc === 1 ? '' : 's'}
                   {fa > 0 ? ` · ${fa} ${fa === 1 ? 'axis' : 'axes'} grouped into families` : ''}
                 </span>
-              ) : (
-                <span className="decide-src dim">tip: deep-dive & group first — decide will then reason at the result level, not shallow summaries</span>
-              )
+              ) : null
             })()}
           </div>
           {decision && decision !== 'deciding' && !decision.error && (
@@ -1138,6 +1136,7 @@ export default function App() {
   const [ctxText, setCtxText] = useState('')
   const [ctxSummary, setCtxSummary] = useState('')
   const [step, setStep] = useState(1)
+  const [qOpen, setQOpen] = useState(false) // the question paragraph is collapsed by default once docked
 
   const wordRefs = useRef({})
   const taRef = useRef(null)
@@ -1293,6 +1292,14 @@ export default function App() {
   }
 
   const onActivate = (id) => setActivated((a) => (a.includes(id) ? a : [...a, id]))
+  // click a coloured word in the question → jump to its dimension below
+  const scrollToWordCluster = (i) => {
+    const id = data?.assignments?.[i]
+    if (!id) return
+    setStep(1)
+    onActivate(id)
+    setTimeout(() => document.getElementById('sec-' + id)?.scrollIntoView({ behavior: prefersReduced ? 'auto' : 'smooth', block: 'center' }), 60)
+  }
   const clusterById = (id) => (data?.clusters || []).find((c) => c.id === id)
   const colorFor = (i) => {
     const id = data?.assignments?.[i]
@@ -1372,22 +1379,42 @@ export default function App() {
 
           {docked && (
             <div className="docked-q">
-              <button className="btn-ghost reset-btn" onClick={reset}>↺ ask another</button>
-              {fromCache && <span className="cached-chip">⚡ cached</span>}
-              <div className="sentence">
-                {tokens.map((t, i) => (
-                  <span key={i}>
-                    {i > 0 && !isPunct(t) ? ' ' : ''}
-                    <span
-                      ref={(el) => (wordRefs.current[i] = el)}
-                      className={`w${colorFor(i) ? ' lit' : ''}`}
-                      style={{ color: colorFor(i) || undefined }}
-                    >
-                      {t}
-                    </span>
-                  </span>
-                ))}
+              <div className="dq-head">
+                <button className="dq-icon reset-btn" onClick={reset} title="ask another question" aria-label="ask another question">↺</button>
+                <button className="dq-toggle" onClick={() => setQOpen((o) => !o)} aria-expanded={qOpen} title={qOpen ? 'collapse the question' : 'expand the question'}>
+                  <span className="dq-chev">{qOpen ? '⌃' : '⌄'}</span>
+                  {!qOpen && <span className="dq-preview">{question.length > 72 ? question.slice(0, 72) + '…' : question}</span>}
+                </button>
+                {fromCache && <span className="cached-chip" title="cached">⚡</span>}
+                {phase === 'clustered' && data && (
+                  <div className="stepper">
+                    {[[1, 'expand'], [2, 'contextualize'], [3, 'research']].map(([n, label]) => (
+                      <button key={n} className={`step-tab${step === n ? ' on' : ''}`} onClick={() => setStep(n)} title={label}>
+                        <span className="step-n">{n}</span>
+                        <span className="step-label">{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+              {qOpen && (
+                <div className="sentence">
+                  {tokens.map((t, i) => (
+                    <span key={i}>
+                      {i > 0 && !isPunct(t) ? ' ' : ''}
+                      <span
+                        ref={(el) => (wordRefs.current[i] = el)}
+                        className={`w${colorFor(i) ? ' lit' : ''}${data?.assignments?.[i] ? ' clickable' : ''}`}
+                        style={{ color: colorFor(i) || undefined }}
+                        onClick={() => scrollToWordCluster(i)}
+                        title={data?.assignments?.[i] ? 'jump to this dimension' : undefined}
+                      >
+                        {t}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1419,15 +1446,6 @@ export default function App() {
 
         {phase === 'clustered' && data && (
           <>
-            <div className="stepper">
-              {[[1, 'expand'], [2, 'contextualize'], [3, 'research']].map(([n, label]) => (
-                <button key={n} className={`step-tab${step === n ? ' on' : ''}`} onClick={() => setStep(n)}>
-                  <span className="step-n">{n}</span>
-                  {label}
-                </button>
-              ))}
-            </div>
-
             {step === 1 && (
               <>
                 <div className="sections">
