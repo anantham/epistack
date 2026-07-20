@@ -1,6 +1,17 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { spawn } from 'node:child_process'
+import { appendFileSync } from 'node:fs'
+
+// --- observability: log every agent call (start / retry / success / failure) to terminal + epistack.log ---
+const LOG_PATH = new URL('./epistack.log', import.meta.url).pathname
+function logEvent(line) {
+  const entry = `${new Date().toISOString()} ${line}`
+  console.log('[epistack] ' + entry)
+  try {
+    appendFileSync(LOG_PATH, entry + '\n')
+  } catch {}
+}
 
 // tolerant JSON extraction: accept clean JSON, a ```json fenced block, or JSON embedded in prose
 function extractJson(text) {
@@ -49,6 +60,7 @@ async function runClaude(prompt, tools) {
     } catch (e) {
       lastErr = e
       if (!e || !e.retryable) break
+      if (attempt === 0) logEvent(`  ↻ retry (${e.error})`)
     }
   }
   throw lastErr
@@ -303,6 +315,7 @@ function apiPlugin() {
     name: 'epistack-api',
     configureServer(server) {
       const handle = (buildPrompt, tools) => (req, res) => {
+        const route = (req.originalUrl || req.url || '').split('?')[0]
         const json = (code, obj) => {
           res.statusCode = code
           res.setHeader('content-type', 'application/json')
@@ -320,15 +333,21 @@ function apiPlugin() {
           }
           const prompt = buildPrompt(p)
           if (prompt == null) return json(400, { error: 'missing fields' })
+          const t0 = Date.now()
+          logEvent(`→ ${route}${tools ? ' [web]' : ''}`)
           try {
-            json(200, await runClaude(prompt, tools))
+            const out = await runClaude(prompt, tools)
+            logEvent(`✓ ${route} ${((Date.now() - t0) / 1000).toFixed(0)}s`)
+            json(200, out)
           } catch (e) {
+            logEvent(`✗ ${route} FAILED ${((Date.now() - t0) / 1000).toFixed(0)}s: ${e?.error || e}${e?.stderr ? ' | stderr: ' + String(e.stderr).replace(/\s+/g, ' ').slice(0, 200) : ''}`)
             json(502, e)
           }
         })
       }
       // for multi-call orchestrations (e.g. the two-phase deep-dive)
       const handleCustom = (run) => (req, res) => {
+        const route = (req.originalUrl || req.url || '').split('?')[0]
         const json = (code, obj) => {
           res.statusCode = code
           res.setHeader('content-type', 'application/json')
@@ -344,9 +363,14 @@ function apiPlugin() {
           } catch {
             return json(400, { error: 'bad request json' })
           }
+          const t0 = Date.now()
+          logEvent(`→ ${route} [multi]`)
           try {
-            json(200, await run(p))
+            const out = await run(p)
+            logEvent(`✓ ${route} ${((Date.now() - t0) / 1000).toFixed(0)}s`)
+            json(200, out)
           } catch (e) {
+            logEvent(`✗ ${route} FAILED ${((Date.now() - t0) / 1000).toFixed(0)}s: ${e?.error || e}`)
             json(502, e)
           }
         })

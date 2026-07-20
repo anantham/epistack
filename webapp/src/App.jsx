@@ -1657,14 +1657,14 @@ export default function App() {
             <div className="docked-q">
               <div className="dq-head">
                 <button className="dq-icon reset-btn" onClick={reset} title="ask another question" aria-label="ask another question">↺</button>
-                {phase === 'clustered' && data && (
-                  <button className="dq-icon" onClick={() => exportInvestigation(question.trim())} title="export this investigation as JSON" aria-label="export investigation">⤓</button>
-                )}
                 <button className="dq-toggle" onClick={() => setQOpen((o) => !o)} aria-expanded={qOpen} title={qOpen ? 'collapse the question' : 'expand the question'}>
                   <span className="dq-chev">{qOpen ? '⌃' : '⌄'}</span>
                   {!qOpen && <span className="dq-preview">{question.length > 72 ? question.slice(0, 72) + '…' : question}</span>}
                 </button>
                 {fromCache && <span className="cached-chip" title="cached">⚡</span>}
+                {phase === 'clustered' && data && (
+                  <button className="dq-icon dq-export" onClick={() => exportInvestigation(question.trim())} title="export this investigation as JSON" aria-label="export investigation">⤓</button>
+                )}
                 {phase === 'clustered' && data && (
                   <div className="stepper">
                     {[[1, 'expand'], [2, 'contextualize'], [3, 'research'], [4, 'artifact']].map(([n, label]) => (
