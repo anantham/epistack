@@ -336,6 +336,49 @@ body{margin:0}
 .df-members{ font-family:var(--font-mono); font-size:11px; color:var(--ink-3); margin-top:6px; line-height:1.5 }
 .df-note{ font-size:12.5px; color:var(--ink-2); font-style:italic; margin-top:6px; line-height:1.45 }
 
+/* stage 4 — the navigable artifact */
+.artifact{ margin:2vh 0 24vh; display:flex; flex-direction:column; gap:18px }
+.art-decision{ background:var(--surface); border:1px solid var(--accent-line); border-radius:var(--r); box-shadow:var(--shadow); padding:20px 22px; display:flex; flex-direction:column; gap:14px }
+.art-nodecision{ font-size:14px; color:var(--ink-3); background:var(--surface-2); border:1px dashed var(--line); border-radius:var(--r); padding:16px 18px }
+.art-overview{ display:flex; flex-wrap:wrap; gap:8px 20px; font-family:var(--font-mono); font-size:12px; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:11px 16px }
+.art-overview b{ color:var(--ink); font-variant-numeric:tabular-nums }
+.art-overview .art-agg{ margin-left:auto; color:var(--accent-strong) }
+
+.art-dims{ display:flex; flex-direction:column; gap:8px }
+.art-dim{ border:1px solid var(--line); border-left:3px solid var(--c,var(--accent)); border-radius:var(--r); background:var(--surface); overflow:hidden }
+.art-dim.st-dropped{ opacity:.55 }
+.art-dim-head{ width:100%; display:flex; align-items:center; gap:10px; padding:13px 16px; background:transparent; border:none; cursor:pointer; text-align:left; font-family:inherit }
+.art-dim-head:hover{ background:var(--surface-2) }
+.art-chev{ font-family:var(--font-mono); font-size:12px; color:var(--ink-3); flex-shrink:0 }
+.art-dot{ width:9px; height:9px; border-radius:50%; background:var(--c,var(--accent)); flex-shrink:0 }
+.art-dim-name{ font-size:15.5px; font-weight:600; color:var(--ink); flex-shrink:0 }
+.art-status{ font-family:var(--font-mono); font-size:10.5px; color:var(--ink-3); white-space:nowrap }
+.art-status.s-open{ color:var(--accent-strong) } .art-status.s-new{ color:var(--flag) } .art-status.s-pinned{ color:var(--ink-2) }
+.art-dim-metrics{ margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--ink-3); text-align:right }
+.art-dim-metrics.v-contested{ color:var(--flag) } .art-dim-metrics.v-converging{ color:var(--accent-strong) }
+.art-pinned{ padding:0 16px 12px 35px; font-size:13.5px; color:var(--accent-strong); margin-top:-4px }
+.art-dim-body{ padding:6px 16px 16px 35px; display:flex; flex-direction:column; gap:12px; border-top:1px solid var(--line-2) }
+.art-dim-body .ebar{ margin-top:12px }
+.art-res{ border-left:2px solid var(--line-2); padding-left:12px }
+.art-res.empty{ opacity:.5 }
+.art-res-head{ font-family:var(--font-mono); font-size:12px; color:var(--ink-2); display:flex; align-items:center; gap:8px }
+.art-res-n{ font-size:10px; color:var(--ink-3); border:1px solid var(--line-2); border-radius:10px; padding:0 7px }
+.art-ev{ margin-top:8px }
+.art-ev-claim{ font-size:13.5px; color:var(--ink); line-height:1.45 }
+.art-ev-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin-top:5px }
+.art-ev-src{ font-family:var(--font-mono); font-size:11px; color:var(--accent); text-decoration:none }
+.art-ev-src:hover{ text-decoration:underline }
+.art-ev-dd{ font-family:var(--font-mono); font-size:10.5px; color:var(--accent-strong); background:var(--accent-wash); border:1px solid var(--accent-line); border-radius:5px; padding:1px 7px }
+.art-families{ display:flex; flex-direction:column; gap:7px }
+.art-fam-list{ display:flex; flex-wrap:wrap; gap:6px }
+.art-fam{ font-family:var(--font-mono); font-size:11px; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--line-2); border-radius:20px; padding:3px 11px }
+.art-fam.corr{ color:var(--flag); background:var(--flag-wash); border-color:var(--flag-line) }
+.art-fam b{ font-variant-numeric:tabular-nums }
+.art-reason{ font-size:13px; color:var(--ink-3); font-style:italic; line-height:1.45 }
+.art-missing{ background:var(--flag-wash); border:1px solid var(--flag-line); border-radius:var(--r); padding:16px 18px }
+.art-missing ul{ margin:9px 0 0; padding-left:18px; display:flex; flex-direction:column; gap:7px }
+.art-missing li{ font-size:13.5px; color:var(--ink); line-height:1.45 }
+
 /* lanes ⇄ matrix toggle */
 .view-toggle{ display:inline-flex; gap:2px; background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:3px; align-self:flex-start }
 .view-toggle button{ font-family:var(--font-mono); font-size:12px; color:var(--ink-3); background:transparent; border:none; border-radius:6px; padding:6px 13px; cursor:pointer }

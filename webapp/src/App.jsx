@@ -1214,6 +1214,168 @@ function ResearchStage({ question, data, pdata, context }) {
   )
 }
 
+// Stage 4 · THE ARTIFACT — a navigable typed graph over the persisted investigation (read-only view)
+function Stage4Artifact({ question, data, pdata }) {
+  const inv = loadInvestigation(question) || {}
+  const research = inv.research || {}
+  const lanes = research.lanes || {}
+  const ledgers = research.ledgers || {}
+  const families = research.families || {}
+  const decision = research.decision && research.decision.answer ? research.decision : null
+  const [openDim, setOpenDim] = useState(null)
+
+  const clusters = data?.clusters || []
+  const statusById = Object.fromEntries((pdata?.clusters || []).map((c) => [c.id, c]))
+  const dims = [
+    ...clusters.map((c) => ({ ...c, status: pdata ? statusById[c.id]?.status || 'open' : 'open', value: statusById[c.id]?.value, reason: statusById[c.id]?.reason })),
+    ...(pdata?.newClusters || []).map((c) => ({ ...c, status: 'new' })),
+  ]
+  const order = { open: 0, new: 1, pinned: 2, dropped: 3 }
+  dims.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9))
+
+  const statsFor = (d) => axisStats(d, lanes[d.id]?.findings || [])
+  const examined = dims.filter((d) => (lanes[d.id]?.findings || []).length > 0)
+  const agg = examined.length ? Math.round((examined.reduce((s, d) => s + statsFor(d).u, 0) / examined.length) * 100) : 100
+  const totalFindings = Object.values(lanes).reduce((s, l) => s + (l.findings?.length || 0), 0)
+  const totalResults = Object.values(ledgers).reduce((s, l) => s + (l.results?.length || 0), 0)
+  const label = { pinned: '✓ pinned', open: '○ open', dropped: '— dropped', new: '＋ new' }
+
+  return (
+    <div className="artifact">
+      {decision ? (
+        <div className="art-decision">
+          <div className="dp-head">
+            <span className={`dp-stance st-${norm(decision.stance).replace(/[^a-z]/g, '')}`}>{decision.stance}</span>
+            <div className="dp-answer">{decision.answer}</div>
+          </div>
+          {decision.crux && (
+            <div className="dp-crux">
+              <span className="rlabel">the crux</span>
+              {decision.crux}
+            </div>
+          )}
+          <div className="dp-conf">
+            <span className={`dp-conf-chip c-${norm(decision.confidence)}`}>{decision.confidence} confidence</span>
+            <span className="dp-conf-note">{decision.confidenceNote}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="art-nodecision">
+          No synthesis yet — run <b>▶ synthesize the answer</b> in the <b>3 · research</b> tab and it appears here.
+        </div>
+      )}
+
+      <div className="art-overview">
+        <span>
+          <b>{dims.length}</b> dimensions
+        </span>
+        <span>
+          <b>{examined.length}</b> examined
+        </span>
+        <span>
+          <b>{totalFindings}</b> findings · <b>{totalResults}</b> result-level records
+        </span>
+        <span className="art-agg">
+          graph uncertainty <b>{agg}%</b>
+        </span>
+      </div>
+
+      <div className="art-dims">
+        {dims.map((d) => {
+          const findings = lanes[d.id]?.findings || []
+          const st = statsFor(d)
+          const v = verdict(st)
+          const fam = families[d.id]
+          const isOpen = openDim === d.id
+          return (
+            <div className={`art-dim st-${d.status}`} key={d.id} style={{ '--c': d.color || 'var(--accent)' }}>
+              <button className="art-dim-head" onClick={() => setOpenDim(isOpen ? null : d.id)}>
+                <span className="art-chev">{isOpen ? '⌃' : '⌄'}</span>
+                <span className="art-dot" />
+                <span className="art-dim-name">{d.name}</span>
+                <span className={`art-status s-${d.status}`}>{label[d.status] || d.status}</span>
+                {findings.length > 0 ? (
+                  <span className={`art-dim-metrics v-${v.key}`}>
+                    {v.label} · spread {Math.round(st.u * 100)}% · {findings.length} findings{fam ? ` · ${fam.independentCount} families` : ''}
+                  </span>
+                ) : (
+                  <span className="art-dim-metrics unexamined">{d.status === 'pinned' ? 'settled by your context' : 'no evidence collected'}</span>
+                )}
+              </button>
+              {d.status === 'pinned' && d.value && <div className="art-pinned">you: {d.value}</div>}
+              {isOpen && (
+                <div className="art-dim-body">
+                  {findings.length > 0 && <EvidenceBar axis={d} stats={st} />}
+                  {(d.resolutions || []).map((r, ri) => {
+                    const fs = findings.filter((f) => matchRes(f.supports, r))
+                    if (!fs.length) return (
+                      <div className="art-res empty" key={ri}>
+                        <div className="art-res-head">{r} <span className="art-res-n">0</span></div>
+                      </div>
+                    )
+                    return (
+                      <div className="art-res" key={ri}>
+                        <div className="art-res-head">
+                          {r} <span className="art-res-n">{fs.length}</span>
+                        </div>
+                        {fs.map((f, fi) => {
+                          const idx = findings.indexOf(f)
+                          const led = ledgers[`${d.id}#${idx}`]
+                          return (
+                            <div className="art-ev" key={fi}>
+                              <div className="art-ev-claim">{f.claim}</div>
+                              <div className="art-ev-meta">
+                                {f.source && (
+                                  <a href={f.url} target="_blank" rel="noreferrer" className="art-ev-src">
+                                    {f.source}
+                                    {f.year ? ` ${f.year}` : ''} ↗
+                                  </a>
+                                )}
+                                {f.confidence && <span className={`tag t-conf c-${norm(f.confidence)}`}>{f.confidence}</span>}
+                                {led?.results?.length ? <span className="art-ev-dd" title="deep-dived into results">◆ {led.results.length} results</span> : null}
+                                {f.coi && !/^none/i.test(String(f.coi)) && <span className="tag t-coi">⚠ COI</span>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                  {fam?.families?.length ? (
+                    <div className="art-families">
+                      <span className="rlabel">independent evidence families ({fam.independentCount})</span>
+                      <div className="art-fam-list">
+                        {fam.families.map((ff, i) => (
+                          <span key={i} className={`art-fam${(ff.members || []).length > 1 ? ' corr' : ''}`} title={ff.basis}>
+                            {ff.label} <b>({(ff.members || []).length})</b>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {d.reason && <div className="art-reason">{d.reason}</div>}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {((decision?.missing || []).length > 0 || dims.some((d) => (d.status === 'open' || d.status === 'new') && !(lanes[d.id]?.findings || []).length)) && (
+        <div className="art-missing">
+          <span className="rlabel">what's missing / not yet collected</span>
+          <ul>
+            {(decision?.missing || []).map((mm, i) => <li key={'m' + i}>{mm}</li>)}
+            {dims
+              .filter((d) => (d.status === 'open' || d.status === 'new') && !(lanes[d.id]?.findings || []).length)
+              .map((d, i) => <li key={'u' + i}>“{d.name}” — open but not yet researched</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function App() {
   const [question, setQuestion] = useState('')
   const [phase, setPhase] = useState('landing') // landing | loading | clustered | error
@@ -1505,7 +1667,7 @@ export default function App() {
                 {fromCache && <span className="cached-chip" title="cached">⚡</span>}
                 {phase === 'clustered' && data && (
                   <div className="stepper">
-                    {[[1, 'expand'], [2, 'contextualize'], [3, 'research']].map(([n, label]) => (
+                    {[[1, 'expand'], [2, 'contextualize'], [3, 'research'], [4, 'artifact']].map(([n, label]) => (
                       <button key={n} className={`step-tab${step === n ? ' on' : ''}`} onClick={() => setStep(n)} title={label}>
                         <span className="step-n">{n}</span>
                         <span className="step-label">{label}</span>
@@ -1604,7 +1766,14 @@ export default function App() {
                 </>
               ))}
 
-            {step === 3 && <ResearchStage question={question} data={data} pdata={pdata} context={ctxSummary} />}
+            {step === 3 && (
+              <>
+                <ResearchStage question={question} data={data} pdata={pdata} context={ctxSummary} />
+                <button className="step-next" onClick={() => setStep(4)}>next · the artifact →</button>
+              </>
+            )}
+
+            {step === 4 && <Stage4Artifact question={question} data={data} pdata={pdata} />}
           </>
         )}
       </div>
