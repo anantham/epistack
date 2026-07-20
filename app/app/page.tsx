@@ -30,6 +30,7 @@ const loadingSteps = [
 ];
 
 type AnalysisPhase = "idle" | "analyzing" | "eliciting" | "review" | "transitioning" | "error";
+type IntroPhase = "typing" | "holding" | "docking" | "ready";
 type ConnectionStatus = { state: "idle" | "checking" | "valid" | "invalid"; message: string };
 type PersistedPreferences = { apiKey?: string; model?: string };
 type PersistedWorkspace = {
@@ -112,7 +113,7 @@ export default function Home() {
   const [decisionContext, setDecisionContext] = useState("");
   const [openRouterKey, setOpenRouterKey] = useState("");
   const [openRouterModel, setOpenRouterModel] = useState(defaultOpenRouterModel);
-  const [introComplete, setIntroComplete] = useState(false);
+  const [introPhase, setIntroPhase] = useState<IntroPhase>("typing");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({ state: "idle", message: "Press Enter to validate." });
   const [phase, setPhase] = useState<AnalysisPhase>("idle");
@@ -144,11 +145,24 @@ export default function Home() {
   const remainingDuration = expectedDuration - analysisElapsed;
   const countdown = formatCountdown(Math.abs(remainingDuration));
   const analysisProgress = Math.min(94, Math.max(3, (analysisElapsed / expectedDuration) * 100));
+  const introComplete = introPhase === "ready";
+  const brandDocked = introPhase === "docking" || introComplete;
 
   useEffect(() => {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const timer = window.setTimeout(() => setIntroComplete(true), reducedMotion ? 0 : 3300);
-    return () => window.clearTimeout(timer);
+    if (reducedMotion) {
+      const reducedMotionTimer = window.setTimeout(() => setIntroPhase("ready"), 0);
+      return () => window.clearTimeout(reducedMotionTimer);
+    }
+
+    const holdTimer = window.setTimeout(() => setIntroPhase("holding"), 1300);
+    const dockTimer = window.setTimeout(() => setIntroPhase("docking"), 2600);
+    const readyTimer = window.setTimeout(() => setIntroPhase("ready"), 4800);
+    return () => {
+      window.clearTimeout(holdTimer);
+      window.clearTimeout(dockTimer);
+      window.clearTimeout(readyTimer);
+    };
   }, []);
 
   useEffect(() => {
@@ -601,7 +615,7 @@ export default function Home() {
 
   return (
     <main className="intro-root">
-      <div className="brand-intro" aria-label="Epistack">
+      <div className={`brand-intro ${brandDocked ? "is-docked" : ""}`} data-phase={introPhase} aria-label="Epistack">
         {brandCharacters.map((character, index) => (
           <span key={`${character}-${index}`} style={{ animationDelay: `${index * 110}ms` }} aria-hidden="true">{character}</span>
         ))}

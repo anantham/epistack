@@ -10,8 +10,9 @@ test("build emits the Epistack application", async () => {
 });
 
 test("question compiler stages AI reading before the editable map", async () => {
-  const [frame, map, api, packageJson] = await Promise.all([
+  const [frame, styles, map, api, packageJson] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
     readFile(new URL("app/map/page.tsx", root), "utf8"),
     readFile(new URL("app/api/decompose/route.ts", root), "utf8"),
     readFile(new URL("package.json", root), "utf8"),
@@ -33,7 +34,14 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(frame, /brand-intro/);
   assert.doesNotMatch(frame, /<i aria-hidden="true">\.<\/i>/);
   assert.match(frame, /brandCharacters/);
-  assert.match(frame, /3300/);
+  assert.match(frame, /setIntroPhase\("holding"\), 1300/);
+  assert.match(frame, /setIntroPhase\("docking"\), 2600/);
+  assert.match(frame, /setIntroPhase\("ready"\), 4800/);
+  assert.match(frame, /brandDocked \? "is-docked"/);
+  assert.match(styles, /\.brand-intro\.is-docked/);
+  assert.match(styles, /font-size 1700ms/);
+  assert.match(styles, /left 1700ms/);
+  assert.doesNotMatch(styles, /@keyframes brand-arrive/);
   assert.match(frame, /placeholder="what is your question\?"/);
   assert.match(frame, /settings-trigger/);
   assert.match(frame, /data-tooltip="Settings"/);
