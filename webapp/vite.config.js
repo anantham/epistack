@@ -96,15 +96,14 @@ Two worked examples — imitate this depth, each dimension grounded in a role:
 
 Return ONLY a single JSON object. No prose. No fences. Exact shape:
 {
-  "clusters": [ { "id": "snake_id", "name": "the dimension as a sharp sub-question", "color": "#RRGGBB", "prompt": "one line on what it turns on", "resolutions": ["a candidate position stated NEUTRALLY — no verdict", "..."], "prior": "OPTIONAL one line: your prior lean, explicitly a prior-to-be-TESTED, kept separate from the resolutions; use '' to stay uniform" } ],
-  "assignments": ["cluster_id or null for EACH token, in order — MOST are null; only map a word that clearly belongs"],
+  "clusters": [ { "id": "snake_id", "name": "the dimension as a sharp sub-question", "color": "#RRGGBB", "prompt": "one line on what it turns on", "resolutions": ["a candidate position stated NEUTRALLY — no verdict", "..."], "prior": "OPTIONAL one line: your prior lean, explicitly a prior-to-be-TESTED, kept separate from the resolutions; use '' to stay uniform", "highlightQuotes": ["EXACT verbatim word or phrase copied from the question that GROUNDS this dimension", "..."] } ],
   "elicit": [ { "id": "snake_id", "question": "a short question ABOUT THE ASKER", "why": "which dimension(s) it resolves", "options": ["short", "..."] } ]
 }
 Rules:
 - 4 to 6 dimensions. Cover the applicable lenses; ALWAYS include the counterfactual. Each "name" is a real sub-question a person weighs — NEVER a meta-label like "what 'should' weighs".
 - resolutions: 3-6 concrete, mutually distinct, quantitative where relevant, and NEUTRAL — each is a candidate position to INVESTIGATE, never a verdict. Do NOT bake in what "the evidence / RCTs / epidemiology shows"; this stage maps the question space with an OPEN MIND, conclusions come from Stage-3 research. A parenthetical clarifying what a position MEANS is fine; one asserting whether it is TRUE is not. (Bad: "no CVD effect — near-neutral in RCTs"; good: "no effect on CVD".)
 - prior: keep your prior belief OUT of the resolutions. If you have a real one, put it in the separate "prior" field, explicitly framed as a prior to be tested — it is NOT shown to the research agents, so they stay unbiased. Prefer '' unless the prior is strong and worth stating.
-- assignments EXACTLY as long as TOKENS; most null.
+- highlightQuotes: for EACH dimension, copy the EXACT word(s)/phrase(s) from the question that ground it (verbatim substrings). MANY-TO-MANY: the SAME word or overlapping phrases MAY ground several dimensions — e.g. in "…good to eat?", 'good' grounds the by-what-measure axis while 'eat' grounds the how/preparation axis, both inside 'good to eat'. Extract at the finest MEANINGFUL granularity and capture every dimension a span opens up. 1-4 quotes per dimension; each must appear verbatim in the question.
 - elicit: 2-4 VOI-ranked asker-facts DERIVED FROM the dimensions (the fact that collapses the most first); "why" names them.
 - distinct vivid hex colors legible on light & dark. Valid JSON only.
 

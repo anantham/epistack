@@ -8,6 +8,28 @@ const prefersReduced =
 const isPunct = (t) => /^[^\sA-Za-z0-9]+$/.test(t)
 const tokenize = (q) => q.match(/[A-Za-z0-9']+|[^\sA-Za-z0-9]/g) || []
 
+// map each token to the SET of clusters whose highlightQuotes contain it (many-to-many; word-level match)
+function computeTokenMembers(tokens, clusters) {
+  const members = tokens.map(() => [])
+  const lc = tokens.map((t) => String(t).toLowerCase())
+  const words = lc.map((t, i) => (/[a-z0-9']/i.test(t) ? i : -1)).filter((i) => i >= 0) // ignore punctuation-only tokens
+  for (const c of clusters || []) {
+    for (const quote of c.highlightQuotes || []) {
+      const q = tokenize(String(quote))
+        .map((t) => t.toLowerCase())
+        .filter((t) => /[a-z0-9']/i.test(t))
+      if (!q.length) continue
+      // slide over the question's WORD tokens; mark every match (handles repeats + overlaps)
+      for (let w = 0; w + q.length <= words.length; w++) {
+        let ok = true
+        for (let j = 0; j < q.length; j++) if (lc[words[w + j]] !== q[j]) { ok = false; break }
+        if (ok) for (let j = 0; j < q.length; j++) { const ti = words[w + j]; if (!members[ti].includes(c.id)) members[ti].push(c.id) }
+      }
+    }
+  }
+  return members
+}
+
 const LOADING_STEPS = [
   'reading the question',
   'coloring the words',
@@ -275,6 +297,71 @@ function ClusterSection({ cluster, wordIdxs, tokens, wordRefs, active, onActivat
             <button className="sugg-btn" onClick={suggestRes} disabled={suggesting}>
               {suggesting ? '✨ thinking…' : '✨ suggest'}
             </button>
+            <button className="blank-btn" onClick={() => onEdit.addRes(cluster.id)}>＋ blank</button>
+          </li>
+        </ul>
+      </div>
+      {cluster.prior && String(cluster.prior).trim() && (
+        <div className="section-prior">
+          <span className="prior-label">AI prior · to be tested, kept out of the research agents</span>
+          <span className="prior-text">{cluster.prior}</span>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// Stage 1 right panel — the active dimension, editable (name/prompt/resolutions/prior + its grounding cues)
+function ClusterDetail({ cluster, onEdit, question }) {
+  const [suggesting, setSuggesting] = useState(false)
+  const [suggestions, setSuggestions] = useState([])
+  async function suggestRes() {
+    setSuggesting(true)
+    try {
+      const r = await fetch('/api/suggest', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: getModel(), kind: 'resolution', question, dimensionName: cluster.name, dimensionPrompt: cluster.prompt, existing: cluster.resolutions || [] }),
+      })
+      const j = await r.json()
+      if (r.ok && Array.isArray(j.suggestions)) {
+        const have = new Set((cluster.resolutions || []).map((x) => String(x).toLowerCase().trim()))
+        setSuggestions(j.suggestions.filter((s) => s && !have.has(String(s).toLowerCase().trim())))
+      }
+    } catch {}
+    setSuggesting(false)
+  }
+  const cues = cluster.highlightQuotes || []
+  return (
+    <section className="cd" style={{ '--c': cluster.color }}>
+      <div className="cd-grounded">
+        <span className="cd-grounded-label">grounded in your words</span>
+        <div className="cd-cues">
+          {cues.length ? cues.map((q, i) => <span key={i} className="cd-cue">“{q}”</span>) : <span className="cd-cue none">—</span>}
+        </div>
+      </div>
+      <div className="section-head">
+        <span className="dot" style={{ background: cluster.color }} />
+        <input className="edit-name" value={cluster.name} placeholder="name this dimension…" onChange={(e) => onEdit.name(cluster.id, e.target.value)} />
+        <button className="del-dim" title="delete this dimension" onClick={() => onEdit.delDim(cluster.id)} aria-label="delete dimension">×</button>
+      </div>
+      <input className="edit-prompt" value={cluster.prompt || ''} placeholder="one line on what this turns on…" onChange={(e) => onEdit.prompt(cluster.id, e.target.value)} />
+      <div className="section-res">
+        <span className="rlabel">ways to resolve it</span>
+        <ul>
+          {(cluster.resolutions || []).map((r, k) => (
+            <li className="res-row" key={k}>
+              <input className="edit-res" value={r} placeholder="a resolution…" onChange={(e) => onEdit.res(cluster.id, k, e.target.value)} />
+              <button className="del-res" title="delete" onClick={() => onEdit.delRes(cluster.id, k)} aria-label="delete resolution">×</button>
+            </li>
+          ))}
+          {suggestions.map((s, i) => (
+            <li className="sugg-row" key={'sugg-' + i}>
+              <button className="sugg-chip" onClick={() => { onEdit.addResWith(cluster.id, s); setSuggestions((prev) => prev.filter((_, j) => j !== i)) }}>＋ {s}</button>
+            </li>
+          ))}
+          <li className="add-res">
+            <button className="sugg-btn" onClick={suggestRes} disabled={suggesting}>{suggesting ? '✨ thinking…' : '✨ suggest'}</button>
             <button className="blank-btn" onClick={() => onEdit.addRes(cluster.id)}>＋ blank</button>
           </li>
         </ul>
@@ -1468,6 +1555,7 @@ export default function App() {
   const [ctxSummary, setCtxSummary] = useState('')
   const [step, setStep] = useState(1)
   const [qOpen, setQOpen] = useState(false) // the question paragraph is collapsed by default once docked
+  const [activeDim, setActiveDim] = useState(null) // stage-1: the dimension shown on the right / lit in the question
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [modelPref, setModelPrefState] = useState(() => getModel() || '')
   const [promptsOpen, setPromptsOpen] = useState(false)
@@ -1549,6 +1637,13 @@ export default function App() {
     if (phase !== 'clustered' || !data) return
     saveInvestigationPatch(question.trim(), { data, tokens, pdata, context: ctxSummary, elicitAns, ctxText, step })
   }, [phase, data, pdata, ctxSummary, elicitAns, ctxText, step, question, tokens])
+
+  // stage 1: keep an active dimension (default the first)
+  useEffect(() => {
+    if (phase !== 'clustered') return
+    const ids = (data?.clusters || []).map((c) => c.id)
+    setActiveDim((cur) => (cur && ids.includes(cur) ? cur : ids[0] || null))
+  }, [data, phase])
 
   async function decompose() {
     const q = question.trim()
@@ -1655,22 +1750,20 @@ export default function App() {
   }
 
   const onActivate = (id) => setActivated((a) => (a.includes(id) ? a : [...a, id]))
-  // click a coloured word in the question → jump to its dimension below
+  // per-token cluster memberships (many-to-many) from each dimension's highlightQuotes
+  const tokenMembers = useMemo(() => computeTokenMembers(tokens, data?.clusters || []), [tokens, data])
+  const clusterById = (id) => (data?.clusters || []).find((c) => c.id === id)
+  // click a word in the collapsed header → jump to step 1 with that dimension active
   const scrollToWordCluster = (i) => {
-    const id = data?.assignments?.[i]
+    const id = tokenMembers[i] && tokenMembers[i][0]
     if (!id) return
     setStep(1)
-    onActivate(id)
-    setTimeout(() => document.getElementById('sec-' + id)?.scrollIntoView({ behavior: prefersReduced ? 'auto' : 'smooth', block: 'center' }), 60)
+    setActiveDim(id)
   }
-  const clusterById = (id) => (data?.clusters || []).find((c) => c.id === id)
   const colorFor = (i) => {
-    const id = data?.assignments?.[i]
-    if (!id) return null
-    return activated.includes(id) ? clusterById(id)?.color || null : null
+    const m = tokenMembers[i]
+    return m && m.length ? clusterById(m[0])?.color || null : null
   }
-  const wordIdxsFor = (cid) =>
-    tokens.map((t, i) => (data?.assignments && data.assignments[i] === cid ? i : -1)).filter((i) => i >= 0)
 
   // --- stage-1 editability: every dimension/resolution is a proposal you can override ---
   const updateCluster = (id, patch) =>
@@ -1830,10 +1923,10 @@ export default function App() {
                       {i > 0 && !isPunct(t) ? ' ' : ''}
                       <span
                         ref={(el) => (wordRefs.current[i] = el)}
-                        className={`w${colorFor(i) ? ' lit' : ''}${data?.assignments?.[i] ? ' clickable' : ''}`}
+                        className={`w${colorFor(i) ? ' lit' : ''}${tokenMembers[i]?.length ? ' clickable' : ''}`}
                         style={{ color: colorFor(i) || undefined }}
                         onClick={() => scrollToWordCluster(i)}
-                        title={data?.assignments?.[i] ? 'jump to this dimension' : undefined}
+                        title={tokenMembers[i]?.length ? 'jump to this dimension' : undefined}
                       >
                         {t}
                       </span>
@@ -1873,25 +1966,59 @@ export default function App() {
         {phase === 'clustered' && data && (
           <>
             {step === 1 && (
-              <>
-                <div className="sections">
-                  {data.clusters.map((c) => (
-                    <ClusterSection
-                      key={c.id}
-                      cluster={c}
-                      wordIdxs={wordIdxsFor(c.id)}
-                      tokens={tokens}
-                      wordRefs={wordRefs}
-                      active={activated.includes(c.id)}
-                      onActivate={onActivate}
-                      onEdit={editHandlers}
-                      question={question}
-                    />
-                  ))}
-                  <button className="add-dim" onClick={addCluster}>＋ add a dimension of your own</button>
+              <div className="expand-layout">
+                <aside className="q-rail">
+                  <div className="q-rail-sentence">
+                    {tokens.map((t, i) => {
+                      const members = tokenMembers[i] || []
+                      const lit = activeDim && members.includes(activeDim)
+                      const c = lit ? clusterById(activeDim) : null
+                      return (
+                        <span key={i}>
+                          {i > 0 && !isPunct(t) ? ' ' : ''}
+                          <span
+                            className={`qw${members.length ? ' live' : ''}${lit ? ' lit' : ''}`}
+                            style={lit && c ? { color: c.color, background: c.color + '20' } : undefined}
+                            onMouseEnter={() => members.length && setActiveDim(members[0])}
+                            onClick={() => members.length && setActiveDim(members[members.indexOf(activeDim) >= 0 ? (members.indexOf(activeDim) + 1) % members.length : 0])}
+                            title={members.length ? `grounds: ${members.map((id) => clusterById(id)?.name).filter(Boolean).join(' · ')}${members.length > 1 ? ' (click to cycle)' : ''}` : undefined}
+                          >
+                            {t}
+                          </span>
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <nav className="q-rail-nav" aria-label="dimensions">
+                    {data.clusters.map((c, idx) => (
+                      <button
+                        key={c.id}
+                        className={`qnav${activeDim === c.id ? ' on' : ''}`}
+                        style={{ '--c': c.color }}
+                        onMouseEnter={() => setActiveDim(c.id)}
+                        onClick={() => setActiveDim(c.id)}
+                      >
+                        <span className="qnav-n">{String(idx + 1).padStart(2, '0')}</span>
+                        <span className="qnav-body">
+                          <span className="qnav-name">{c.name || 'untitled dimension'}</span>
+                          {(c.highlightQuotes || []).length > 0 && (
+                            <span className="qnav-cues">{c.highlightQuotes.map((q) => `“${q}”`).join(' · ')}</span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                    <button className="add-dim qnav-add" onClick={addCluster}>＋ add a dimension of your own</button>
+                  </nav>
+                </aside>
+                <div className="cd-panel">
+                  {activeDim && clusterById(activeDim) ? (
+                    <ClusterDetail cluster={clusterById(activeDim)} onEdit={editHandlers} question={question} />
+                  ) : (
+                    <div className="cd-empty">pick a dimension on the left</div>
+                  )}
+                  <button className="step-next" onClick={() => setStep(2)}>next · make it about you →</button>
                 </div>
-                <button className="step-next" onClick={() => setStep(2)}>next · make it about you →</button>
-              </>
+              </div>
             )}
 
             {step === 2 &&
