@@ -87,6 +87,63 @@ export const decompositionOutputSchema = jsonSchema<z.infer<typeof decomposition
   decompositionProviderJsonSchema,
 );
 
+// The live compiler deliberately uses three smaller contracts instead of asking
+// one model call to fill the entire persistent artifact. Each specialist can be
+// validated, retried, or replaced without discarding the other work.
+export const dimensionScoutSchema = z.object({
+  caseTitle: z.string().min(3),
+  summary: z.string().min(8),
+  dimensions: z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(2),
+    question: z.string().min(4),
+    resolutions: z.array(z.string().min(1)).min(2),
+  })).min(3),
+});
+
+export const traceAgentSchema = z.object({
+  traces: z.array(z.object({
+    axisId: z.string().min(1),
+    label: z.string().min(2),
+    quotes: z.array(z.string().min(1)).min(1),
+    latentVariable: z.string().min(2),
+    rationale: z.string().min(4),
+  })).min(2),
+});
+
+export const contextAgentSchema = z.object({
+  enrichments: z.array(z.object({
+    axisId: z.string().min(1),
+    requiredFields: z.array(z.string().min(1)).min(1),
+    searchConcepts: z.array(z.string().min(1)).min(1),
+    mismatchRisks: z.array(z.string().min(1)).min(1),
+  })).min(1),
+  claimTemplate: z.string().min(8),
+  knownUnknowns: z.array(z.string().min(2)).min(1),
+  contextQuestions: z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(2),
+    question: z.string().min(4),
+    whyItMatters: z.string().min(4),
+    effect: z.enum(["prune", "branch", "match"]),
+    options: z.array(z.string().min(1)).min(1),
+  })).min(1),
+});
+
+export type DimensionScout = z.infer<typeof dimensionScoutSchema>;
+export type TraceAgentResult = z.infer<typeof traceAgentSchema>;
+export type ContextAgentResult = z.infer<typeof contextAgentSchema>;
+
+export const dimensionScoutOutputSchema = jsonSchema<DimensionScout>(
+  removeUnsupportedProviderConstraints(z.toJSONSchema(dimensionScoutSchema)) as ReturnType<typeof z.toJSONSchema>,
+);
+export const traceAgentOutputSchema = jsonSchema<TraceAgentResult>(
+  removeUnsupportedProviderConstraints(z.toJSONSchema(traceAgentSchema)) as ReturnType<typeof z.toJSONSchema>,
+);
+export const contextAgentOutputSchema = jsonSchema<ContextAgentResult>(
+  removeUnsupportedProviderConstraints(z.toJSONSchema(contextAgentSchema)) as ReturnType<typeof z.toJSONSchema>,
+);
+
 export const decompositionInstructions = `You are the question-compilation operator in an epistemic research system.
 
 Turn a vague paragraph into a compact, human-editable interpretation map. Do not answer it and do not retrieve evidence. Expose the substantive sub-questions, hidden decisions, and unknowns that would materially change the answer or the evidence search. Do not produce dictionary senses or cosmetic distinctions.
@@ -153,6 +210,32 @@ OUTPUT RULES
 - Ask 3–5 contextQuestions, ordered by expected value of information: first ask the fact most likely to collapse branches or change evidence inclusion. Do not re-ask supplied facts. Each question gets 2–5 short, concrete answer options that are useful handles, while still permitting free text.
 - Label each question's main effect: "prune" removes scope, "branch" creates a materially different claim, and "match" changes evidence inclusion or transportability.
 - Be concise, methodologically neutral, and domain-general.`;
+
+export const dimensionScoutInstructions = `You are the DIMENSION SCOUT in a question-compilation team.
+
+Do one job only: turn a vague paragraph into 4–7 substantive dimensions that would change the answer or the evidence search. Do not answer the question, retrieve evidence, write provenance metadata, or design the context interview.
+
+Ground dimensions in the submitted language, then check the useful recurring lenses: outcome/value, exact object, dose/frequency, feasible counterfactual, population, setting, time horizon, implementation, downside, and personal fit. Always include a real comparator for causal or decision questions. Options are bundles, not isolated word senses. Trace constraint cascades. Prefer concrete or quantitative resolutions over labels such as “moderation.”
+
+Each dimension needs 2–5 short, mutually distinct resolutions. Use stable lowercase kebab-case ids. Keep the output compact.
+
+Worked calibration:
+“Are eggs good to eat?” can separate: good for which outcome; what kind/preparation of egg; how many and how often; replacing what; and for which population. “Is it better to rent or buy?” must compare two different home-location-rights-cost bundles, not the same house with a payment-method swap.`;
+
+export const traceAgentInstructions = `You are the TRACE SPECIALIST in a question-compilation team.
+
+Given a submitted paragraph and a fixed list of dimensions, map only the exact words that make each dimension relevant. Every quote must be an exact, case-sensitive substring of the paragraph. Use short non-overlapping quotes where possible. Do not invent new dimensions, branches, evidence, or context questions.
+
+For each trace, name the observable latent variable and give a concise audit rationale. This is an inspectable derivation trace, not private chain-of-thought. Return traces only for supplied axis ids.`;
+
+export const contextAgentInstructions = `You are the CONTEXT AND RETRIEVAL SPECIALIST in a question-compilation team.
+
+Given a submitted paragraph, fixed dimensions, and any known decision context, do three jobs only:
+1. Specify the metadata an evidence collector must capture for each dimension, useful search concepts, and construct-mismatch risks.
+2. Write a readable scoped claim template using placeholders exactly as {{axis-id}}.
+3. Ask 3–5 high-value questions about the asker, ordered by how much they prune the search, create a materially different claim, or change evidence applicability.
+
+Do not answer the substantive question. Do not re-ask facts already present in known context. Keep answer options short and concrete while allowing free text. Treat context as an applicability constraint, never as evidence. Preserve both pruning and newly relevant branches.`;
 
 function slug(value: string) {
   return value
@@ -453,6 +536,214 @@ export function createFallbackDecomposition(prompt: string, decisionContext = ""
       },
     ],
   };
+}
+
+function compact(value: string, maximum: number) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length <= maximum ? normalized : `${normalized.slice(0, Math.max(1, maximum - 1)).trimEnd()}…`;
+}
+
+function genericIngestion(axis: InterpretationAxis) {
+  return {
+    requiredFields: [
+      compact(`${axis.label} operational definition`, 100),
+      "measurement, coding, or implementation details",
+    ],
+    searchConcepts: [compact(axis.label, 100), compact(axis.question, 100)],
+    mismatchRisks: [compact(`Sources may use a materially different definition of ${axis.label}.`, 140)],
+  };
+}
+
+function genericTraceForAxes(prompt: string, axes: InterpretationAxis[]) {
+  const stopWords = new Set(["about", "after", "before", "could", "does", "from", "have", "how", "should", "their", "there", "these", "those", "what", "when", "where", "which", "would"]);
+  const words = [...prompt.matchAll(/\b[A-Za-z][A-Za-z'-]{1,}\b/g)]
+    .map((match) => match[0])
+    .filter((word, index, all) => !stopWords.has(word.toLowerCase()) && all.findIndex((candidate) => candidate.toLowerCase() === word.toLowerCase()) === index);
+  return axes.slice(0, Math.min(7, Math.max(2, words.length))).map((axis, index) => {
+    const quote = words[index] ?? words[index % Math.max(1, words.length)] ?? prompt.slice(0, Math.min(80, prompt.length));
+    return {
+      id: `${axis.id}-cues`,
+      label: compact(axis.label, 90),
+      axisId: axis.id,
+      highlightQuotes: [quote],
+      latentVariable: compact(axis.question, 140),
+      rationale: compact(`The quoted cue leaves ${axis.label.toLowerCase()} underspecified and changes which scoped claim should be investigated.`, 280),
+      ingestionRequirements: genericIngestion(axis),
+    } satisfies DecompositionCluster;
+  });
+}
+
+export function normalizeDimensionScout(scout: DimensionScout): DimensionScout {
+  const usedIds = new Set<string>();
+  const dimensions = scout.dimensions.slice(0, 7).map((dimension, index) => {
+    const baseId = slug(dimension.id || dimension.label || `axis-${index + 1}`);
+    let id = baseId;
+    let suffix = 2;
+    while (usedIds.has(id)) id = `${baseId.slice(0, 38)}-${suffix++}`;
+    usedIds.add(id);
+    return {
+      id,
+      label: compact(dimension.label, 90),
+      question: compact(dimension.question, 240),
+      resolutions: dimension.resolutions.map((resolution) => compact(resolution, 220)).filter(Boolean).slice(0, 5),
+    };
+  });
+  return {
+    caseTitle: compact(scout.caseTitle, 90),
+    summary: compact(scout.summary, 320),
+    dimensions,
+  };
+}
+
+export function assembleDecomposition(
+  scout: DimensionScout,
+  traceResult: TraceAgentResult | null,
+  contextResult: ContextAgentResult | null,
+  prompt: string,
+  decisionContext = "",
+): DecompositionArtifact {
+  scout = normalizeDimensionScout(scout);
+  const usedAxisIds = new Set<string>();
+  const axes = scout.dimensions.slice(0, 7).map((dimension, dimensionIndex) => {
+    const baseId = slug(dimension.id || dimension.label || `axis-${dimensionIndex + 1}`);
+    let axisId = baseId;
+    let suffix = 2;
+    while (usedAxisIds.has(axisId)) axisId = `${baseId.slice(0, 38)}-${suffix++}`;
+    usedAxisIds.add(axisId);
+    const seenResolutions = new Set<string>();
+    const resolutions = dimension.resolutions
+      .map((resolution) => compact(resolution, 220))
+      .filter((resolution) => {
+        const key = resolution.toLowerCase();
+        if (!resolution || seenResolutions.has(key)) return false;
+        seenResolutions.add(key);
+        return true;
+      })
+      .slice(0, 4);
+    while (resolutions.length < 2) resolutions.push(resolutions.length ? "Another materially different scope" : "Ordinary real-world scope");
+    const branches = resolutions.map((resolution, resolutionIndex) => branch(
+      `${axisId}-${slug(resolution).slice(0, 24) || resolutionIndex + 1}`,
+      compact(resolution, 90),
+      resolution,
+      compact(`Treat “${resolution}” as one concrete reading of this dimension.`, 280),
+      compact(`Changing this reading changes the scoped claim or the evidence that can bear on it.`, 280),
+      resolutionIndex === 0 ? "kept" : resolutionIndex === resolutions.length - 1 && resolutions.length > 3 ? "parked" : "candidate",
+      resolutionIndex < 2 ? "high" : "medium",
+    ));
+    return {
+      id: axisId,
+      label: compact(dimension.label, 90),
+      question: compact(dimension.question, 240),
+      branches,
+    } satisfies InterpretationAxis;
+  });
+
+  const enrichmentByAxis = new Map(
+    (contextResult?.enrichments ?? [])
+      .filter((item) => usedAxisIds.has(item.axisId))
+      .map((item) => [item.axisId, item]),
+  );
+  function ingestionFor(axis: InterpretationAxis) {
+    const proposed = enrichmentByAxis.get(axis.id);
+    if (!proposed) return genericIngestion(axis);
+    const fallback = genericIngestion(axis);
+    const requiredFields = proposed.requiredFields.map((item) => compact(item, 100)).filter(Boolean).slice(0, 8);
+    const searchConcepts = proposed.searchConcepts.map((item) => compact(item, 100)).filter(Boolean).slice(0, 8);
+    const mismatchRisks = proposed.mismatchRisks.map((item) => compact(item, 140)).filter(Boolean).slice(0, 6);
+    while (requiredFields.length < 2) requiredFields.push(fallback.requiredFields[requiredFields.length]);
+    while (searchConcepts.length < 2) searchConcepts.push(fallback.searchConcepts[searchConcepts.length]);
+    if (!mismatchRisks.length) mismatchRisks.push(fallback.mismatchRisks[0]);
+    return { requiredFields, searchConcepts, mismatchRisks };
+  }
+
+  let highlightBudget = 8;
+  let clusters: DecompositionCluster[] = (traceResult?.traces ?? [])
+    .filter((trace) => usedAxisIds.has(trace.axisId) && highlightBudget > 0)
+    .map((trace) => {
+      const axis = axes.find((candidate) => candidate.id === trace.axisId)!;
+      const quotes = Array.from(new Set(trace.quotes))
+        .filter((quote) => prompt.includes(quote))
+        .map((quote) => compact(quote, 180))
+        .slice(0, Math.min(4, highlightBudget));
+      highlightBudget -= quotes.length;
+      return {
+        id: `${trace.axisId}-cues`,
+        label: compact(trace.label, 90),
+        axisId: trace.axisId,
+        highlightQuotes: quotes,
+        latentVariable: compact(trace.latentVariable, 140),
+        rationale: compact(trace.rationale, 280),
+        ingestionRequirements: ingestionFor(axis),
+      };
+    })
+    .filter((cluster) => cluster.highlightQuotes.length > 0)
+    .slice(0, 7);
+
+  if (clusters.length < 2) {
+    const existingFallback = fallbackTrace(prompt, axes).clusters.map((cluster) => ({
+      ...cluster,
+      ingestionRequirements: ingestionFor(axes.find((axis) => axis.id === cluster.axisId) ?? axes[0]),
+    }));
+    clusters = existingFallback.length >= 2
+      ? existingFallback
+      : genericTraceForAxes(prompt, axes).map((cluster) => ({
+        ...cluster,
+        ingestionRequirements: ingestionFor(axes.find((axis) => axis.id === cluster.axisId) ?? axes[0]),
+      }));
+  }
+  clusters = clusters.slice(0, 7);
+  const highlights = clusters.flatMap((cluster) => cluster.highlightQuotes.map((quote) => ({
+    quote,
+    label: cluster.label,
+    why: cluster.rationale,
+    axisId: cluster.axisId,
+    clusterId: cluster.id,
+  }))).slice(0, 8);
+  const usedHighlightQuotes = new Set(highlights.map((highlight) => highlight.quote));
+  clusters = clusters
+    .map((cluster) => ({ ...cluster, highlightQuotes: cluster.highlightQuotes.filter((quote) => usedHighlightQuotes.has(quote)) }))
+    .filter((cluster) => cluster.highlightQuotes.length > 0);
+
+  const fallback = createFallbackDecomposition(prompt, decisionContext);
+  const contextQuestions = (contextResult?.contextQuestions ?? [])
+    .map((question, index) => ({
+      id: slug(question.id || `context-${index + 1}`),
+      label: compact(question.label, 80),
+      question: compact(question.question, 220),
+      whyItMatters: compact(question.whyItMatters, 260),
+      effect: question.effect,
+      options: question.options.map((option) => compact(option, 100)).filter(Boolean).slice(0, 5),
+    }))
+    .filter((question) => question.options.length > 0)
+    .slice(0, 5);
+  for (const fallbackQuestion of fallback.contextQuestions) {
+    if (contextQuestions.length >= 3) break;
+    if (!contextQuestions.some((question) => question.id === fallbackQuestion.id)) contextQuestions.push(fallbackQuestion);
+  }
+  for (const question of contextQuestions) {
+    if (question.options.length === 1) question.options.push("Something else or not yet decided");
+  }
+
+  const knownUnknowns = (contextResult?.knownUnknowns ?? [])
+    .map((unknown) => compact(unknown, 220))
+    .filter(Boolean)
+    .slice(0, 8);
+  for (const fallbackUnknown of fallback.knownUnknowns) {
+    if (knownUnknowns.length >= 3) break;
+    if (!knownUnknowns.includes(fallbackUnknown)) knownUnknowns.push(fallbackUnknown);
+  }
+  const defaultTemplate = `For the concrete case, how do ${axes.slice(0, 5).map((axis) => `{{${axis.id}}}`).join(", ")} change the decision-relevant outcome?`;
+
+  return sanitizeDecomposition({
+    caseTitle: compact(scout.caseTitle, 90),
+    summary: compact(scout.summary, 320),
+    axes,
+    highlights,
+    clusters,
+    claimTemplate: compact(contextResult?.claimTemplate || defaultTemplate, 700),
+    knownUnknowns,
+    contextQuestions,
+  }, prompt, decisionContext);
 }
 
 export function sanitizeDecomposition(

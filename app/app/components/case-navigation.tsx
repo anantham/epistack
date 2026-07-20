@@ -2,33 +2,38 @@
 
 import Link from "next/link";
 
-export type InvestigationStage = "frame" | "research" | "evidence" | "assess" | "synthesize";
+export type InvestigationStage = "decompose" | "contextualize" | "investigate" | "artifact";
 
-const stages: Array<{ id: InvestigationStage; label: string; href: string }> = [
-  { id: "frame", label: "Frame", href: "/" },
-  { id: "research", label: "Research", href: "/research" },
-  { id: "evidence", label: "Evidence", href: "/evidence" },
-  { id: "assess", label: "Assess", href: "/inventory" },
-  { id: "synthesize", label: "Decide", href: "/synthesis" },
+const stages: Array<{ id: InvestigationStage; label: string; tooltip: string; href: string }> = [
+  { id: "decompose", label: "Decompose", tooltip: "Decompose · dimensions", href: "/" },
+  { id: "contextualize", label: "Contextualize", tooltip: "Contextualize · action space", href: "/map" },
+  { id: "investigate", label: "Investigate", tooltip: "Investigate · agents & ingestion", href: "/research" },
+  { id: "artifact", label: "Artifact", tooltip: "Artifact · claims & uncertainty", href: "/evidence" },
 ];
+
+export function StageNav({ active }: { active: InvestigationStage }) {
+  return (
+    <nav className="stage-nav" aria-label="Investigation stages">
+      {stages.map((stage, index) => (
+        <Link
+          className={`stage ${stage.id === active ? "active" : "ready"}`}
+          href={stage.href}
+          key={stage.id}
+          aria-current={stage.id === active ? "page" : undefined}
+          aria-label={`Stage ${index + 1}: ${stage.label}`}
+        >
+          <b>{index + 1}</b>
+          <span className="stage-tooltip" aria-hidden="true">{stage.tooltip}</span>
+        </Link>
+      ))}
+    </nav>
+  );
+}
 
 export function CaseHeader({ active }: { active: InvestigationStage }) {
   return (
     <header className="topbar">
-      <nav className="stage-nav" aria-label="Investigation stages">
-        {stages.map((stage, index) => (
-          <Link
-            className={`stage ${stage.id === active ? "active" : "ready"}`}
-            href={stage.href}
-            key={stage.id}
-            aria-current={stage.id === active ? "page" : undefined}
-            aria-label={`Stage ${index + 1}: ${stage.label}`}
-          >
-            <b>{index + 1}</b>
-            <span className="stage-tooltip" aria-hidden="true">{stage.label}</span>
-          </Link>
-        ))}
-      </nav>
+      <StageNav active={active} />
     </header>
   );
 }

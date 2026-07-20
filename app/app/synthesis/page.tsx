@@ -34,7 +34,7 @@ const outcomeRows = [
 export default function SynthesisPage() {
   return (
     <main>
-      <CaseHeader active="synthesize" />
+      <CaseHeader active="artifact" />
       <section className="route-page decision-route">
         <header className="page-hero narrow synthesis-hero">
           <div>

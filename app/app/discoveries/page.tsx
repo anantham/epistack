@@ -4,7 +4,7 @@ import { DiscoveryBrowser } from "./discovery-browser";
 export default function DiscoveriesPage() {
   return (
     <main>
-      <CaseHeader active="evidence" />
+      <CaseHeader active="artifact" />
       <section className="route-page">
         <EvidenceSubnav active="discoveries" />
         <header className="page-hero narrow">

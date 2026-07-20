@@ -18,21 +18,36 @@ test("operation cache keys are stable across object key ordering and contract-ve
 });
 
 test("live research and model extraction use a bypassable shared cache", async () => {
-  const [researchRoute, deepDiveRoute, cacheStore] = await Promise.all([
+  const [researchRoute, deepDiveRoute, decompositionRoute, cacheStore] = await Promise.all([
     readFile(new URL("../app/api/research/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/deep-dive/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/decompose/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/cache.ts", import.meta.url), "utf8"),
   ]);
-  for (const route of [researchRoute, deepDiveRoute]) {
-    assert.match(route, /body\.refresh === true/);
+  for (const route of [researchRoute, deepDiveRoute, decompositionRoute]) {
     assert.match(route, /readOperationCache/);
     assert.match(route, /writeOperationCache/);
     assert.match(route, /status: "hit"/);
     assert.match(route, /status: refresh \? "bypass" : "miss"/);
   }
+  assert.match(researchRoute, /body\.refresh === true/);
+  assert.match(deepDiveRoute, /body\.refresh === true/);
+  assert.match(decompositionRoute, /refresh = body\.refresh === true/);
   assert.match(deepDiveRoute, /const cached = await readOperationCache[\s\S]+const openRouterApiKey/);
+  assert.match(decompositionRoute, /const cached = await readOperationCache[\s\S]+const openRouterApiKey/);
   assert.match(cacheStore, /Cache failure must never block the underlying research operation/);
   assert.match(cacheStore, /ON CONFLICT\(id\) DO UPDATE SET/);
+});
+
+test("decomposition reuses an exact browser result before requiring a model key", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /epistack:decomposition-operation-cache:v2/);
+  assert.match(page, /cached\.prompt === normalizedPrompt/);
+  assert.match(page, /cached\.decisionContext === contextForRequest/);
+  assert.match(page, /cached\.model === normalizedModel/);
+  assert.match(page, /cache: \{ status: "browser", layer: "browser"/);
+  assert.match(page, /if \(!openRouterKey\.trim\(\)\)/);
+  assert.match(page, /Recompute/);
 });
 
 test("the dashboard restores disposable UI state and exposes explicit live refresh", async () => {

@@ -8,7 +8,7 @@ import { EvidenceBrowser } from "./evidence-browser";
 export default function EvidencePage() {
   return (
     <main>
-      <CaseHeader active="evidence" />
+      <CaseHeader active="artifact" />
       <section className="route-page">
         <EvidenceSubnav active="sources" />
         <header className="page-hero">

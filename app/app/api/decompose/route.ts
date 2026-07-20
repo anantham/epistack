@@ -1,16 +1,33 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, Output } from "ai";
 import { env } from "cloudflare:workers";
+import { operationCacheKey, readOperationCache, writeOperationCache } from "../../../db/cache";
+import type { DecompositionResponse } from "../../../lib/decomposition";
 import {
-  decompositionInstructions,
-  decompositionOutputSchema,
+  assembleDecomposition,
+  contextAgentInstructions,
+  contextAgentOutputSchema,
+  contextAgentSchema,
+  createFallbackDecomposition,
   decompositionSchema,
-  sanitizeDecomposition,
+  dimensionScoutInstructions,
+  dimensionScoutOutputSchema,
+  dimensionScoutSchema,
+  normalizeDimensionScout,
+  traceAgentInstructions,
+  traceAgentOutputSchema,
+  traceAgentSchema,
+  type ContextAgentResult,
+  type DimensionScout,
+  type TraceAgentResult,
 } from "../../../lib/decomposition-server";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
 const openRouterBaseURL = "https://openrouter.ai/api/v1";
+const decompositionCacheContract = "question-decomposition-orchestrator-v2";
+const decompositionCacheTtlMs = 30 * 24 * 60 * 60 * 1000;
+type CachedDecomposition = Omit<DecompositionResponse, "cache">;
 
 type DecompositionEnvironment = {
   OPENROUTER_API_KEY?: string;
@@ -22,21 +39,28 @@ type DecompositionRequest = {
   decisionContext?: unknown;
   openRouterApiKey?: unknown;
   openRouterModel?: unknown;
+  refresh?: unknown;
 };
 
 const modelIdPattern = /^[a-z0-9._-]+\/[a-z0-9._:-]+$/i;
+
+function issueSummary(issues: Array<{ path: PropertyKey[]; message: string }>) {
+  return issues.slice(0, 5).map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`).join("; ");
+}
 
 export async function POST(request: Request) {
   let prompt = "";
   let decisionContext = "";
   let suppliedOpenRouterKey = "";
   let suppliedOpenRouterModel = "";
+  let refresh = false;
   try {
     const body = (await request.json()) as DecompositionRequest;
     prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     decisionContext = typeof body.decisionContext === "string" ? body.decisionContext.trim() : "";
     suppliedOpenRouterKey = typeof body.openRouterApiKey === "string" ? body.openRouterApiKey.trim() : "";
     suppliedOpenRouterModel = typeof body.openRouterModel === "string" ? body.openRouterModel.trim() : "";
+    refresh = body.refresh === true;
   } catch {
     return Response.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
@@ -57,78 +81,161 @@ export async function POST(request: Request) {
     return Response.json({ error: "Use an OpenRouter model id such as anthropic/claude-opus-4.8." }, { status: 400 });
   }
 
-  const caseId = crypto.randomUUID();
   const runtimeEnvironment = env as unknown as DecompositionEnvironment;
-  const openRouterApiKey = suppliedOpenRouterKey
-    || runtimeEnvironment.OPENROUTER_API_KEY
-    || process.env.OPENROUTER_API_KEY;
   const openRouterModel = suppliedOpenRouterModel
     || runtimeEnvironment.EPISTACK_OPENROUTER_MODEL
     || process.env.EPISTACK_OPENROUTER_MODEL
     || defaultOpenRouterModel;
+  const cacheKey = await operationCacheKey("question-decomposition", decompositionCacheContract, {
+    prompt,
+    decisionContext,
+    model: openRouterModel,
+  });
+  if (!refresh) {
+    const cached = await readOperationCache<CachedDecomposition>(cacheKey);
+    if (cached) {
+      return Response.json({
+        ...cached.payload,
+        cache: { status: "hit", layer: "d1", createdAt: cached.createdAt, expiresAt: cached.expiresAt },
+      } satisfies DecompositionResponse);
+    }
+  }
 
+  const openRouterApiKey = suppliedOpenRouterKey
+    || runtimeEnvironment.OPENROUTER_API_KEY
+    || process.env.OPENROUTER_API_KEY;
   if (!openRouterApiKey) {
     return Response.json({
-      error: "Add an OpenRouter key in Settings to decompose this question.",
+      error: "No reusable decomposition is cached for this question and model. Add an OpenRouter key in Settings to create one.",
     }, { status: 401 });
   }
 
-  try {
-    const origin = request.headers.get("origin") || "https://epistack-evidence-lab.avalokai.chatgpt.site";
-    const openRouter = createOpenAI({
-      apiKey: openRouterApiKey,
-      baseURL: openRouterBaseURL,
-      headers: {
-        "HTTP-Referer": origin,
-        "X-OpenRouter-Title": "Epistack Evidence Lab",
-        "X-OpenRouter-Metadata": "enabled",
-      },
-    });
-    const basePrompt = `Decompose this submitted paragraph without answering it.\n\nSUBMITTED QUESTION:\n${prompt}\n\nKNOWN DECISION CONTEXT:\n${decisionContext || "None supplied. Ask only high-value follow-up questions."}`;
-    let validationSummary = "";
+  const openRouter = createOpenAI({
+    apiKey: openRouterApiKey,
+    baseURL: openRouterBaseURL,
+    headers: {
+      "HTTP-Referer": request.headers.get("origin") || "https://epistack-evidence-lab.avalokai.chatgpt.site",
+      "X-OpenRouter-Title": "Epistack Evidence Lab",
+      "X-OpenRouter-Metadata": "enabled",
+    },
+  });
+  const dimensionPrompt = `SUBMITTED QUESTION\n${prompt}\n\nKNOWN DECISION CONTEXT\n${decisionContext || "None supplied. Do not invent personal facts."}`;
+  let scout: DimensionScout | null = null;
+  let scoutFailure: unknown = null;
+  let scoutValidation = "";
 
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const repairInstruction = attempt === 0
-        ? ""
-        : `\n\nREPAIR PASS: The previous attempt missed required fields or cardinalities (${validationSummary || "schema mismatch"}). Return a complete object with 4–7 axes, 2–4 branches per axis, inspectable clusters, exact-substring highlights, and 3–5 context questions with answer options.`;
+  for (let attempt = 0; attempt < 2 && !scout; attempt += 1) {
+    try {
       const { output } = await generateText({
         model: openRouter(openRouterModel),
         output: Output.object({
-          name: "question_decomposition",
-          description: "A human-editable interpretation map for an underspecified research question.",
-          schema: decompositionOutputSchema,
+          name: "dimension_scout",
+          description: "A compact list of substantive dimensions and concrete resolutions for an underspecified question.",
+          schema: dimensionScoutOutputSchema,
         }),
-        system: decompositionInstructions,
-        prompt: `${basePrompt}${repairInstruction}`,
-        maxOutputTokens: 12000,
-        temperature: 0.2,
+        system: dimensionScoutInstructions,
+        prompt: attempt === 0
+          ? dimensionPrompt
+          : `${dimensionPrompt}\n\nREPAIR: Return every required field. Keep 4–7 dimensions and at least two concrete resolutions per dimension. Previous validation: ${scoutValidation || "incomplete object"}.`,
+        maxOutputTokens: 5000,
+        temperature: 0.15,
       });
-
-      const validatedOutput = decompositionSchema.safeParse(output);
-      if (validatedOutput.success) {
-        return Response.json({
-          caseId,
-          mode: "ai",
-          model: `OpenRouter · ${openRouterModel}`,
-          warning: attempt === 1 ? "The first model response was incomplete; Epistack repaired it automatically." : null,
-          prompt,
-          decisionContext,
-          decomposition: sanitizeDecomposition(validatedOutput.data, prompt, decisionContext),
-        });
-      }
-      validationSummary = validatedOutput.error.issues
-        .slice(0, 6)
-        .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
-        .join("; ");
+      const parsed = dimensionScoutSchema.safeParse(output);
+      if (parsed.success) scout = parsed.data;
+      else scoutValidation = issueSummary(parsed.error.issues);
+    } catch (error) {
+      scoutFailure = error;
+      scoutValidation = error instanceof Error ? error.message : "specialist request failed";
     }
-
-    return Response.json({
-      error: `${openRouterModel} returned an incomplete decomposition after two attempts. Try again or choose another frontier model in Settings.`,
-      code: "invalid_model_output",
-      details: validationSummary,
-    }, { status: 502 });
-  } catch (thrown) {
-    const failure = openRouterFailureFromThrown(thrown);
-    return Response.json({ error: failure.message, code: failure.code }, { status: failure.status });
   }
+
+  if (!scout) {
+    const providerFailure = scoutFailure ? openRouterFailureFromThrown(scoutFailure) : null;
+    if (providerFailure && ["authentication", "credits", "permission", "model", "rate_limit", "request"].includes(providerFailure.code)) {
+      return Response.json({ error: providerFailure.message, code: providerFailure.code }, { status: providerFailure.status });
+    }
+    const payload: CachedDecomposition = {
+      caseId: crypto.randomUUID(),
+      mode: "local-fallback",
+      model: `Local scaffold after ${openRouterModel}`,
+      warning: "The dimension specialist did not return a usable compact object, so Epistack kept the workflow moving with an editable domain-general scaffold. This fallback was not added to the shared cache.",
+      prompt,
+      decisionContext,
+      decomposition: createFallbackDecomposition(prompt, decisionContext),
+    };
+    return Response.json({
+      ...payload,
+      cache: { status: refresh ? "bypass" : "miss", layer: "d1", createdAt: null, expiresAt: null },
+    } satisfies DecompositionResponse);
+  }
+
+  scout = normalizeDimensionScout(scout);
+  const axisBrief = scout.dimensions.slice(0, 7).map((dimension) => ({
+    id: dimension.id,
+    label: dimension.label,
+    question: dimension.question,
+    resolutions: dimension.resolutions.slice(0, 5),
+  }));
+  const tracePromise = (async (): Promise<TraceAgentResult> => {
+    const { output } = await generateText({
+      model: openRouter(openRouterModel),
+      output: Output.object({
+        name: "decomposition_trace",
+        description: "Exact submitted-language cues mapped to fixed dimensions.",
+        schema: traceAgentOutputSchema,
+      }),
+      system: traceAgentInstructions,
+      prompt: `SUBMITTED QUESTION\n${prompt}\n\nFIXED DIMENSIONS\n${JSON.stringify(axisBrief)}`,
+      maxOutputTokens: 3500,
+      temperature: 0.05,
+    });
+    return traceAgentSchema.parse(output);
+  })();
+  const contextPromise = (async (): Promise<ContextAgentResult> => {
+    const { output } = await generateText({
+      model: openRouter(openRouterModel),
+      output: Output.object({
+        name: "context_and_retrieval_plan",
+        description: "Retrieval metadata, mismatch risks, claim template, and high-value context questions for fixed dimensions.",
+        schema: contextAgentOutputSchema,
+      }),
+      system: contextAgentInstructions,
+      prompt: `SUBMITTED QUESTION\n${prompt}\n\nFIXED DIMENSIONS\n${JSON.stringify(axisBrief)}\n\nKNOWN DECISION CONTEXT\n${decisionContext || "None supplied. Ask only facts with high pruning or evidence-matching value."}`,
+      maxOutputTokens: 6500,
+      temperature: 0.1,
+    });
+    return contextAgentSchema.parse(output);
+  })();
+  const [traceSettled, contextSettled] = await Promise.allSettled([tracePromise, contextPromise]);
+  const traceResult = traceSettled.status === "fulfilled" ? traceSettled.value : null;
+  const contextResult = contextSettled.status === "fulfilled" ? contextSettled.value : null;
+  const warnings: string[] = [];
+  if (!traceResult) warnings.push("The trace specialist fell back to deterministic exact-word mapping.");
+  if (!contextResult) warnings.push("The context specialist fell back to domain-general retrieval fields and interview questions.");
+  const decomposition = assembleDecomposition(scout, traceResult, contextResult, prompt, decisionContext);
+  const validated = decompositionSchema.safeParse(decomposition);
+  if (!validated.success) {
+    warnings.push("The merged specialist output missed the persistent artifact contract, so an editable scaffold is shown instead.");
+  }
+  const payload: CachedDecomposition = {
+    caseId: crypto.randomUUID(),
+    mode: validated.success ? "ai" : "local-fallback",
+    model: `OpenRouter · ${openRouterModel} · orchestrated specialists`,
+    warning: warnings.length ? warnings.join(" ") : null,
+    prompt,
+    decisionContext,
+    decomposition: validated.success ? validated.data : createFallbackDecomposition(prompt, decisionContext),
+  };
+  const stored = validated.success
+    ? await writeOperationCache(cacheKey, "question-decomposition", decompositionCacheContract, payload, decompositionCacheTtlMs)
+    : null;
+  return Response.json({
+    ...payload,
+    cache: {
+      status: refresh ? "bypass" : "miss",
+      layer: "d1",
+      createdAt: stored?.createdAt ?? null,
+      expiresAt: stored?.expiresAt ?? null,
+    },
+  } satisfies DecompositionResponse);
 }

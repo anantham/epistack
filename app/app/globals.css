@@ -133,6 +133,13 @@ main {
   top: 12px;
 }
 
+.minimal-topbar .stage-nav {
+  pointer-events: auto;
+  position: absolute;
+  right: clamp(74px, 8vw, 128px);
+  top: 12px;
+}
+
 [data-tooltip] {
   position: relative;
 }
@@ -639,7 +646,7 @@ main {
   background: rgba(245, 242, 233, 0.9);
   border-bottom: 1px solid rgba(168, 175, 168, 0.45);
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   min-height: 62px;
   padding: 10px clamp(20px, 4vw, 64px);
   position: sticky;
@@ -3410,15 +3417,44 @@ h2 {
   max-width: 660px;
 }
 
-.story-heading > span {
+.story-heading-meta {
+  align-items: flex-end;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.story-heading-meta > span {
   background: var(--green-soft);
   border-radius: 999px;
   color: var(--green);
-  flex: none;
   font-family: var(--font-geist-mono), monospace;
   font-size: 9px;
   padding: 8px 10px;
   text-transform: uppercase;
+}
+
+.story-heading-meta small {
+  color: var(--ink-soft);
+  font-size: 9px;
+}
+
+.story-heading-meta button {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line-dark);
+  color: var(--green);
+  font-size: 9px;
+  padding: 0 0 2px;
+}
+
+.decomposition-warning {
+  background: #fff3d7;
+  border-radius: 8px;
+  color: #765517 !important;
+  font-size: 10px !important;
+  padding: 8px 10px;
 }
 
 .scroll-invitation {

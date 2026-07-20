@@ -71,7 +71,9 @@ export type DecompositionResponse = {
   prompt: string;
   decisionContext: string;
   decomposition: DecompositionArtifact;
+  cache: CacheMetadata;
 };
 
 export const decompositionSessionKey = "epistack:decomposition:v1";
 export const interpretationMapStorageKey = "epistack:interpretation-map:v1";
+import type { CacheMetadata } from "./research";

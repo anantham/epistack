@@ -15,7 +15,7 @@ function readable(value: string) {
 export default function MatrixPage() {
   return (
     <main>
-      <CaseHeader active="assess" />
+      <CaseHeader active="artifact" />
       <section className="route-page matrix-route">
         <EvidenceSubnav active="matrix" />
         <header className="page-hero narrow">

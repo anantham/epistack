@@ -699,7 +699,7 @@ export default function InterpretationMapPage() {
 
   return (
     <main>
-      <CaseHeader active="frame" />
+      <CaseHeader active="contextualize" />
 
       {!ready ? (
         <section className="map-arrival" aria-live="polite">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { StageNav } from "./components/case-navigation";
 import type {
   DecompositionResponse,
   QuestionHighlight,
@@ -14,20 +15,18 @@ const analysisDurationsKey = "epistack:analysis-durations:v1";
 const legacyAnalysisDurationsKey = "epistack_decomp_ms";
 const preferencesStorageKey = "epistack:preferences:v1";
 const workspaceStorageKey = "epistack:workspace:v1";
+const decompositionBrowserCacheKey = "epistack:decomposition-operation-cache:v2";
+const decompositionBrowserCacheContract = "question-decomposition-orchestrator-v2";
 const provisionalEstimateMs = 90_000;
 const loadingSteps = [
-  "bisecting the question",
-  "isolating load-bearing words",
-  "mapping hidden comparators",
-  "clustering related ideas",
-  "testing dimensions of perturbation",
-  "unbundling the options",
-  "tracing constraint cascades",
-  "probing population mismatches",
-  "ranking high-information follow-ups",
-  "compiling evidence requirements",
-  "stress-testing claim boundaries",
-  "checking what the question leaves unsaid",
+  "scouting substantive dimensions",
+  "unbundling concrete resolutions",
+  "mapping exact language cues",
+  "tracing hidden comparators",
+  "planning high-value context questions",
+  "compiling retrieval requirements",
+  "checking construct mismatches",
+  "merging specialist contracts",
 ];
 
 type AnalysisPhase = "idle" | "analyzing" | "eliciting" | "review" | "transitioning" | "error";
@@ -41,6 +40,14 @@ type PersistedWorkspace = {
   contextSelections?: Record<string, string[]>;
   elicitationIndex?: number;
   phase?: "idle" | "eliciting" | "review";
+};
+type BrowserDecompositionCache = {
+  contract: typeof decompositionBrowserCacheContract;
+  prompt: string;
+  decisionContext: string;
+  model: string;
+  savedAt: string;
+  result: DecompositionResponse;
 };
 
 type TextSegment = {
@@ -91,6 +98,13 @@ function formatCountdown(milliseconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function decompositionCacheLabel(result: DecompositionResponse) {
+  if (result.cache.status === "browser") return "restored instantly";
+  if (result.cache.status === "hit") return "reused · no model call";
+  if (result.cache.status === "bypass") return "recomputed live";
+  return result.mode === "ai" ? "orchestrated live" : "editable fallback";
 }
 
 export default function Home() {
@@ -190,7 +204,11 @@ export default function Home() {
           setElicitationIndex(Math.max(0, savedWorkspace.elicitationIndex));
         }
         if (restoredResult?.decomposition) {
-          setResult(restoredResult);
+          const restoredWithCache: DecompositionResponse = {
+            ...restoredResult,
+            cache: { status: "browser", layer: "browser", createdAt: new Date().toISOString(), expiresAt: null },
+          };
+          setResult(restoredWithCache);
           if (!savedWorkspace.prompt) setPrompt(restoredResult.prompt);
           if (!savedWorkspace.decisionContext) setDecisionContext(restoredResult.decisionContext ?? "");
           const canResumeInterview = savedWorkspace.phase === "eliciting" && restoredResult.decomposition.contextQuestions.length > 0;
@@ -361,14 +379,11 @@ export default function Home() {
     };
   }, [phase, result]);
 
-  async function analyze(contextOverride?: string, skipElicitation = false) {
+  async function analyze(contextOverride?: string, skipElicitation = false, refresh = false) {
     if (!prompt.trim() || busy) return;
-    if (!openRouterKey.trim()) {
-      setError("Add an OpenRouter key in Settings to decompose this question.");
-      setSettingsOpen(true);
-      setPhase("error");
-      return;
-    }
+    const contextForRequest = typeof contextOverride === "string" ? contextOverride : decisionContext;
+    const normalizedPrompt = prompt.trim();
+    const normalizedModel = openRouterModel.trim() || defaultOpenRouterModel;
     setError("");
     setResult(null);
     setActiveCluster(-1);
@@ -382,9 +397,40 @@ export default function Home() {
     revealedClustersRef.current.clear();
     setLoadingStep(0);
     setAnalysisElapsed(0);
-    setPhase("analyzing");
 
-    const contextForRequest = typeof contextOverride === "string" ? contextOverride : decisionContext;
+    if (!refresh) {
+      try {
+        const cached = JSON.parse(window.localStorage.getItem(decompositionBrowserCacheKey) || "null") as BrowserDecompositionCache | null;
+        if (cached
+          && cached.contract === decompositionBrowserCacheContract
+          && cached.prompt === normalizedPrompt
+          && cached.decisionContext === contextForRequest
+          && cached.model === normalizedModel
+          && cached.result?.decomposition) {
+          const browserResult: DecompositionResponse = {
+            ...cached.result,
+            cache: { status: "browser", layer: "browser", createdAt: cached.savedAt, expiresAt: null },
+          };
+          setResult(browserResult);
+          window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(browserResult));
+          setDecisionContext(contextForRequest);
+          setPhase(!skipElicitation && !contextForRequest && browserResult.decomposition.contextQuestions.length
+            ? "eliciting"
+            : "review");
+          return;
+        }
+      } catch {
+        window.localStorage.removeItem(decompositionBrowserCacheKey);
+      }
+    }
+
+    if (!openRouterKey.trim()) {
+      setError("No reusable decomposition is cached for this question and model. Add an OpenRouter key in Settings to create one.");
+      setSettingsOpen(true);
+      setPhase("error");
+      return;
+    }
+    setPhase("analyzing");
     const requestStartedAt = window.performance.now();
 
     try {
@@ -395,26 +441,40 @@ export default function Home() {
           prompt,
           decisionContext: contextForRequest,
           openRouterApiKey: openRouterKey.trim() || undefined,
-          openRouterModel: openRouterModel.trim() || undefined,
+          openRouterModel: normalizedModel,
+          refresh,
         }),
       });
       const payload = await response.json() as DecompositionResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "The decomposition could not be generated.");
 
-      const duration = window.performance.now() - requestStartedAt;
-      setAnalysisDurations((current) => {
-        const next = [...current, duration].slice(-12);
-        try {
-          window.localStorage.setItem(analysisDurationsKey, JSON.stringify(next));
-        } catch {
-          // Latency history is optional; never block the decomposition.
-        }
-        return next;
-      });
+      if (payload.cache.status === "miss" || payload.cache.status === "bypass") {
+        const duration = window.performance.now() - requestStartedAt;
+        setAnalysisDurations((current) => {
+          const next = [...current, duration].slice(-12);
+          try {
+            window.localStorage.setItem(analysisDurationsKey, JSON.stringify(next));
+          } catch {
+            // Latency history is optional; never block the decomposition.
+          }
+          return next;
+        });
+      }
 
       setResult(payload);
       window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
       window.localStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
+      if (payload.mode === "ai") {
+        const browserCache: BrowserDecompositionCache = {
+          contract: decompositionBrowserCacheContract,
+          prompt: normalizedPrompt,
+          decisionContext: contextForRequest,
+          model: normalizedModel,
+          savedAt: new Date().toISOString(),
+          result: payload,
+        };
+        window.localStorage.setItem(decompositionBrowserCacheKey, JSON.stringify(browserCache));
+      }
       window.localStorage.removeItem(interpretationMapStorageKey);
       setDecisionContext(contextForRequest);
       setActiveCluster(-1);
@@ -549,6 +609,7 @@ export default function Home() {
 
       <div className={`intro-surface ${introComplete ? "is-ready" : ""}`} aria-hidden={!introComplete}>
         <header className="minimal-topbar">
+          <StageNav active="decompose" />
           <button
             type="button"
             className="icon-button settings-trigger"
@@ -736,8 +797,13 @@ export default function Home() {
             <div className="story-heading">
               <div>
                 <h2 id="trace-title">Decomposition</h2>
+                {result.warning && <p className="decomposition-warning">{result.warning}</p>}
               </div>
-              <span>{result.decomposition.clusters.length} semantic clusters</span>
+              <div className="story-heading-meta">
+                <span title="Computational freshness only; this does not imply evidential confidence.">{decompositionCacheLabel(result)}</span>
+                <small>{result.decomposition.clusters.length} semantic clusters</small>
+                <button type="button" onClick={() => void analyze(decisionContext, true, true)}>Recompute</button>
+              </div>
             </div>
 
             <div className="scroll-invitation" aria-hidden="true">

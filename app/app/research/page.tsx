@@ -4,7 +4,7 @@ import { ResearchDashboard } from "./research-dashboard";
 export default function ResearchPage() {
   return (
     <main>
-      <CaseHeader active="research" />
+      <CaseHeader active="investigate" />
       <section className="route-page research-route">
         <ResearchDashboard />
       </section>

@@ -5,7 +5,7 @@ import { InventoryBrowser } from "./inventory-browser";
 export default function InventoryPage() {
   return (
     <main>
-      <CaseHeader active="assess" />
+      <CaseHeader active="artifact" />
       <section className="route-page">
         <EvidenceSubnav active="inventory" />
         <header className="page-hero narrow">
