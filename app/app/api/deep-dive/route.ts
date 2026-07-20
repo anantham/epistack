@@ -5,17 +5,23 @@ import {
   deepDiveInstructions,
   deepDiveOutputSchema,
   deepDiveSchema,
+  type DeepDiveResponse,
   type DeepDiveSource,
 } from "../../../lib/deep-dive";
+import { operationCacheKey, readOperationCache, writeOperationCache } from "../../../db/cache";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
 const openRouterBaseURL = "https://openrouter.ai/api/v1";
+const deepDiveCacheContract = "abstract-result-extraction-v1";
+const deepDiveCacheTtlMs = 30 * 24 * 60 * 60 * 1000;
+type CachedDeepDive = Omit<DeepDiveResponse, "cache">;
 
 type DeepDiveRequest = {
   record?: Partial<Omit<DeepDiveSource, "abstract">>;
   openRouterApiKey?: unknown;
   openRouterModel?: unknown;
+  refresh?: unknown;
 };
 
 type DeepDiveEnvironment = {
@@ -59,10 +65,25 @@ export async function POST(request: Request) {
   const suppliedKey = typeof body.openRouterApiKey === "string" ? body.openRouterApiKey.trim() : "";
   const suppliedModel = typeof body.openRouterModel === "string" ? body.openRouterModel.trim() : "";
   const runtimeEnvironment = env as unknown as DeepDiveEnvironment;
-  const openRouterApiKey = suppliedKey || runtimeEnvironment.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
   const openRouterModel = suppliedModel || runtimeEnvironment.EPISTACK_OPENROUTER_MODEL || process.env.EPISTACK_OPENROUTER_MODEL || defaultOpenRouterModel;
+  const refresh = body.refresh === true;
+  const cacheKey = await operationCacheKey("abstract-result-extraction", deepDiveCacheContract, {
+    pmid,
+    model: openRouterModel,
+  });
+  if (!refresh) {
+    const cached = await readOperationCache<CachedDeepDive>(cacheKey);
+    if (cached) {
+      return Response.json({
+        ...cached.payload,
+        cache: { status: "hit", layer: "d1", createdAt: cached.createdAt, expiresAt: cached.expiresAt },
+      } satisfies DeepDiveResponse);
+    }
+  }
+
+  const openRouterApiKey = suppliedKey || runtimeEnvironment.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
   if (!openRouterApiKey) {
-    return Response.json({ error: "Add a bring-your-own model key in Settings before extracting a new source." }, { status: 401 });
+    return Response.json({ error: "No reusable extraction is cached for this source and model. Add a bring-your-own model key in Settings to create one." }, { status: 401 });
   }
 
   try {
@@ -110,7 +131,28 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return Response.json({ error: "The model returned an incomplete result extraction. Retry or choose another frontier model." }, { status: 502 });
     }
-    return Response.json({ source, candidate: parsed.data, model: openRouterModel, verificationStatus: "abstract-only" });
+    const payload: CachedDeepDive = {
+      source,
+      candidate: parsed.data,
+      model: openRouterModel,
+      verificationStatus: "abstract-only",
+    };
+    const stored = await writeOperationCache(
+      cacheKey,
+      "abstract-result-extraction",
+      deepDiveCacheContract,
+      payload,
+      deepDiveCacheTtlMs,
+    );
+    return Response.json({
+      ...payload,
+      cache: {
+        status: refresh ? "bypass" : "miss",
+        layer: "d1",
+        createdAt: stored?.createdAt ?? null,
+        expiresAt: stored?.expiresAt ?? null,
+      },
+    } satisfies DeepDiveResponse);
   } catch (error) {
     const providerFailure = openRouterFailureFromThrown(error);
     if (providerFailure.code !== "provider_error") {

@@ -1,10 +1,17 @@
 import { compilePubmedQuery, publicationFilters, type PublicationFilter, type PubmedDiscovery } from "../../../lib/research";
+import { operationCacheKey, readOperationCache, writeOperationCache } from "../../../db/cache";
+import type { ResearchResponse } from "../../../lib/research";
 
 type ResearchRequest = {
   query?: unknown;
   filters?: unknown;
   maxResults?: unknown;
+  refresh?: unknown;
 };
+
+const researchCacheContract = "pubmed-discovery-v1";
+const researchCacheTtlMs = 24 * 60 * 60 * 1000;
+type CachedResearch = Omit<ResearchResponse, "cache">;
 
 type PubmedSummary = {
   uid?: string;
@@ -54,6 +61,21 @@ export async function POST(request: Request) {
   const requestedMax = typeof body.maxResults === "number" ? body.maxResults : 6;
   const maxResults = Math.max(1, Math.min(10, Math.floor(requestedMax)));
   const executedQuery = compilePubmedQuery(query, filters);
+  const refresh = body.refresh === true;
+  const cacheKey = await operationCacheKey("pubmed-discovery", researchCacheContract, {
+    executedQuery,
+    filters: [...filters].sort(),
+    maxResults,
+  });
+  if (!refresh) {
+    const cached = await readOperationCache<CachedResearch>(cacheKey);
+    if (cached) {
+      return Response.json({
+        ...cached.payload,
+        cache: { status: "hit", layer: "d1", createdAt: cached.createdAt, expiresAt: cached.expiresAt },
+      } satisfies ResearchResponse);
+    }
+  }
   const baseUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
 
   try {
@@ -74,14 +96,19 @@ export async function POST(request: Request) {
     const ids = searchPayload.esearchresult?.idlist ?? [];
 
     if (!ids.length) {
-      return Response.json({
+      const payload: CachedResearch = {
         query,
         executedQuery,
         retrievedAt: new Date().toISOString(),
         database: "PubMed",
         totalMatches: Number(searchPayload.esearchresult?.count ?? 0),
         records: [],
-      });
+      };
+      const stored = await writeOperationCache(cacheKey, "pubmed-discovery", researchCacheContract, payload, researchCacheTtlMs);
+      return Response.json({
+        ...payload,
+        cache: { status: refresh ? "bypass" : "miss", layer: "d1", createdAt: stored?.createdAt ?? null, expiresAt: stored?.expiresAt ?? null },
+      } satisfies ResearchResponse);
     }
 
     const summaryUrl = new URL(`${baseUrl}/esummary.fcgi`);
@@ -102,14 +129,19 @@ export async function POST(request: Request) {
       })
       .filter((record): record is PubmedDiscovery => record !== null);
 
-    return Response.json({
+    const payload: CachedResearch = {
       query,
       executedQuery,
       retrievedAt: new Date().toISOString(),
       database: "PubMed",
       totalMatches: Number(searchPayload.esearchresult?.count ?? records.length),
       records,
-    });
+    };
+    const stored = await writeOperationCache(cacheKey, "pubmed-discovery", researchCacheContract, payload, researchCacheTtlMs);
+    return Response.json({
+      ...payload,
+      cache: { status: refresh ? "bypass" : "miss", layer: "d1", createdAt: stored?.createdAt ?? null, expiresAt: stored?.expiresAt ?? null },
+    } satisfies ResearchResponse);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Unknown retrieval error";
     return Response.json({

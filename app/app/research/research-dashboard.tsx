@@ -45,9 +45,41 @@ type PromotionRecord = {
   family_reason: string;
 };
 
-const initialRuns = Object.fromEntries(
-  researchLanes.map((lane) => [lane.id, { status: "ready", response: null, error: "" }]),
-) as Record<ResearchLaneId, LaneRun>;
+type CachedDashboardState = {
+  version: 1;
+  savedAt: string;
+  queries: Record<ResearchLaneId, string>;
+  filters: PublicationFilter[];
+  runs: Record<ResearchLaneId, LaneRun>;
+  deepDives: Record<string, DeepDiveRun>;
+  openLane: ResearchLaneId;
+};
+
+const dashboardCacheKey = "epistack:research-ui-cache:v1";
+
+function defaultQueries() {
+  return Object.fromEntries(researchLanes.map((lane) => [lane.id, lane.defaultQuery])) as Record<ResearchLaneId, string>;
+}
+
+function freshRuns() {
+  return Object.fromEntries(
+    researchLanes.map((lane) => [lane.id, { status: "ready", response: null, error: "" }]),
+  ) as Record<ResearchLaneId, LaneRun>;
+}
+
+function cacheLabel(cache: ResearchResponse["cache"]) {
+  if (cache.status === "browser") return "restored from this browser";
+  if (cache.status === "hit") return "reused from operation cache";
+  if (cache.status === "bypass") return "refreshed live";
+  return "fresh · saved for reuse";
+}
+
+function cacheTitle(cache: ResearchResponse["cache"]) {
+  if (cache.status === "browser") return "This display was restored instantly from local browser storage. Use Refresh live to contact PubMed again.";
+  if (cache.status === "hit") return `This exact operation was reused from the shared cache${cache.expiresAt ? `; it expires ${new Date(cache.expiresAt).toLocaleString()}` : ""}.`;
+  if (cache.status === "bypass") return "The cache was deliberately bypassed and replaced by a fresh operation result.";
+  return `This operation ran live${cache.expiresAt ? ` and can be reused until ${new Date(cache.expiresAt).toLocaleString()}` : ""}.`;
+}
 
 const publicationOptions: Array<{ id: PublicationFilter; label: string }> = [
   { id: "trials", label: "Trials" },
@@ -67,14 +99,13 @@ function statusLabel(status: LaneRun["status"]) {
 }
 
 export function ResearchDashboard() {
-  const [queries, setQueries] = useState<Record<ResearchLaneId, string>>(
-    Object.fromEntries(researchLanes.map((lane) => [lane.id, lane.defaultQuery])) as Record<ResearchLaneId, string>,
-  );
+  const [queries, setQueries] = useState<Record<ResearchLaneId, string>>(defaultQueries);
   const [filters, setFilters] = useState<PublicationFilter[]>(["trials", "reviews"]);
-  const [runs, setRuns] = useState<Record<ResearchLaneId, LaneRun>>(initialRuns);
+  const [runs, setRuns] = useState<Record<ResearchLaneId, LaneRun>>(freshRuns);
   const [deepDives, setDeepDives] = useState<Record<string, DeepDiveRun>>({});
   const [promotionRecords, setPromotionRecords] = useState<PromotionRecord[]>([]);
   const [openLane, setOpenLane] = useState<ResearchLaneId>(researchLanes[0].id);
+  const [storageReady, setStorageReady] = useState(false);
 
   const activeCount = useMemo(
     () => Object.values(runs).filter((run) => run.status === "running").length,
@@ -106,23 +137,122 @@ export function ResearchDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(dashboardCacheKey);
+      if (!raw) return;
+      const cached = JSON.parse(raw) as Partial<CachedDashboardState>;
+      if (cached.version !== 1 || !cached.savedAt) return;
+
+      const restoredQueries = defaultQueries();
+      for (const lane of researchLanes) {
+        const cachedQuery = cached.queries?.[lane.id];
+        if (typeof cachedQuery === "string") restoredQueries[lane.id] = cachedQuery;
+      }
+      setQueries(restoredQueries);
+
+      if (Array.isArray(cached.filters)) {
+        setFilters(cached.filters.filter((filter): filter is PublicationFilter => publicationOptions.some((option) => option.id === filter)));
+      }
+
+      const restoredRuns = freshRuns();
+      for (const lane of researchLanes) {
+        const cachedRun = cached.runs?.[lane.id];
+        if (cachedRun?.response) {
+          restoredRuns[lane.id] = {
+            status: "complete",
+            response: {
+              ...cachedRun.response,
+              cache: { status: "browser", layer: "browser", createdAt: cached.savedAt, expiresAt: null },
+            },
+            error: "",
+          };
+        }
+      }
+      setRuns(restoredRuns);
+
+      const restoredDeepDives: Record<string, DeepDiveRun> = {};
+      for (const [pmid, dive] of Object.entries(cached.deepDives ?? {})) {
+        if (!dive?.payload) continue;
+        restoredDeepDives[pmid] = {
+          status: dive.status === "persisted" ? "persisted" : "review",
+          payload: {
+            ...dive.payload,
+            cache: { status: "browser", layer: "browser", createdAt: cached.savedAt, expiresAt: null },
+          },
+          checked: dive.checked === true,
+          error: "",
+        };
+      }
+      setDeepDives(restoredDeepDives);
+
+      if (researchLanes.some((lane) => lane.id === cached.openLane)) setOpenLane(cached.openLane as ResearchLaneId);
+    } catch {
+      window.localStorage.removeItem(dashboardCacheKey);
+    } finally {
+      setStorageReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    const timer = window.setTimeout(() => {
+      const reusableRuns = Object.fromEntries(researchLanes.map((lane) => {
+        const run = runs[lane.id];
+        return [lane.id, run.response
+          ? { status: "complete", response: run.response, error: "" }
+          : { status: "ready", response: null, error: "" }];
+      })) as Record<ResearchLaneId, LaneRun>;
+      const reusableDeepDives = Object.fromEntries(
+        Object.entries(deepDives)
+          .filter(([, dive]) => dive.payload !== null)
+          .map(([pmid, dive]) => [pmid, {
+            status: dive.status === "persisted" ? "persisted" : "review",
+            payload: dive.payload,
+            checked: dive.checked,
+            error: "",
+          }]),
+      ) as Record<string, DeepDiveRun>;
+      const cache: CachedDashboardState = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        queries,
+        filters,
+        runs: reusableRuns,
+        deepDives: reusableDeepDives,
+        openLane,
+      };
+      window.localStorage.setItem(dashboardCacheKey, JSON.stringify(cache));
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [deepDives, filters, openLane, queries, runs, storageReady]);
+
+  function clearDashboardCache() {
+    window.localStorage.removeItem(dashboardCacheKey);
+    setQueries(defaultQueries());
+    setFilters(["trials", "reviews"]);
+    setRuns(freshRuns());
+    setDeepDives({});
+    setOpenLane(researchLanes[0].id);
+  }
+
   function toggleFilter(filter: PublicationFilter) {
     setFilters((current) => current.includes(filter)
       ? current.filter((candidate) => candidate !== filter)
       : [...current, filter]);
   }
 
-  async function runLane(lane: ResearchLane) {
+  async function runLane(lane: ResearchLane, refresh = false) {
     setOpenLane(lane.id);
     setRuns((current) => ({
       ...current,
-      [lane.id]: { status: "running", response: null, error: "" },
+      [lane.id]: { status: "running", response: current[lane.id].response, error: "" },
     }));
     try {
       const response = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: queries[lane.id], filters, maxResults: 6 }),
+        body: JSON.stringify({ query: queries[lane.id], filters, maxResults: 6, refresh }),
       });
       const payload = await response.json() as ResearchResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "The live discovery sweep failed.");
@@ -135,7 +265,7 @@ export function ResearchDashboard() {
         ...current,
         [lane.id]: {
           status: "error",
-          response: null,
+          response: current[lane.id].response,
           error: error instanceof Error ? error.message : "The live discovery sweep failed.",
         },
       }));
@@ -157,7 +287,7 @@ export function ResearchDashboard() {
     }
   }
 
-  async function extractRecord(record: PubmedDiscovery) {
+  async function extractRecord(record: PubmedDiscovery, refresh = false) {
     setDeepDives((current) => ({
       ...current,
       [record.pmid]: { status: "extracting", payload: null, checked: false, error: "" },
@@ -167,7 +297,7 @@ export function ResearchDashboard() {
       const response = await fetch("/api/deep-dive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ record, openRouterApiKey: preferences.apiKey, openRouterModel: preferences.model }),
+        body: JSON.stringify({ record, openRouterApiKey: preferences.apiKey, openRouterModel: preferences.model, refresh }),
       });
       const payload = await response.json() as DeepDiveResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "The abstract extraction failed.");
@@ -270,9 +400,12 @@ export function ResearchDashboard() {
             </button>
           ))}
         </div>
-        <p>
-          Filters are applied to every lane. Turn them all off to inspect the unfiltered query; edit any lane directly before launching it.
-        </p>
+        <div className="cache-controls">
+          <p>Results reopen instantly on this browser. Shared operation outputs expire; accepted evidence records do not.</p>
+          <button onClick={clearDashboardCache} title="Remove only this browser’s research display cache. The shared operation cache and accepted evidence graph are unchanged.">
+            Reset browser cache
+          </button>
+        </div>
       </section>
 
       <div className="research-lanes">
@@ -309,8 +442,13 @@ export function ResearchDashboard() {
                   </label>
                   <div className="lane-actions">
                     <button className="primary-button" onClick={() => runLane(lane)} disabled={run.status === "running"}>
-                      {run.status === "running" ? "Searching PubMed…" : run.status === "complete" ? "Run this lane again" : "Run this lane"}
+                      {run.status === "running" ? "Searching PubMed…" : "Run this lane"}
                     </button>
+                    {run.response && (
+                      <button className="cache-refresh-button" onClick={() => runLane(lane, true)} disabled={run.status === "running"} title="Bypass both cached operation output and the browser-restored display.">
+                        Refresh live
+                      </button>
+                    )}
                     <span>{audit.resultCount} reviewed results from {audit.familyCount} independent families already anchor this lane.</span>
                   </div>
 
@@ -320,7 +458,10 @@ export function ResearchDashboard() {
                     <section className="live-discoveries" aria-label={`${lane.label} discovery results`}>
                       <header>
                         <div><span>Live discovery sweep</span><strong>{run.response.records.length} shown · {run.response.totalMatches.toLocaleString()} PubMed matches</strong></div>
-                        <small>{new Date(run.response.retrievedAt).toLocaleString()}</small>
+                        <div className="cache-meta">
+                          <em title={cacheTitle(run.response.cache)}>{cacheLabel(run.response.cache)}</em>
+                          <small>retrieved {new Date(run.response.retrievedAt).toLocaleString()}</small>
+                        </div>
                       </header>
                       <div className="executed-query"><span>Executed</span><code>{run.response.executedQuery}</code></div>
                       <div className="discovery-records">
@@ -354,7 +495,10 @@ export function ResearchDashboard() {
                                 <div className="candidate-extraction">
                                   <header>
                                     <div><span>Proposed typed records</span><strong>{deepDive.payload.candidate.results.length} atomic results · abstract only</strong></div>
-                                    <small>{deepDive.payload.model}</small>
+                                    <div className="candidate-cache-meta">
+                                      <em title={cacheTitle(deepDive.payload.cache)}>{cacheLabel(deepDive.payload.cache)}</em>
+                                      <small>{deepDive.payload.model}</small>
+                                    </div>
                                   </header>
                                   <dl className="candidate-study">
                                     <div><dt>Design</dt><dd>{deepDive.payload.candidate.study.design}</dd></div>
@@ -384,9 +528,16 @@ export function ResearchDashboard() {
                                     />
                                     <span>I checked the abstract, result boundaries, claim relations, and dependence-family proposal. Keep status “pending full text.”</span>
                                   </label>
-                                  <button className="primary-button" onClick={() => promoteRecord(record)} disabled={!deepDive.checked || deepDive.status === "promoting" || deepDive.status === "persisted"}>
-                                    {deepDive.status === "promoting" ? "Writing typed records…" : deepDive.status === "persisted" ? "Accepted · pending full text" : "Promote checked results"}
-                                  </button>
+                                  <div className="candidate-actions">
+                                    <button className="primary-button" onClick={() => promoteRecord(record)} disabled={!deepDive.checked || deepDive.status === "promoting" || deepDive.status === "persisted"}>
+                                      {deepDive.status === "promoting" ? "Writing typed records…" : deepDive.status === "persisted" ? "Accepted · pending full text" : "Promote checked results"}
+                                    </button>
+                                    {deepDive.status !== "persisted" && (
+                                      <button className="cache-refresh-button" onClick={() => extractRecord(record, true)} disabled={deepDive.status === "extracting" || deepDive.status === "promoting"} title="Fetch the PubMed abstract and run the selected model again, replacing this reusable extraction.">
+                                        Re-extract live
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </article>

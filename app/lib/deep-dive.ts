@@ -1,5 +1,6 @@
 import { jsonSchema } from "ai";
 import { z } from "zod";
+import type { CacheMetadata } from "./research";
 
 export const deepDiveSchema = z.object({
   study: z.object({
@@ -74,6 +75,7 @@ export type DeepDiveResponse = {
   candidate: DeepDiveCandidate;
   model: string;
   verificationStatus: "abstract-only";
+  cache: CacheMetadata;
 };
 
 export const deepDiveInstructions = `You extract proposed atomic evidence records from one PubMed abstract.

@@ -17,6 +17,13 @@ export type PubmedDiscovery = {
   url: string;
 };
 
+export type CacheMetadata = {
+  status: "hit" | "miss" | "bypass" | "browser";
+  layer: "d1" | "browser";
+  createdAt: string | null;
+  expiresAt: string | null;
+};
+
 export type ResearchResponse = {
   query: string;
   executedQuery: string;
@@ -24,6 +31,7 @@ export type ResearchResponse = {
   database: "PubMed";
   totalMatches: number;
   records: PubmedDiscovery[];
+  cache: CacheMetadata;
 };
 
 export function compilePubmedQuery(query: string, filters: PublicationFilter[]) {

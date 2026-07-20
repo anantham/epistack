@@ -243,6 +243,21 @@ export const updateEvents = sqliteTable("update_events", {
   index("update_events_review_idx").on(table.reviewStatus),
 ]);
 
+// Recomputable operation output. This is never the canonical evidence store:
+// cache rows may expire or be bypassed without changing accepted graph records.
+export const operationCache = sqliteTable("operation_cache", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull(),
+  contractVersion: text("contract_version").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  lastAccessedAt: text("last_accessed_at").notNull(),
+}, (table) => [
+  index("operation_cache_kind_idx").on(table.kind),
+  index("operation_cache_expires_idx").on(table.expiresAt),
+]);
+
 export const assessments = sqliteTable("assessments", {
   id: text("id").primaryKey(),
   caseId: text("case_id").notNull().references(() => cases.id),
