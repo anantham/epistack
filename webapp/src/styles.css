@@ -265,6 +265,9 @@ body{margin:0}
 .finding.conf-high{ border-left-color:var(--accent) }
 .finding.conf-medium{ border-left-color:var(--accent-line) }
 .finding-claim{ font-size:14.5px; color:var(--ink); line-height:1.5 }
+.chan-chip{ display:inline-block; font-family:var(--font-mono); font-size:10px; letter-spacing:.04em; padding:2px 8px; border-radius:20px; margin-bottom:8px; border:1px solid transparent }
+.chan-chip.broad{ color:var(--ink-2); background:var(--surface-2); border-color:var(--line) }
+.chan-chip.personal{ color:var(--accent-strong); background:var(--accent-wash); border-color:var(--accent-line) }
 .finding-tags{ display:flex; flex-wrap:wrap; gap:6px; margin-top:9px }
 .tag{ font-family:var(--font-mono); font-size:10.5px; letter-spacing:.02em; padding:2px 8px; border-radius:5px; border:1px solid var(--line); color:var(--ink-2); background:var(--surface) }
 .tag.t-supports{ color:var(--accent-strong); background:var(--accent-wash); border-color:var(--accent-line); font-weight:600 }
@@ -347,6 +350,8 @@ body{margin:0}
 .dp-against li::marker{ color:var(--flag) }
 .dp-crux, .dp-test{ border-left:3px solid var(--accent); padding-left:16px }
 .dp-crux{ font-size:15.5px; line-height:1.5; color:var(--ink) }
+.dp-bvp{ font-size:14.5px; line-height:1.5; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:11px 13px; margin:2px 0 4px }
+.dp-bvp .rlabel{ margin-bottom:5px }
 .dp-test{ border-left-color:var(--flag); font-size:15px; line-height:1.5; color:var(--ink) }
 .dp-conf{ display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; padding-top:14px; border-top:1px solid var(--line-2) }
 .dp-conf-chip{ flex-shrink:0; font-family:var(--font-mono); font-size:11px; padding:4px 10px; border-radius:6px; text-transform:uppercase; letter-spacing:.02em; border:1px solid var(--line) }

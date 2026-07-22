@@ -740,6 +740,12 @@ function FindingCard({ f, question, axisName, rkey, onLedger, initialLedger }) {
   }
   return (
     <div className={`finding conf-${conf}`}>
+      {f.channel && (
+        <span className={`chan-chip ${/subgroup|you|personal/i.test(f.channel) ? 'personal' : 'broad'}`}
+          title={/subgroup|you|personal/i.test(f.channel) ? 'applicability channel — close to your scope' : 'recall channel — the broad literature, incl. evidence against your likely hope'}>
+          {/subgroup|you|personal/i.test(f.channel) ? '◆ for you' : '◇ broad literature'}
+        </span>
+      )}
       <div className="finding-claim">{f.claim}</div>
       {f.relevance && <div className="finding-rel">for you: {f.relevance}</div>}
       <div className="finding-tags">
@@ -1497,6 +1503,12 @@ function ResearchStage({ R, question, data, pdata, context }) {
                 <span className={`dp-stance st-${norm(decision.stance).replace(/[^a-z]/g, '')}`}>{decision.stance}</span>
                 <div className="dp-answer">{decision.answer}</div>
               </div>
+              {decision.broadVsPersonal && (
+                <div className="dp-bvp">
+                  <span className="rlabel">broad literature vs. you</span>
+                  {decision.broadVsPersonal}
+                </div>
+              )}
               <div className="dp-cols">
                 <div className="dp-for">
                   <span className="rlabel">for</span>
@@ -1635,6 +1647,12 @@ function Stage4Artifact({ R, question, data, pdata }) {
             <span className={`dp-stance st-${norm(decision.stance).replace(/[^a-z]/g, '')}`}>{decision.stance}</span>
             <div className="dp-answer">{decision.answer}</div>
           </div>
+          {decision.broadVsPersonal && (
+            <div className="dp-bvp">
+              <span className="rlabel">broad literature vs. you</span>
+              {decision.broadVsPersonal}
+            </div>
+          )}
           {decision.crux && (
             <div className="dp-crux">
               <span className="rlabel">the crux</span>
