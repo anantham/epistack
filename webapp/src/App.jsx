@@ -1043,32 +1043,44 @@ function MatrixView({ axes, lanes, ledgers, question }) {
   )
 }
 
-function ResearchStage({ question, data, pdata, context }) {
+// Research state + actions LIFTED into App, so Stage 3 (dispatch) and Stage 4
+// (the artifact) read ONE live source — the artifact fills in as agents stream in.
+function useResearch({ question, data, pdata, context, committed }) {
   const axes = useMemo(() => {
+    const clusters = data?.clusters || []
     if (pdata) {
       const byId = Object.fromEntries((pdata.clusters || []).map((c) => [c.id, c]))
-      const open = (data.clusters || []).filter((c) => (byId[c.id]?.status || 'open') === 'open')
+      const open = clusters.filter((c) => (byId[c.id]?.status || 'open') === 'open')
       const news = pdata.newClusters || []
       const picked = [...open, ...news]
-      return picked.length ? picked : data.clusters || []
+      return picked.length ? picked : clusters
     }
-    return data.clusters || []
+    return clusters
   }, [data, pdata])
 
-  const saved0 = loadInvestigation(question)?.research || {} // hydrate on mount (survives reload + tab-switch)
-  const [lanes, setLanes] = useState(() => saved0.lanes || {})
-  const [now, setNow] = useState(() => Date.now())
-  const [plan, setPlan] = useState(() => saved0.plan || null) // null | 'planning' | result | {error}
-  const [view, setView] = useState('lanes') // lanes | matrix
-  const [decision, setDecision] = useState(() => saved0.decision || null) // null | 'deciding' | result | {error}
+  const [lanes, setLanes] = useState({})
+  const [plan, setPlan] = useState(null) // null | 'planning' | result | {error}
+  const [decision, setDecision] = useState(null) // null | 'deciding' | result | {error}
   // canonical result store, populated live by deep-dives + dependence passes; matrix & decide read from it
-  const [ledgers, setLedgers] = useState(() => saved0.ledgers || {}) // "axisId#idx" -> result ledger {study, results, authorConclusion}
-  const [families, setFamilies] = useState(() => saved0.families || {}) // axisId -> dependence {families, independentCount, ...}
+  const [ledgers, setLedgers] = useState({}) // "axisId#idx" -> result ledger {study, results, authorConclusion}
+  const [families, setFamilies] = useState({}) // axisId -> dependence {families, independentCount, ...}
   // the compiled RESEARCH BRIEF — claim portfolio + applicability profile + retrieval plans + parked
-  const [brief, setBrief] = useState(() => saved0.brief || null) // null | 'compiling' | result | {error}
+  const [brief, setBrief] = useState(null) // null | 'compiling' | result | {error}
+
+  // (re)hydrate the research slice whenever a DIFFERENT decomposed investigation becomes
+  // active — keyed on the committed question, so typing / dimension edits never clobber it
+  useEffect(() => {
+    const saved = (committed && question?.trim() && loadInvestigation(question)?.research) || {}
+    setLanes(saved.lanes || {})
+    setPlan(saved.plan && saved.plan.agents ? saved.plan : null)
+    setBrief(saved.brief && saved.brief.claims ? saved.brief : null)
+    setLedgers(saved.ledgers || {})
+    setFamilies(saved.families || {})
+    setDecision(saved.decision && saved.decision.answer ? saved.decision : null)
+  }, [question, committed])
 
   // structured Stage-2 outputs the compiler consumes (pinned = applicability facts, dropped = parked)
-  const nameOf = (id) => (data.clusters || []).find((x) => x.id === id)?.name || id
+  const nameOf = (id) => (data?.clusters || []).find((x) => x.id === id)?.name || id
   const pinnedAxes = pdata
     ? (pdata.clusters || []).filter((c) => c.status === 'pinned').map((c) => ({ id: c.id, name: nameOf(c.id), value: c.value || '', reason: c.reason || '' }))
     : []
@@ -1079,7 +1091,7 @@ function ResearchStage({ question, data, pdata, context }) {
   // A.3: persist the research slice (only completed lanes / results — drop in-flight state)
   useEffect(() => {
     const q = question?.trim()
-    if (!q) return
+    if (!q || !committed || !data) return
     const doneLanes = Object.fromEntries(Object.entries(lanes).filter(([, l]) => l?.status === 'done'))
     saveInvestigationPatch(q, {
       research: {
@@ -1091,7 +1103,7 @@ function ResearchStage({ question, data, pdata, context }) {
         decision: decision && decision.answer ? decision : null,
       },
     })
-  }, [lanes, plan, brief, ledgers, families, decision, question])
+  }, [lanes, plan, brief, ledgers, families, decision, question, committed, data])
   const onLedger = (k, l) => setLedgers((m) => ({ ...m, [k]: l }))
   const onFamilies = (id, fam) => setFamilies((m) => ({ ...m, [id]: fam }))
   const statsById = useMemo(
@@ -1125,12 +1137,6 @@ function ResearchStage({ question, data, pdata, context }) {
   }
   const claimsFor = (id) => (brief && Array.isArray(brief.claims) ? brief.claims.filter((c) => c.axis === id) : [])
   const applicability = brief && Array.isArray(brief.applicability) ? brief.applicability : []
-
-  useEffect(() => {
-    if (!Object.values(lanes).some((l) => l && l.status === 'searching')) return
-    const id = setInterval(() => setNow(Date.now()), 200)
-    return () => clearInterval(id)
-  }, [lanes])
 
   async function research(axis) {
     setLanes((l) => ({ ...l, [axis.id]: { status: 'searching', findings: [], t0: Date.now() } }))
@@ -1223,6 +1229,19 @@ function ResearchStage({ question, data, pdata, context }) {
       setDecision({ error: String(e.message || e) })
     }
   }
+
+  return { axes, lanes, plan, decision, ledgers, families, brief, applicability, nameOf, statsById, briefFor, onLedger, onFamilies, compileBrief, research, researchAll, decide }
+}
+
+function ResearchStage({ R, question, data, pdata, context }) {
+  const { axes, lanes, plan, decision, ledgers, families, brief, applicability, nameOf, statsById, briefFor, onLedger, onFamilies, compileBrief, research, researchAll, decide } = R
+  const [view, setView] = useState('lanes') // lanes | matrix
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!Object.values(lanes).some((l) => l && l.status === 'searching')) return
+    const id = setInterval(() => setNow(Date.now()), 200)
+    return () => clearInterval(id)
+  }, [lanes])
 
   const anyRunning = axes.some((a) => lanes[a.id]?.status === 'searching')
   const allFindings = axes.flatMap((a) => lanes[a.id]?.findings || [])
@@ -1467,13 +1486,13 @@ function ResearchStage({ question, data, pdata, context }) {
 }
 
 // Stage 4 · THE ARTIFACT — a navigable typed graph over the persisted investigation (read-only view)
-function Stage4Artifact({ question, data, pdata }) {
-  const inv = loadInvestigation(question) || {}
-  const research = inv.research || {}
-  const lanes = research.lanes || {}
-  const ledgers = research.ledgers || {}
-  const families = research.families || {}
-  const decision = research.decision && research.decision.answer ? research.decision : null
+function Stage4Artifact({ R, question, data, pdata }) {
+  // live: reads the SAME research state Stage 3 writes, so the artifact fills in
+  // in real time as agents return and deep-dives resolve
+  const { axes = [], lanes = {}, ledgers = {}, families = {}, decision: dec } = R || {}
+  const decision = dec && dec.answer ? dec : null
+  const searching = axes.filter((a) => lanes[a.id]?.status === 'searching')
+  const anyRunning = searching.length > 0
   const [openDim, setOpenDim] = useState(null)
 
   const clusters = data?.clusters || []
@@ -1494,6 +1513,13 @@ function Stage4Artifact({ question, data, pdata }) {
 
   return (
     <div className="artifact">
+      {anyRunning && (
+        <div className="art-live">
+          <span className="art-live-pulse" />
+          {searching.length} agent{searching.length === 1 ? '' : 's'} still searching — the graph is filling in live
+          <span className="art-live-names">{searching.map((a) => a.name).join(' · ')}</span>
+        </div>
+      )}
       {decision ? (
         <div className="art-decision">
           <div className="dp-head">
@@ -1656,6 +1682,9 @@ export default function App() {
   const [modelPref, setModelPrefState] = useState(() => getModel() || '')
   const [promptsOpen, setPromptsOpen] = useState(false)
   const [prompts, setPrompts] = useState(null)
+  // research state lives HERE (not inside a step) so it survives step 3↔4 and the
+  // Stage-4 artifact renders live as agents/deep-dives stream in
+  const R = useResearch({ question, data, pdata, context: ctxSummary, committed: phase === 'clustered' })
   async function openPrompts() {
     setSettingsOpen(false)
     setPromptsOpen(true)
@@ -2139,12 +2168,12 @@ export default function App() {
 
             {step === 3 && (
               <>
-                <ResearchStage question={question} data={data} pdata={pdata} context={ctxSummary} />
+                <ResearchStage R={R} question={question} data={data} pdata={pdata} context={ctxSummary} />
                 <button className="step-next" onClick={() => setStep(4)}>next · the artifact →</button>
               </>
             )}
 
-            {step === 4 && <Stage4Artifact question={question} data={data} pdata={pdata} />}
+            {step === 4 && <Stage4Artifact R={R} question={question} data={data} pdata={pdata} />}
           </>
         )}
       </div>
