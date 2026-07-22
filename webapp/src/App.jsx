@@ -1,4 +1,5 @@
 import { useState, useRef, useLayoutEffect, useEffect, useMemo } from 'react'
+import { mergeInvestigationRecord } from './merge.js'
 
 const prefersReduced =
   typeof window !== 'undefined' &&
@@ -184,72 +185,6 @@ const setMeName = (name) => {
   const next = { ...me, name: String(name || '').slice(0, 40) }
   try { localStorage.setItem(ME_KEY, JSON.stringify(next)) } catch {}
   return next
-}
-
-// dedup key for a finding: the source URL if any, else source+claim
-const findingKey = (f) => {
-  const u = String(f.url || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
-  return u || `${f.source || ''}|${String(f.claim || '').slice(0, 80)}`
-}
-
-// MERGE another investigator's record into mine. Evidence UNIONS (attributed, deduped);
-// dimensions union by id; personal context/decision stay MINE. Returns { merged, summary }.
-function mergeInvestigationRecord(mine, incoming, byId) {
-  mine = mine || {}
-  const mr = mine.research || {}
-  const ir = incoming.research || {}
-  // dimensions: keep mine, add any axes they have that I don't (they may have opened a new one)
-  const mineClusters = mine.data?.clusters || []
-  const haveDim = new Set(mineClusters.map((c) => c.id))
-  const addedDims = (incoming.data?.clusters || []).filter((c) => c.id && !haveDim.has(c.id))
-  const mergedData = mineClusters.length
-    ? { ...(mine.data || {}), clusters: [...mineClusters, ...addedDims] }
-    : incoming.data || null
-  // lanes + ledgers: union findings per axis (dedup), remapping their ledger keys to the new indices
-  const mineLanes = mr.lanes || {}
-  const theirLanes = ir.lanes || {}
-  const mineLedgers = mr.ledgers || {}
-  const theirLedgers = ir.ledgers || {}
-  const outLanes = {}
-  const outLedgers = { ...mineLedgers }
-  let addedFindings = 0
-  const touchedAxes = new Set()
-  const axisIds = new Set([...Object.keys(mineLanes), ...Object.keys(theirLanes)])
-  for (const axis of axisIds) {
-    const findings = (mineLanes[axis]?.findings || []).slice()
-    const seen = new Set(findings.map(findingKey))
-    const startIdx = findings.length
-    let k = 0
-    ;(theirLanes[axis]?.findings || []).forEach((tf, tIdx) => {
-      if (seen.has(findingKey(tf))) return
-      seen.add(findingKey(tf))
-      findings.push({ ...tf, _by: tf._by || byId })
-      const led = theirLedgers[`${axis}#${tIdx}`]
-      const newKey = `${axis}#${startIdx + k}`
-      if (led && !outLedgers[newKey]) outLedgers[newKey] = { ...led, _by: led._by || byId }
-      addedFindings++
-      touchedAxes.add(axis)
-      k++
-    })
-    const base = mineLanes[axis] || theirLanes[axis] || {}
-    outLanes[axis] = { ...base, findings, status: findings.length ? 'done' : base.status }
-  }
-  // evidence families: keep mine, fill from theirs where I have none for that axis
-  const outFamilies = { ...(ir.families || {}), ...(mr.families || {}) }
-  // interaction timeline: union, tag theirs, sort, cap
-  const mineInter = mine.interactions || []
-  const theirInter = (incoming.interactions || incoming.human?.interactions || []).map((x) => ({ ...x, _by: x._by || byId }))
-  const mergedInter = [...mineInter, ...theirInter].sort((a, b) => String(a.t).localeCompare(String(b.t))).slice(-1000)
-  const merged = {
-    ...mine,
-    question: mine.question || incoming.question,
-    data: mergedData,
-    // personal — stays mine (their context/personalization/decision are not imposed)
-    pdata: mine.pdata || null,
-    research: { ...mr, lanes: outLanes, ledgers: outLedgers, families: outFamilies, brief: mr.brief || ir.brief || null },
-    interactions: mergedInter,
-  }
-  return { merged, summary: { addedFindings, addedDimensions: addedDims.length, axes: [...touchedAxes] } }
 }
 
 // read an exported file, merge/adopt it into the store. Returns a summary for the UI.
@@ -815,6 +750,8 @@ function FindingCard({ f, question, axisName, rkey, onLedger, initialLedger }) {
 // dependence grouping — cluster the axis's sources into independent evidence families
 function DependencePanel({ axis, findings, question, onFamilies, initialDep }) {
   const [dep, setDep] = useState(initialDep || null) // null | 'loading' | result | {error}
+  // reflect the stored grouping (incl. a merge-set _stale flag) when it changes underneath us
+  useEffect(() => { setDep(initialDep || null) }, [initialDep])
   async function run() {
     setDep('loading')
     logInteraction(question, 'human', 'group-evidence-families', { axis: axis.name })
@@ -840,11 +777,13 @@ function DependencePanel({ axis, findings, question, onFamilies, initialDep }) {
   const total = done ? dep.totalSources || findings.length : findings.length
   const indep = done ? dep.independentCount : null
   const inflated = indep != null && total > indep
+  const stale = done && dep._stale
   return (
     <div className="dependence">
+      {stale && <div className="stale-note">⟳ evidence changed since this grouping — regroup to re-check independence</div>}
       <div className="dep-bar">
-        <button className="lane-run" onClick={run} disabled={dep === 'loading'}>
-          {dep === 'loading' ? 'grouping…' : done ? '↻ regroup' : '⚖ group by evidence family'}
+        <button className={`lane-run${stale ? ' stale' : ''}`} onClick={run} disabled={dep === 'loading'}>
+          {dep === 'loading' ? 'grouping…' : stale ? '↻ regroup (stale)' : done ? '↻ regroup' : '⚖ group by evidence family'}
         </button>
         {indep != null && (
           <span className={`dep-count${inflated ? ' inflated' : ''}`}>
@@ -1490,12 +1429,14 @@ function ResearchStage({ R, question, data, pdata, context }) {
       {started && (
         <div className="decide">
           <div className="decide-bar">
-            <button className="btn-decompose" onClick={decide} disabled={decision === 'deciding'}>
+            <button className={`btn-decompose${decision && decision._stale ? ' stale' : ''}`} onClick={decide} disabled={decision === 'deciding'}>
               {decision === 'deciding'
                 ? 'synthesizing your answer…'
-                : decision && !decision.error
-                  ? '↻ re-synthesize'
-                  : '▶ synthesize the answer'}
+                : decision && decision._stale
+                  ? '↻ re-synthesize (new evidence)'
+                  : decision && !decision.error
+                    ? '↻ re-synthesize'
+                    : '▶ synthesize the answer'}
             </button>
             {decision === 'deciding' && <span className="orch-hint">reading the graph, weighing conflicts, calibrating confidence…</span>}
             {decision && decision.error && <span className="dd-err">{decision.error}</span>}
@@ -1511,7 +1452,10 @@ function ResearchStage({ R, question, data, pdata, context }) {
             })()}
           </div>
           {decision && decision !== 'deciding' && !decision.error && (
-            <div className="decision-panel">
+            <div className={`decision-panel${decision._stale ? ' stale' : ''}`}>
+              {decision._stale && (
+                <div className="stale-note">⟳ new evidence merged in since this answer — re-synthesize to reflect it</div>
+              )}
               <div className="dp-head">
                 <span className={`dp-stance st-${norm(decision.stance).replace(/[^a-z]/g, '')}`}>{decision.stance}</span>
                 <div className="dp-answer">{decision.answer}</div>
@@ -1646,7 +1590,10 @@ function Stage4Artifact({ R, question, data, pdata }) {
         </div>
       )}
       {decision ? (
-        <div className="art-decision">
+        <div className={`art-decision${decision._stale ? ' stale' : ''}`}>
+          {decision._stale && (
+            <div className="stale-note">⟳ new evidence merged in since this was synthesized — re-synthesize in <b>3 · research</b> for an answer that reflects it</div>
+          )}
           <div className="dp-head">
             <span className={`dp-stance st-${norm(decision.stance).replace(/[^a-z]/g, '')}`}>{decision.stance}</span>
             <div className="dp-answer">{decision.answer}</div>
