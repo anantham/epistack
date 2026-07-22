@@ -600,31 +600,29 @@ const matchRes = (a, b) => {
   return !!x && !!y && (x === y || x.includes(y) || y.includes(x))
 }
 
-// evidence weight by confidence; drives the histogram + uncertainty (normalised entropy)
-const CONF_W = { high: 3, medium: 2, low: 1 }
+// Honest per-axis descriptive stats. A "finding" is ONE unit — no confidence-weighting,
+// no entropy, no derived "uncertainty %". segs = how the RETRIEVED findings distribute across
+// resolutions (the histogram); topShare = the fraction on the leading resolution. These describe
+// what the agents FOUND, never the probability that a claim is true.
 function axisStats(axis, findings) {
   const res = axis.resolutions || []
-  const wOf = (arr) => arr.reduce((s, f) => s + (CONF_W[norm(f.confidence)] || 1), 0)
-  const buckets = res.map((r) => ({ r, w: wOf(findings.filter((f) => matchRes(f.supports, r))) }))
-  const unclearW = wOf(findings.filter((f) => !res.some((r) => matchRes(f.supports, r))))
+  const buckets = res.map((r) => ({ r, w: findings.filter((f) => matchRes(f.supports, r)).length }))
+  const unclearW = findings.filter((f) => !res.some((r) => matchRes(f.supports, r))).length
   const segs = unclearW > 0 ? [...buckets, { r: 'unclear', w: unclearW, unclear: true }] : buckets.length ? buckets : [{ r: '—', w: 0 }]
-  const total = segs.reduce((s, b) => s + b.w, 0)
+  const total = findings.length
   const maxW = Math.max(1, ...segs.map((b) => b.w))
-  const k = Math.max(res.length, 2)
-  let u = 1 // no evidence → maximum uncertainty (uniform prior over resolutions)
-  if (total > 0) {
-    const ps = segs.map((b) => b.w / total).filter((p) => p > 0)
-    const H = -ps.reduce((s, p) => s + p * Math.log(p), 0)
-    u = Math.min(1, H / Math.log(k))
-  }
   const top = [...segs].filter((b) => !b.unclear).sort((a, b) => b.w - a.w)[0]
-  return { segs, total, maxW, u, evidence: findings.length, top: top && top.w > 0 ? top.r : null }
+  const topShare = total > 0 && top ? top.w / total : 0
+  return { segs, total, maxW, evidence: findings.length, top: top && top.w > 0 ? top.r : null, topShare }
 }
+// a QUALITATIVE read of the retrieved findings — deliberately not a number. "findings" prefix
+// keeps it honest: this is agreement among what was retrieved, not confidence in the truth.
 function verdict(s) {
   if (s.evidence === 0) return { key: 'unexamined', label: 'unexamined' }
-  if (s.u <= 0.35) return { key: 'converging', label: `converging → ${s.top || '—'}` }
-  if (s.u >= 0.72) return { key: 'contested', label: 'genuinely contested' }
-  return { key: 'leaning', label: `leaning → ${s.top || '—'}` }
+  if (s.evidence < 2) return { key: 'thin', label: 'thin · 1 finding' }
+  if (s.topShare >= 0.8) return { key: 'converging', label: `findings agree → ${s.top || '—'}` }
+  if (s.topShare < 0.55) return { key: 'contested', label: 'findings conflict' }
+  return { key: 'leaning', label: `findings lean → ${s.top || '—'}` }
 }
 
 // one segmented bar = the evidence distribution across an axis's resolutions (the "histogram")
@@ -929,7 +927,6 @@ function ResearchLane({ axis, lane, stats, brief, now, onRun, question, onLedger
           <EvidenceBar axis={axis} stats={stats} />
           <div className="lane-buckets">
             <span className={`lane-verdict v-${v.key}`}>{v.label}</span>
-            <span className="lane-u">spread {Math.round(stats.u * 100)}%</span>
             {buckets.map((b, i) => (
               <span key={i} className={`bucket${b.n ? ' hit' : ''}`}>
                 {b.r} <b>{b.n}</b>
@@ -961,30 +958,36 @@ function ResearchLane({ axis, lane, stats, brief, now, onRun, question, onLedger
   )
 }
 
-// Stage 3 top: the caring graph — every axis's evidence histogram + uncertainty, dropping live
+// Stage 3 top: the caring graph — honest COUNTS accumulating live (coverage + findings),
+// never a derived "uncertainty %". The meter is axes-covered, an actual ratio; per-row shows
+// finding count + a qualitative agree/conflict read.
 function GraphState({ axes, statsById }) {
-  const us = axes.map((a) => statsById[a.id].u)
-  const agg = us.length ? Math.round((us.reduce((x, y) => x + y, 0) / us.length) * 100) : 100
   const examined = axes.filter((a) => statsById[a.id].evidence > 0).length
-  const contested = axes.filter((a) => statsById[a.id].evidence > 0 && statsById[a.id].u >= 0.72).length
+  const conflicting = axes.filter((a) => {
+    const s = statsById[a.id]
+    return s.evidence >= 2 && s.topShare < 0.55
+  }).length
+  const totalFindings = axes.reduce((s, a) => s + (statsById[a.id].evidence || 0), 0)
+  const coverage = axes.length ? Math.round((examined / axes.length) * 100) : 0
   return (
     <div className="graphstate">
       <div className="gs-head">
         <div className="gs-title-wrap">
           <span className="rlabel">the caring graph</span>
-          <div className="gs-title">evidence spread across {axes.length} {axes.length === 1 ? 'axis' : 'axes'}</div>
+          <div className="gs-title">evidence across {axes.length} {axes.length === 1 ? 'axis' : 'axes'}</div>
           <div className="gs-note">
-            {examined}/{axes.length} examined{contested ? ` · ${contested} genuinely contested` : ''} · spread of what agents
-            retrieved, not probability of truth
+            {totalFindings} finding{totalFindings === 1 ? '' : 's'} so far{conflicting ? ` · ${conflicting} ax${conflicting === 1 ? 'is' : 'es'} where findings conflict` : ''} · this
+            shows what agents RETRIEVED, not the probability any claim is true
           </div>
         </div>
         <div className="gs-meter">
           <div className="gs-pct">
-            <b>{agg}</b>%
+            <b>{examined}</b>/{axes.length}
           </div>
           <div className="gs-track">
-            <span className="gs-fill" style={{ width: agg + '%' }} />
+            <span className="gs-fill" style={{ width: coverage + '%' }} />
           </div>
+          <div className="gs-meter-label">axes covered</div>
         </div>
       </div>
       <div className="gs-rows">
@@ -996,7 +999,7 @@ function GraphState({ axes, statsById }) {
               <span className="gs-name">{a.name}</span>
               <EvidenceBar axis={a} stats={s} />
               <span className={`gs-verdict v-${v.key}`}>{v.label}</span>
-              <span className="gs-u">{Math.round(s.u * 100)}%</span>
+              <span className="gs-count" title="findings retrieved for this axis">{s.evidence || 0}</span>
             </div>
           )
         })}
@@ -1628,9 +1631,9 @@ function Stage4Artifact({ R, question, data, pdata }) {
 
   const statsFor = (d) => axisStats(d, lanes[d.id]?.findings || [])
   const examined = dims.filter((d) => (lanes[d.id]?.findings || []).length > 0)
-  const agg = examined.length ? Math.round((examined.reduce((s, d) => s + statsFor(d).u, 0) / examined.length) * 100) : 100
   const totalFindings = Object.values(lanes).reduce((s, l) => s + (l.findings?.length || 0), 0)
   const totalResults = Object.values(ledgers).reduce((s, l) => s + (l.results?.length || 0), 0)
+  const deepDived = Object.keys(ledgers).length // findings taken to result level — the real depth signal
   const label = { pinned: '✓ pinned', open: '○ open', dropped: '— dropped', new: '＋ new' }
 
   return (
@@ -1675,8 +1678,8 @@ function Stage4Artifact({ R, question, data, pdata }) {
         <span>
           <b>{totalFindings}</b> findings · <b>{totalResults}</b> result-level records
         </span>
-        <span className="art-agg">
-          graph uncertainty <b>{agg}%</b>
+        <span className="art-agg" title="findings taken to result level (source read, results extracted) — shallow findings are agent summaries only">
+          <b>{deepDived}</b>/{totalFindings} deep-dived
         </span>
       </div>
 
@@ -1696,7 +1699,7 @@ function Stage4Artifact({ R, question, data, pdata }) {
                 <span className={`art-status s-${d.status}`}>{label[d.status] || d.status}</span>
                 {findings.length > 0 ? (
                   <span className={`art-dim-metrics v-${v.key}`}>
-                    {v.label} · spread {Math.round(st.u * 100)}% · {findings.length} findings{fam ? ` · ${fam.independentCount} families` : ''}
+                    {v.label} · {findings.length} findings{fam ? ` · ${fam.independentCount} independent` : ''}
                   </span>
                 ) : (
                   <span className="art-dim-metrics unexamined">{d.status === 'pinned' ? 'settled by your context' : 'no evidence collected'}</span>
