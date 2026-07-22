@@ -135,6 +135,8 @@ const exportInvestigation = (q) => {
     question: q,
     exportedAt: new Date().toISOString(),
     model: getModel() || 'default',
+    contributor: getMe(), // who collected this — so merged evidence stays attributed
+
     // everything the HUMAN did — inputs, edits, and the full steering timeline
     human: {
       dimensionsAsShaped: inv.data?.clusters || [], // after your renames / prunes / additions
@@ -164,6 +166,121 @@ const exportInvestigation = (q) => {
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+// --- who am I: a stable per-browser contributor identity, so merged evidence stays attributed ---
+const ME_KEY = 'epistack_me'
+const getMe = () => {
+  try {
+    const m = JSON.parse(localStorage.getItem(ME_KEY) || 'null')
+    if (m && m.id) return m
+  } catch {}
+  const me = { id: 'c_' + Math.random().toString(36).slice(2, 9), name: '' }
+  try { localStorage.setItem(ME_KEY, JSON.stringify(me)) } catch {}
+  return me
+}
+const setMeName = (name) => {
+  const me = getMe()
+  const next = { ...me, name: String(name || '').slice(0, 40) }
+  try { localStorage.setItem(ME_KEY, JSON.stringify(next)) } catch {}
+  return next
+}
+
+// dedup key for a finding: the source URL if any, else source+claim
+const findingKey = (f) => {
+  const u = String(f.url || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+  return u || `${f.source || ''}|${String(f.claim || '').slice(0, 80)}`
+}
+
+// MERGE another investigator's record into mine. Evidence UNIONS (attributed, deduped);
+// dimensions union by id; personal context/decision stay MINE. Returns { merged, summary }.
+function mergeInvestigationRecord(mine, incoming, byId) {
+  mine = mine || {}
+  const mr = mine.research || {}
+  const ir = incoming.research || {}
+  // dimensions: keep mine, add any axes they have that I don't (they may have opened a new one)
+  const mineClusters = mine.data?.clusters || []
+  const haveDim = new Set(mineClusters.map((c) => c.id))
+  const addedDims = (incoming.data?.clusters || []).filter((c) => c.id && !haveDim.has(c.id))
+  const mergedData = mineClusters.length
+    ? { ...(mine.data || {}), clusters: [...mineClusters, ...addedDims] }
+    : incoming.data || null
+  // lanes + ledgers: union findings per axis (dedup), remapping their ledger keys to the new indices
+  const mineLanes = mr.lanes || {}
+  const theirLanes = ir.lanes || {}
+  const mineLedgers = mr.ledgers || {}
+  const theirLedgers = ir.ledgers || {}
+  const outLanes = {}
+  const outLedgers = { ...mineLedgers }
+  let addedFindings = 0
+  const touchedAxes = new Set()
+  const axisIds = new Set([...Object.keys(mineLanes), ...Object.keys(theirLanes)])
+  for (const axis of axisIds) {
+    const findings = (mineLanes[axis]?.findings || []).slice()
+    const seen = new Set(findings.map(findingKey))
+    const startIdx = findings.length
+    let k = 0
+    ;(theirLanes[axis]?.findings || []).forEach((tf, tIdx) => {
+      if (seen.has(findingKey(tf))) return
+      seen.add(findingKey(tf))
+      findings.push({ ...tf, _by: tf._by || byId })
+      const led = theirLedgers[`${axis}#${tIdx}`]
+      const newKey = `${axis}#${startIdx + k}`
+      if (led && !outLedgers[newKey]) outLedgers[newKey] = { ...led, _by: led._by || byId }
+      addedFindings++
+      touchedAxes.add(axis)
+      k++
+    })
+    const base = mineLanes[axis] || theirLanes[axis] || {}
+    outLanes[axis] = { ...base, findings, status: findings.length ? 'done' : base.status }
+  }
+  // evidence families: keep mine, fill from theirs where I have none for that axis
+  const outFamilies = { ...(ir.families || {}), ...(mr.families || {}) }
+  // interaction timeline: union, tag theirs, sort, cap
+  const mineInter = mine.interactions || []
+  const theirInter = (incoming.interactions || incoming.human?.interactions || []).map((x) => ({ ...x, _by: x._by || byId }))
+  const mergedInter = [...mineInter, ...theirInter].sort((a, b) => String(a.t).localeCompare(String(b.t))).slice(-1000)
+  const merged = {
+    ...mine,
+    question: mine.question || incoming.question,
+    data: mergedData,
+    // personal — stays mine (their context/personalization/decision are not imposed)
+    pdata: mine.pdata || null,
+    research: { ...mr, lanes: outLanes, ledgers: outLedgers, families: outFamilies, brief: mr.brief || ir.brief || null },
+    interactions: mergedInter,
+  }
+  return { merged, summary: { addedFindings, addedDimensions: addedDims.length, axes: [...touchedAxes] } }
+}
+
+// read an exported file, merge/adopt it into the store. Returns a summary for the UI.
+function ingestInvestigationFile(text, currentQuestion) {
+  let file
+  try { file = JSON.parse(text) } catch { throw new Error('not valid JSON') }
+  if (!file || typeof file !== 'object' || !file.question) throw new Error('not an epistack export (no question)')
+  const incoming = file._record || {
+    question: file.question,
+    data: { clusters: file.human?.dimensionsAsShaped || [], elicit: file.ai?.elicitationQuestions || [], assignments: file.ai?.wordAssignments || [] },
+    pdata: file.ai?.personalization || null,
+    ctxText: file.human?.contextRant || '',
+    context: file.human?.contextSummary || '',
+    interactions: file.human?.interactions || [],
+    research: { lanes: file.ai?.findings || {}, ledgers: file.ai?.resultLedgers || {}, families: file.ai?.evidenceFamilies || {}, decision: file.decision || null },
+  }
+  const byId = (file.contributor && file.contributor.id) || 'imported'
+  const byName = (file.contributor && file.contributor.name) || ''
+  const q = file.question.trim()
+  const mine = loadInvestigation(q)
+  const sameQuestion = currentQuestion && currentQuestion.trim() === q
+  if (mine && (sameQuestion || (mine.research && Object.keys(mine.research.lanes || {}).length))) {
+    // merge into an existing investigation of the same question
+    const { merged, summary } = mergeInvestigationRecord(mine, incoming, byId)
+    saveInvestigationPatch(q, merged)
+    return { mode: 'merged', question: q, byName, byId, ...summary }
+  }
+  // adopt fresh (I have nothing for this question)
+  const { merged, summary } = mergeInvestigationRecord({ question: q }, incoming, byId)
+  saveInvestigationPatch(q, merged)
+  return { mode: 'adopted', question: q, byName, byId, ...summary }
 }
 
 // One cluster = one scroll "stage". Activates when scrolled into view:
@@ -1067,16 +1184,21 @@ function useResearch({ question, data, pdata, context, committed }) {
   // the compiled RESEARCH BRIEF — claim portfolio + applicability profile + retrieval plans + parked
   const [brief, setBrief] = useState(null) // null | 'compiling' | result | {error}
 
-  // (re)hydrate the research slice whenever a DIFFERENT decomposed investigation becomes
-  // active — keyed on the committed question, so typing / dimension edits never clobber it
-  useEffect(() => {
-    const saved = (committed && question?.trim() && loadInvestigation(question)?.research) || {}
+  // adopt a research slice into memory (used by initial hydrate + explicit re-hydrate after import)
+  const hydrate = (saved) => {
+    saved = saved || {}
     setLanes(saved.lanes || {})
     setPlan(saved.plan && saved.plan.agents ? saved.plan : null)
     setBrief(saved.brief && saved.brief.claims ? saved.brief : null)
     setLedgers(saved.ledgers || {})
     setFamilies(saved.families || {})
     setDecision(saved.decision && saved.decision.answer ? saved.decision : null)
+  }
+  // (re)hydrate whenever a DIFFERENT decomposed investigation becomes active — keyed on the
+  // committed question, so typing / dimension edits never clobber it
+  useEffect(() => {
+    hydrate((committed && question?.trim() && loadInvestigation(question)?.research) || {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question, committed])
 
   // structured Stage-2 outputs the compiler consumes (pinned = applicability facts, dropped = parked)
@@ -1230,7 +1352,7 @@ function useResearch({ question, data, pdata, context, committed }) {
     }
   }
 
-  return { axes, lanes, plan, decision, ledgers, families, brief, applicability, nameOf, statsById, briefFor, onLedger, onFamilies, compileBrief, research, researchAll, decide }
+  return { axes, lanes, plan, decision, ledgers, families, brief, applicability, nameOf, statsById, briefFor, onLedger, onFamilies, compileBrief, research, researchAll, decide, hydrate }
 }
 
 function ResearchStage({ R, question, data, pdata, context }) {
@@ -1680,11 +1802,31 @@ export default function App() {
   const [activeDim, setActiveDim] = useState(null) // stage-1: the dimension shown on the right / lit in the question
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [modelPref, setModelPrefState] = useState(() => getModel() || '')
+  const [meName, setMeNameState] = useState(() => getMe().name || '')
   const [promptsOpen, setPromptsOpen] = useState(false)
   const [prompts, setPrompts] = useState(null)
   // research state lives HERE (not inside a step) so it survives step 3↔4 and the
   // Stage-4 artifact renders live as agents/deep-dives stream in
   const R = useResearch({ question, data, pdata, context: ctxSummary, committed: phase === 'clustered' })
+  const importRef = useRef(null)
+  const [importMsg, setImportMsg] = useState(null) // {mode, addedFindings, ...} | {error}
+  async function handleImportFile(e) {
+    const f = e.target.files && e.target.files[0]
+    e.target.value = '' // allow re-importing the same file
+    if (!f) return
+    try {
+      const text = await f.text()
+      const res = ingestInvestigationFile(text, question)
+      const saved = loadInvestigation(res.question)
+      if (saved && saved.data) loadInto(res.question, saved) // open (or refresh) the merged investigation
+      R.hydrate(saved?.research) // adopt the merged evidence into live state (same render — no stale re-persist)
+      setImportMsg(res)
+      setTimeout(() => setImportMsg(null), 9000)
+    } catch (err) {
+      setImportMsg({ error: String(err.message || err) })
+      setTimeout(() => setImportMsg(null), 9000)
+    }
+  }
   async function openPrompts() {
     setSettingsOpen(false)
     setPromptsOpen(true)
@@ -1770,6 +1912,25 @@ export default function App() {
     setActiveDim((cur) => (cur && ids.includes(cur) ? cur : ids[0] || null))
   }, [data, phase])
 
+  // hydrate the whole UI from a stored investigation (shared by decompose-restore + import)
+  function loadInto(q, saved, atStep) {
+    setQuestion(q)
+    setEverDecomposed(true)
+    const toks = tokenize(q)
+    setTokens(saved.tokens && saved.tokens.length ? saved.tokens : toks)
+    setData(saved.data)
+    setPdata(saved.pdata || null)
+    setPersonalized(!!saved.pdata)
+    setCtxSummary(saved.context || '')
+    setElicitAns(saved.elicitAns || {})
+    setCtxText(saved.ctxText || '')
+    setStep(atStep || saved.step || 1)
+    setFromCache(true)
+    setErr('')
+    setActivated([])
+    setPhase('clustered')
+  }
+
   async function decompose() {
     const q = question.trim()
     if (!q) return
@@ -1780,16 +1941,7 @@ export default function App() {
     // full restore: a saved investigation brings back context, personalization + research too
     const saved = loadInvestigation(q)
     if (saved && saved.data) {
-      setTokens(saved.tokens && saved.tokens.length ? saved.tokens : toks)
-      setData(saved.data)
-      setPdata(saved.pdata || null)
-      setPersonalized(!!saved.pdata)
-      setCtxSummary(saved.context || '')
-      setElicitAns(saved.elicitAns || {})
-      setCtxText(saved.ctxText || '')
-      setStep(saved.step || 1)
-      setFromCache(true)
-      setPhase('clustered')
+      loadInto(q, saved)
       return
     }
     setTokens(toks)
@@ -1924,6 +2076,26 @@ export default function App() {
 
   return (
     <div className={`app ${docked ? 'docked' : 'landing'}`}>
+      {importMsg && (
+        <div className={`import-toast${importMsg.error ? ' err' : ''}`} onClick={() => setImportMsg(null)}>
+          {importMsg.error ? (
+            <>import failed — {importMsg.error}</>
+          ) : (
+            <>
+              <b>{importMsg.mode === 'merged' ? 'merged in' : 'opened'}{importMsg.byName ? ` ${importMsg.byName}'s` : ' an'} investigation</b>
+              {importMsg.mode === 'merged' ? (
+                <span>
+                  {' '}+{importMsg.addedFindings} new finding{importMsg.addedFindings === 1 ? '' : 's'}
+                  {importMsg.addedDimensions ? ` · +${importMsg.addedDimensions} dimension${importMsg.addedDimensions === 1 ? '' : 's'}` : ''}
+                  {importMsg.axes.length ? ` across ${importMsg.axes.length} ax${importMsg.axes.length === 1 ? 'is' : 'es'}` : ' (nothing new — already had it all)'}
+                </span>
+              ) : (
+                <span> — {importMsg.addedFindings} finding{importMsg.addedFindings === 1 ? '' : 's'} loaded</span>
+              )}
+            </>
+          )}
+        </div>
+      )}
       <div className="settings">
         <button className="settings-gear" onClick={() => setSettingsOpen((o) => !o)} title="settings — pick the model" aria-label="settings">
           ⚙{modelPref && <span className="settings-badge">{MODELS.find((m) => m.v === modelPref)?.label || modelPref}</span>}
@@ -1950,6 +2122,15 @@ export default function App() {
                 </button>
               ))}
               <button className="sp-link" onClick={openPrompts}>⌗ inspect the prompts →</button>
+              <div className="sp-name-row">
+                <label className="sp-name-label">your name — stamped on evidence you share, so collaborators know who found what</label>
+                <input
+                  className="sp-name-input"
+                  value={meName}
+                  placeholder="anonymous"
+                  onChange={(e) => { setMeNameState(e.target.value); setMeName(e.target.value) }}
+                />
+              </div>
               <div className="sp-foot">applies to every AI call, from the next one on</div>
             </div>
           </>
@@ -2029,8 +2210,10 @@ export default function App() {
                 </button>
                 {fromCache && <span className="cached-chip" title="cached">⚡</span>}
                 {phase === 'clustered' && data && (
-                  <button className="dq-icon dq-export" onClick={() => exportInvestigation(question.trim())} title="Export the whole investigation as JSON — your question, your edits/prunes/context + full interaction timeline (human), and every finding, deep-dive result record, evidence family & the decision (AI)." aria-label="export investigation">⤓</button>
+                  <button className="dq-icon dq-export" onClick={() => exportInvestigation(question.trim())} title="Export the whole investigation as JSON — your question, your edits/prunes/context + full interaction timeline (human), and every finding, deep-dive result record, evidence family & the decision (AI). Share it so a collaborator can merge in their evidence." aria-label="export investigation">⤓</button>
                 )}
+                <button className="dq-icon dq-import" onClick={() => importRef.current?.click()} title="Import a collaborator's exported investigation. Same question → their evidence (findings, result records, families) MERGES into yours, attributed and deduped; your context and decision stay yours. A new question → opens theirs." aria-label="import investigation">⤒</button>
+                <input ref={importRef} type="file" accept="application/json,.json" onChange={handleImportFile} style={{ display: 'none' }} />
                 {phase === 'clustered' && data && (
                   <div className="stepper">
                     {[[1, 'expand'], [2, 'contextualize'], [3, 'research'], [4, 'artifact']].map(([n, label]) => (
