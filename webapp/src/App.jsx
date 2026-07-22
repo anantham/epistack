@@ -127,42 +127,79 @@ const setModelPref = (m) => {
   } catch {}
 }
 
-const exportInvestigation = (q) => {
+// strip the per-finding personalized fields (the "applies to YOU" lines that carry context)
+const shareableLanes = (lanes) => {
+  const out = {}
+  for (const [ax, l] of Object.entries(lanes || {})) {
+    out[ax] = { ...l, findings: (l.findings || []).map((f) => {
+      const g = { ...f }
+      delete g.relevance
+      delete g.scope
+      delete g.scopeNote
+      return g
+    }) }
+  }
+  return out
+}
+
+// redact=false → full private backup (round-trips). redact=true → shareable: the EVIDENCE
+// (the compounding substrate) plus the GENERALIZED applicability profile, WITHOUT the raw
+// context rant, personalization, decision, or per-finding "applies to you" lines. Honest scope:
+// this removes the structured personal fields; it does NOT scrub free text you authored in
+// dimension names/prompts — review those before publishing.
+const exportInvestigation = (q, { redact = false } = {}) => {
   const inv = loadInvestigation(q)
   if (!inv) return
   const r = inv.research || {}
-  const payload = {
-    schema: 'epistack.investigation/v1',
-    question: q,
-    exportedAt: new Date().toISOString(),
-    model: getModel() || 'default',
-    contributor: getMe(), // who collected this — so merged evidence stays attributed
+  const payload = redact
+    ? {
+        schema: 'epistack.investigation/v1',
+        variant: 'shareable-redacted',
+        question: q,
+        exportedAt: new Date().toISOString(),
+        contributor: getMe(),
+        redaction: 'Removed: your context, personalization, the decision, and per-finding "applies to you" lines. Kept: the evidence + a GENERALIZED applicability profile. NOTE: dimension names/prompts are your own words and are NOT auto-scrubbed — review before publishing.',
+        dimensions: inv.data?.clusters || [],
+        applicabilityProfile: r.brief?.applicability || [], // already generalized by the compiler
+        privacyNote: r.brief?.privacyNote || '',
+        evidence: {
+          findings: shareableLanes(r.lanes),
+          resultLedgers: r.ledgers || {},
+          evidenceFamilies: r.families || {},
+        },
+      }
+    : {
+        schema: 'epistack.investigation/v1',
+        question: q,
+        exportedAt: new Date().toISOString(),
+        model: getModel() || 'default',
+        contributor: getMe(), // who collected this — so merged evidence stays attributed
 
-    // everything the HUMAN did — inputs, edits, and the full steering timeline
-    human: {
-      dimensionsAsShaped: inv.data?.clusters || [], // after your renames / prunes / additions
-      elicitAnswers: inv.elicitAns || {},
-      contextRant: inv.ctxText || '',
-      contextSummary: inv.context || '',
-      interactions: inv.interactions || [],
-    },
-    // everything the AI produced
-    ai: {
-      wordAssignments: inv.data?.assignments || [],
-      elicitationQuestions: inv.data?.elicit || [],
-      personalization: inv.pdata || null,
-      findings: r.lanes || {},
-      resultLedgers: r.ledgers || {},
-      evidenceFamilies: r.families || {},
-    },
-    decision: r.decision || null,
-    _record: inv, // the raw store record, so the file round-trips back into the tool
-  }
+        // everything the HUMAN did — inputs, edits, and the full steering timeline
+        human: {
+          dimensionsAsShaped: inv.data?.clusters || [], // after your renames / prunes / additions
+          elicitAnswers: inv.elicitAns || {},
+          contextRant: inv.ctxText || '',
+          contextSummary: inv.context || '',
+          interactions: inv.interactions || [],
+        },
+        // everything the AI produced
+        ai: {
+          wordAssignments: inv.data?.assignments || [],
+          elicitationQuestions: inv.data?.elicit || [],
+          personalization: inv.pdata || null,
+          findings: r.lanes || {},
+          resultLedgers: r.ledgers || {},
+          evidenceFamilies: r.families || {},
+        },
+        decision: r.decision || null,
+        _record: inv, // the raw store record, so the file round-trips back into the tool
+      }
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `epistack-${(q || 'investigation').slice(0, 40).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()}.json`
+  a.download = `epistack-${redact ? 'shared-' : ''}${(q || 'investigation').slice(0, 40).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()}.json`
   document.body.appendChild(a)
   a.click()
   a.remove()
@@ -1760,6 +1797,7 @@ export default function App() {
   const R = useResearch({ question, data, pdata, context: ctxSummary, committed: phase === 'clustered' })
   const importRef = useRef(null)
   const [importMsg, setImportMsg] = useState(null) // {mode, addedFindings, ...} | {error}
+  const [exportOpen, setExportOpen] = useState(false)
   async function handleImportFile(e) {
     const f = e.target.files && e.target.files[0]
     e.target.value = '' // allow re-importing the same file
@@ -2160,7 +2198,24 @@ export default function App() {
                 </button>
                 {fromCache && <span className="cached-chip" title="cached">⚡</span>}
                 {phase === 'clustered' && data && (
-                  <button className="dq-icon dq-export" onClick={() => exportInvestigation(question.trim())} title="Export the whole investigation as JSON — your question, your edits/prunes/context + full interaction timeline (human), and every finding, deep-dive result record, evidence family & the decision (AI). Share it so a collaborator can merge in their evidence." aria-label="export investigation">⤓</button>
+                  <div className="dq-export-wrap">
+                    <button className="dq-icon dq-export" onClick={() => setExportOpen((o) => !o)} title="Export this investigation as JSON" aria-label="export investigation" aria-expanded={exportOpen}>⤓</button>
+                    {exportOpen && (
+                      <>
+                        <div className="settings-scrim" onClick={() => setExportOpen(false)} />
+                        <div className="export-pop">
+                          <button className="ex-opt" onClick={() => { exportInvestigation(question.trim(), { redact: false }); setExportOpen(false) }}>
+                            <span className="ex-name">⤓ full — private backup</span>
+                            <span className="ex-note">everything: your context, personalization, decision + all evidence + the interaction timeline. Round-trips back into the tool. For yourself or a trusted collaborator.</span>
+                          </button>
+                          <button className="ex-opt" onClick={() => { exportInvestigation(question.trim(), { redact: true }); setExportOpen(false) }}>
+                            <span className="ex-name">⤒ shareable — redacted</span>
+                            <span className="ex-note">the evidence + a generalized applicability profile, WITHOUT your context, personalization, decision, or per-finding "applies to you" lines. For contributing to a shared question. (Dimension text you wrote isn't auto-scrubbed — review first.)</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
                 <button className="dq-icon dq-import" onClick={() => importRef.current?.click()} title="Import a collaborator's exported investigation. Same question → their evidence (findings, result records, families) MERGES into yours, attributed and deduped; your context and decision stay yours. A new question → opens theirs." aria-label="import investigation">⤒</button>
                 <input ref={importRef} type="file" accept="application/json,.json" onChange={handleImportFile} style={{ display: 'none' }} />
