@@ -10,6 +10,7 @@ import {
   traceAgentOutputSchema,
 } from "../lib/decomposition-server.ts";
 import { readFile } from "node:fs/promises";
+import { decisionSynthesisOutputSchema } from "../lib/decision-synthesis.ts";
 
 const unsupportedStructuredOutputKeywords = new Set([
   "minLength", "maxLength", "pattern", "format",
@@ -28,7 +29,13 @@ function collectUnsupportedKeywords(value, path = "$", findings = []) {
 }
 
 test("the provider schema contains only Azure-supported constraint keywords", () => {
-  for (const schema of [decompositionProviderJsonSchema, dimensionScoutOutputSchema, traceAgentOutputSchema, contextAgentOutputSchema]) {
+  for (const schema of [
+    decompositionProviderJsonSchema,
+    dimensionScoutOutputSchema,
+    traceAgentOutputSchema,
+    contextAgentOutputSchema,
+    decisionSynthesisOutputSchema,
+  ]) {
     assert.deepEqual(
       collectUnsupportedKeywords(schema),
       [],

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 export type InvestigationStage = "decompose" | "contextualize" | "investigate" | "artifact";
 
@@ -8,24 +9,51 @@ const stages: Array<{ id: InvestigationStage; label: string; tooltip: string; hr
   { id: "decompose", label: "Decompose", tooltip: "Decompose · dimensions", href: "/" },
   { id: "contextualize", label: "Contextualize", tooltip: "Contextualize · action space", href: "/map" },
   { id: "investigate", label: "Investigate", tooltip: "Investigate · agents & ingestion", href: "/research" },
-  { id: "artifact", label: "Artifact", tooltip: "Artifact · claims & uncertainty", href: "/evidence" },
+  { id: "artifact", label: "Artifact", tooltip: "Artifact · live accepted evidence", href: "/artifact" },
 ];
 
+function useCurrentCaseId() {
+  const [caseId, setCaseId] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setCaseId(new URLSearchParams(window.location.search).get("caseId")?.trim() || "");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return caseId;
+}
+
+export function useCaseHref(href: string) {
+  const caseId = useCurrentCaseId();
+  if (!caseId) return href;
+  const separator = href.includes("?") ? "&" : "?";
+  return `${href}${separator}caseId=${encodeURIComponent(caseId)}`;
+}
+
 export function StageNav({ active }: { active: InvestigationStage }) {
+  const caseId = useCurrentCaseId();
+
   return (
     <nav className="stage-nav" aria-label="Investigation stages">
-      {stages.map((stage, index) => (
-        <Link
-          className={`stage ${stage.id === active ? "active" : "ready"}`}
-          href={stage.href}
-          key={stage.id}
-          aria-current={stage.id === active ? "page" : undefined}
-          aria-label={`Stage ${index + 1}: ${stage.label}`}
-        >
-          <b>{index + 1}</b>
-          <span className="stage-tooltip" aria-hidden="true">{stage.tooltip}</span>
-        </Link>
-      ))}
+      {stages.map((stage, index) => {
+        const href = caseId
+          ? `${stage.href}?caseId=${encodeURIComponent(caseId)}`
+          : stage.href;
+        return (
+          <Link
+            className={`stage ${stage.id === active ? "active" : "ready"}`}
+            href={href}
+            key={stage.id}
+            aria-current={stage.id === active ? "page" : undefined}
+            aria-label={`Stage ${index + 1}: ${stage.label}`}
+          >
+            <b>{index + 1}</b>
+            <span className="stage-tooltip" aria-hidden="true">{stage.tooltip}</span>
+          </Link>
+        );
+      })}
     </nav>
   );
 }

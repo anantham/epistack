@@ -15,9 +15,11 @@ test("the prompt registry enumerates every live model specialist", () => {
     "trace-specialist",
     "context-retrieval",
     "research-brief-compiler",
+    "broad-recall-specialist",
     "abstract-extractor",
     "full-paper-extractor",
     "adversarial-reviewer",
+    "decision-synthesizer",
   ]);
   for (const prompt of agentPromptDefinitions) {
     assert.ok(prompt.instructions.length > 100);

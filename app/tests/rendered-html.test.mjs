@@ -45,6 +45,7 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.doesNotMatch(styles, /@keyframes brand-arrive/);
   assert.match(frame, /placeholder="what is your question\?"/);
   assert.match(frame, /settings-trigger/);
+  assert.match(frame, /get\("settings"\) === "1"/);
   assert.match(frame, /data-tooltip="Settings"/);
   assert.match(frame, /question-composer/);
   assert.match(frame, /composer-submit/);
@@ -137,7 +138,8 @@ test("evidence corpus keeps discovery separate and decomposes sources into resul
   assert.match(ledger, /emrani-heterogeneity/);
   assert.match(synthesisPage, /DecisionWorkbench/);
   assert.match(synthesisPage, /Highest-value next information/);
-  assert.match(synthesisPage, /Six breakfasts can test usability, not universal health/);
+  assert.match(synthesisPage, /Versioned accepted evidence/);
+  assert.match(synthesisPage, /human-compiled action space/);
   assert.match(discoveryPage, /Keep discovery separate from evidence/);
 });
 
@@ -164,7 +166,8 @@ test("the investigation is split into focused navigable routes", async () => {
   assert.match(navigation, /Decompose · dimensions/);
   assert.match(navigation, /Contextualize · action space/);
   assert.match(navigation, /Investigate · agents & ingestion/);
-  assert.match(navigation, /Artifact · claims & uncertainty/);
+  assert.match(navigation, /href: "\/artifact"/);
+  assert.match(navigation, /Artifact · live accepted evidence/);
   assert.doesNotMatch(navigation, /Stage 5/);
   assert.match(navigation, /stage-tooltip/);
   assert.match(navigation, /aria-label={`Stage \${index \+ 1}: \${stage\.label}`}/);

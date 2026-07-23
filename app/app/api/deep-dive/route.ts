@@ -16,6 +16,7 @@ import {
 } from "../../../lib/agent-prompts";
 import { operationCacheKey, readOperationCache, writeOperationCache } from "../../../db/cache";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
+import { shareableApplicabilityProfileSchema } from "../../../lib/broad-recall";
 import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
@@ -82,9 +83,13 @@ export async function POST(request: Request) {
   if (!parsedClaimFrames.success) {
     return Response.json({ error: "The extraction request is missing the compiled claim frames. Return to Contextualize and compile a research brief first." }, { status: 400 });
   }
-  const applicabilityProfile = body.applicabilityProfile && typeof body.applicabilityProfile === "object"
-    ? body.applicabilityProfile
-    : { summary: "No structured applicability profile supplied." };
+  const parsedApplicabilityProfile = shareableApplicabilityProfileSchema.safeParse(body.applicabilityProfile);
+  if (!parsedApplicabilityProfile.success) {
+    return Response.json({
+      error: "The applicability profile must use the privacy-minimized outbound contract. Local-only stakeholder facts cannot be sent to the abstract model.",
+    }, { status: 400 });
+  }
+  const applicabilityProfile = parsedApplicabilityProfile.data;
   const runtimeEnvironment = env as unknown as DeepDiveEnvironment;
   const openRouterModel = suppliedModel || runtimeEnvironment.EPISTACK_OPENROUTER_MODEL || process.env.EPISTACK_OPENROUTER_MODEL || defaultOpenRouterModel;
   const refresh = body.refresh === true;

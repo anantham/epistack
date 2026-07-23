@@ -62,21 +62,28 @@ test("research route keeps discovery separate from evidence promotion", async ()
   assert.match(dashboard, /researchBriefStorageKey/);
   assert.match(dashboard, /researchLanesFromBrief/);
   assert.match(dashboard, /claimFrames: compiledClaimFrames\(\)/);
-  assert.match(dashboard, /applicabilityProfile: applicabilityProfile\(\)/);
+  assert.match(dashboard, /applicabilityProfile: outboundApplicabilityProfile\(\)/);
+  assert.match(dashboard, /applicabilityProfile: localApplicabilityProfile\(\)/);
   assert.match(api, /eutils\.ncbi\.nlm\.nih\.gov/);
   assert.match(api, /compilePubmedQuery/);
   assert.match(deepDiveApi, /deepDiveSchema\.safeParse/);
   assert.match(deepDiveApi, /verificationStatus: "abstract-only"/);
+  assert.match(deepDiveApi, /shareableApplicabilityProfileSchema/);
+  assert.match(deepDiveApi, /Local-only stakeholder facts cannot be sent/);
   assert.match(promoteApi, /autoGatePasses/);
   assert.match(promoteApi, /dualReviewPolicyId/);
-  assert.match(promoteApi, /accepted-pending-full-text/);
+  assert.match(promoteApi, /provisional-pending-full-text/);
   assert.match(promoteApi, /accepted-by-dual-model-review/);
   assert.match(promoteApi, /JOIN result_records/);
   assert.match(database, /ensureEvidenceGraphTables/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS assessments/);
-  assert.match(decision, /What will the eggs replace/);
-  assert.match(decision, /Save decision snapshot/);
-  assert.match(decision, /evidenceBasis/);
+  assert.match(decision, /Only accepted D1 result records/);
+  assert.match(decision, /Synthesize decision/);
+  assert.match(decision, /loadBearingResultIds/);
+  assert.match(decision, /dependenceGroups/);
+  assert.match(dashboard, /Launch both agents/);
+  assert.match(dashboard, /Recall layer · Lead-only/);
+  assert.match(dashboard, /Use query in PubMed lane/);
 });
 
 test("abstract extraction keeps provider constraints separate from semantic validation", () => {
@@ -90,4 +97,39 @@ test("abstract extraction keeps provider constraints separate from semantic vali
   }
   assert.deepEqual(findUnsupported(deepDiveProviderJsonSchema), []);
   assert.equal(deepDiveSchema.safeParse({}).success, false);
+});
+
+test("research requires a matching case contract and minimizes outbound applicability context", async () => {
+  const [dashboard, navigation, artifact, decision, synthesisPage] = await Promise.all([
+    readFile(new URL("../app/research/research-dashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/case-navigation.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/artifact/artifact-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/synthesis/decision-workbench.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/synthesis/page.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(dashboard, /Research contract required/);
+  assert.match(dashboard, /will not substitute a demo/);
+  assert.match(dashboard, /new URLSearchParams\(window\.location\.search\)\.get\("caseId"\)/);
+  assert.doesNotMatch(dashboard, /legacyClaimFrames|Egg fixture fallback|eggs-live-mvp/);
+  assert.match(dashboard, /setOpenLane\(\(current\) => current === lane\.id \? "" : lane\.id\)/);
+  assert.match(dashboard, /Recheck companion status/);
+  assert.match(dashboard, /explicitly authorizes this exact site origin with EPISTACK_ALLOWED_BROWSER_ORIGINS/);
+  assert.match(dashboard, /applicabilityProfile: outboundApplicabilityProfile\(\)/);
+  assert.match(dashboard, /applicabilityProfile: localApplicabilityProfile\(\)/);
+
+  const outboundStart = dashboard.indexOf("function outboundApplicabilityProfile");
+  const localStart = dashboard.indexOf("function localApplicabilityProfile");
+  assert.ok(outboundStart >= 0 && localStart > outboundStart);
+  const outboundProfile = dashboard.slice(outboundStart, localStart);
+  assert.doesNotMatch(outboundProfile, /brief\.stakeholderProfile|brief\.decisionContext|assignment\.selectedValue/);
+
+  assert.match(navigation, /useCaseHref/);
+  assert.match(navigation, /caseId=\$\{encodeURIComponent\(caseId\)\}/);
+  assert.doesNotMatch(artifact, /\|\| "eggs-live-mvp"/);
+  assert.doesNotMatch(decision, /\|\| "eggs-live-mvp"/);
+  assert.match(decision, /if \(!decisionResponse\.ok\)/);
+  assert.match(decision, /artifact\.integrityWarnings\.length === 0/);
+  assert.match(decision, /href="\/\?settings=1"/);
+  assert.match(synthesisPage, /useCaseHref\("\/artifact"\)/);
 });

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { adjudicateDualReview, dualReviewPolicyId, passageExists } from "../lib/dual-review.ts";
 import { jatsToPlainText, parseClaudeStructuredOutput } from "../scripts/local-claude-agents.mjs";
@@ -48,8 +49,15 @@ function primary(results = [result()]) {
       exposure: "egg breakfast",
       comparator: "energy-matched bagel breakfast",
       limitations: ["Eight-week duration"],
+      registrationId: null,
+      cohortIdentifiers: [],
     },
-    evidenceFamily: { label: "Vander Wal 2008 trial", reason: "All records use the same randomized sample." },
+    evidenceFamily: {
+      label: "Vander Wal 2008 trial",
+      reason: "All records use the same randomized sample.",
+      basis: "same-sample",
+      dependsOn: [],
+    },
     results,
     authorConclusion: "An egg breakfast enhanced weight loss during energy restriction.",
     conclusionFit: "matches-results",
@@ -80,6 +88,14 @@ test("JATS acquisition text and Claude structured envelopes are deterministicall
   assert.equal(jatsToPlainText("<article><sec><title>Results</title><p>A &amp; B</p></sec></article>"), "Results\n\nA & B");
   assert.deepEqual(parseClaudeStructuredOutput(JSON.stringify({ result: "{\"ok\":true}" })), { ok: true });
   assert.equal(passageExists("Observed weight loss of 2.63 kg compared with 1.59 kg.", "weight loss of 2.63 kg compared with 1.59 kg"), true);
+});
+
+test("the local companion keeps remote browser access opt-in and origin-scoped", async () => {
+  const source = await readFile(new URL("../scripts/local-claude-agents.mjs", import.meta.url), "utf8");
+  assert.match(source, /EPISTACK_ALLOWED_BROWSER_ORIGINS/);
+  assert.match(source, /configuredBrowserOrigins\.has\(origin\)/);
+  assert.match(source, /Access-Control-Allow-Private-Network/);
+  assert.doesNotMatch(source, /Access-Control-Allow-Origin", "\\*"/);
 });
 
 test("dual-model policy promotes only a passage-backed result reviewed by a different model", () => {

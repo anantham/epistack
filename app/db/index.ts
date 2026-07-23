@@ -148,3 +148,79 @@ export async function ensureEvidenceGraphTables() {
     d1.prepare("CREATE INDEX IF NOT EXISTS assessments_policy_idx ON assessments (policy_id)"),
   ]);
 }
+
+export async function ensureDecisionTables() {
+  await ensureEvidenceGraphTables();
+  const d1 = getD1();
+  await d1.batch([
+    d1.prepare(`CREATE TABLE IF NOT EXISTS decision_episodes (
+      id TEXT PRIMARY KEY,
+      case_id TEXT NOT NULL REFERENCES cases(id),
+      question TEXT NOT NULL,
+      target_context_json TEXT NOT NULL DEFAULT '{}',
+      constraints_json TEXT NOT NULL DEFAULT '{}',
+      values_json TEXT NOT NULL DEFAULT '{}',
+      graph_snapshot_id TEXT REFERENCES snapshots(id),
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
+    d1.prepare("CREATE INDEX IF NOT EXISTS decision_episodes_case_idx ON decision_episodes (case_id)"),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS decision_options (
+      id TEXT PRIMARY KEY,
+      decision_id TEXT NOT NULL REFERENCES decision_episodes(id),
+      label TEXT NOT NULL,
+      action_json TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'candidate',
+      created_at TEXT NOT NULL
+    )`),
+    d1.prepare("CREATE INDEX IF NOT EXISTS decision_options_decision_idx ON decision_options (decision_id)"),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS decision_outcomes (
+      id TEXT PRIMARY KEY,
+      decision_id TEXT NOT NULL REFERENCES decision_episodes(id),
+      label TEXT NOT NULL,
+      measure TEXT,
+      importance REAL,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    )`),
+    d1.prepare("CREATE INDEX IF NOT EXISTS decision_outcomes_decision_idx ON decision_outcomes (decision_id)"),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS protocols (
+      id TEXT PRIMARY KEY,
+      decision_id TEXT NOT NULL REFERENCES decision_episodes(id),
+      option_id TEXT REFERENCES decision_options(id),
+      title TEXT NOT NULL,
+      protocol_json TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_at TEXT NOT NULL
+    )`),
+    d1.prepare("CREATE INDEX IF NOT EXISTS protocols_decision_idx ON protocols (decision_id)"),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS observations (
+      id TEXT PRIMARY KEY,
+      protocol_id TEXT NOT NULL REFERENCES protocols(id),
+      source_id TEXT REFERENCES sources(id),
+      observed_at TEXT NOT NULL,
+      measure TEXT NOT NULL,
+      value_json TEXT NOT NULL,
+      context_json TEXT NOT NULL DEFAULT '{}',
+      missingness TEXT,
+      sharing TEXT NOT NULL DEFAULT 'private',
+      created_at TEXT NOT NULL
+    )`),
+    d1.prepare("CREATE INDEX IF NOT EXISTS observations_protocol_idx ON observations (protocol_id)"),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS update_events (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      source_url TEXT,
+      scope TEXT NOT NULL,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      review_status TEXT NOT NULL DEFAULT 'queued',
+      occurred_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`),
+    d1.prepare("CREATE INDEX IF NOT EXISTS update_events_target_idx ON update_events (target_type, target_id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS update_events_review_idx ON update_events (review_status)"),
+  ]);
+}

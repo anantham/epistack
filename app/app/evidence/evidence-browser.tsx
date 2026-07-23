@@ -36,14 +36,17 @@ export function EvidenceBrowser() {
   useEffect(() => {
     const resultId = new URLSearchParams(window.location.search).get("result");
     if (!resultId || !atomicResults.some((result) => result.id === resultId)) return;
-    setFocusedResultId(resultId);
-    const result = atomicResults.find((candidate) => candidate.id === resultId);
-    if (result) {
-      setClaimId(result.claimId);
-      window.requestAnimationFrame(() => {
-        document.getElementById(`result-${resultId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-      });
-    }
+    const timer = window.setTimeout(() => {
+      setFocusedResultId(resultId);
+      const result = atomicResults.find((candidate) => candidate.id === resultId);
+      if (result) {
+        setClaimId(result.claimId);
+        window.requestAnimationFrame(() => {
+          document.getElementById(`result-${resultId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const filteredResults = useMemo(() => atomicResults.filter((result) => {

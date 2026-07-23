@@ -199,6 +199,9 @@ export default function Home() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      if (new URLSearchParams(window.location.search).get("settings") === "1") {
+        setSettingsOpen(true);
+      }
       try {
         const savedPreferences = JSON.parse(window.localStorage.getItem(preferencesStorageKey) || "{}") as PersistedPreferences;
         if (typeof savedPreferences.apiKey === "string") {

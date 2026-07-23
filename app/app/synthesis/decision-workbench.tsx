@@ -1,214 +1,578 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { atomicResults, evidenceFamilies } from "../../data/eggs-result-ledger";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  agentPromptStorageKey,
+  sanitizeAgentPromptOverrides,
+  type AgentPromptOverrides,
+} from "../../lib/agent-prompts";
+import type { DecisionSynthesis } from "../../lib/decision-synthesis";
+import {
+  researchBriefSchema,
+  researchBriefStorageKey,
+  type ResearchBrief,
+} from "../../lib/research-brief";
 
-type Replacement = "refined-breakfast" | "protein-matched" | "skip-breakfast" | "adding" | "unknown";
-type Goal = "satiety" | "weight" | "training" | "lipids";
-type RiskContext = "none-known" | "high-ldl" | "diabetes" | "allergy" | "unknown";
-
-type SavedWorkspace = {
-  prompt?: string;
-  decisionContext?: string;
-  result?: { caseId?: string; prompt?: string } | null;
+type ArtifactSummary = {
+  contractVersion: "live-artifact.v1";
+  generatedAt: string;
+  caseId: string;
+  status: {
+    phase: string;
+    label: string;
+    reasons: string[];
+    isStale: boolean;
+  };
+  counts: {
+    claimFrames: number;
+    missingClaims: number;
+    sources: number;
+    results: number;
+    evidenceRelations: number;
+    dependenceGroups: number;
+  };
+  latestEvidenceAt: string | null;
+  latestEvidenceSnapshot: { id: string; createdAt: string } | null;
+  latestDecision: {
+    id: string;
+    status: string;
+    isStale: boolean;
+    staleReasons: string[];
+  } | null;
+  integrityWarnings: string[];
+  graph: {
+    claimFrames: Array<{ id: string; statement: string }>;
+    sources: Array<{ id: string; title: string; canonicalUrl: string | null }>;
+    results: Array<{ id: string; resultText: string; dependenceGroupId: string }>;
+    evidenceRelations: Array<{ id: string; resultId: string; claimFrameId: string }>;
+    dependenceGroups: Array<{ id: string; label: string; reason: string }>;
+  };
 };
 
-const replacementOptions: Array<{ id: Replacement; label: string }> = [
-  { id: "refined-breakfast", label: "Refined-carb breakfast" },
-  { id: "protein-matched", label: "Protein-matched breakfast" },
-  { id: "skip-breakfast", label: "Skipping breakfast" },
-  { id: "adding", label: "Adding eggs; replacing nothing" },
-  { id: "unknown", label: "I have not named it" },
+type StoredDecision = {
+  caseId: string;
+  decision?: {
+    id: string;
+    status: string;
+    graphSnapshotId: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  decisionId?: string;
+  graphSnapshotId?: string;
+  evidenceVersion?: string;
+  model?: string;
+  createdAt?: string;
+  synthesis?: DecisionSynthesis | null;
+  cache?: {
+    status: "hit" | "miss" | "bypass";
+    createdAt: string;
+    expiresAt: string | null;
+  };
+  error?: string;
+};
+
+type Preferences = {
+  apiKey?: string;
+  model?: string;
+};
+
+type LoadState =
+  | { status: "loading"; message: string }
+  | { status: "ready"; message: string }
+  | { status: "empty"; message: string }
+  | { status: "error"; message: string };
+
+const waitingSteps = [
+  "reading accepted result records",
+  "grouping correlated evidence",
+  "checking option coverage",
+  "separating applicability from truth",
+  "finding load-bearing cruxes",
+  "testing decision-flip conditions",
+  "drafting a reversible observation",
 ];
 
-const goalOptions: Array<{ id: Goal; label: string }> = [
-  { id: "satiety", label: "Satiety and adherence" },
-  { id: "weight", label: "Weight loss" },
-  { id: "training", label: "Training nutrition" },
-  { id: "lipids", label: "Lipid safety" },
-];
-
-const riskOptions: Array<{ id: RiskContext; label: string }> = [
-  { id: "none-known", label: "No known constraint" },
-  { id: "high-ldl", label: "High LDL / hyper-response concern" },
-  { id: "diabetes", label: "Diabetes or metabolic condition" },
-  { id: "allergy", label: "Egg allergy" },
-  { id: "unknown", label: "Not checked" },
-];
-
-function decisionFor(replacement: Replacement, goal: Goal, risk: RiskContext, farmChecked: boolean) {
-  if (risk === "allergy") {
+function getSession() {
+  if (typeof window === "undefined") {
     return {
-      stance: "Do not run the food trial.",
-      action: "An allergy is an action constraint, not an uncertainty for this evidence graph to average away. Choose a feasible non-egg comparator.",
-      stability: "Stable unless the allergy classification itself changes under appropriate clinical review.",
-      next: "Identify a protein option compatible with the allergy and the same breakfast objective.",
+      caseId: "",
+      brief: null as ResearchBrief | null,
+      preferences: {} as Preferences,
+      promptOverrides: {} as AgentPromptOverrides,
     };
   }
-  if (risk === "high-ldl" || risk === "diabetes" || risk === "unknown") {
-    return {
-      stance: "The represented evidence is not sufficient for an unsupervised health conclusion.",
-      action: "Resolve baseline clinical context before using the general egg trials as permission. A preference trial cannot establish lipid or long-term safety.",
-      stability: "Unstable: target-population applicability is currently load-bearing.",
-      next: risk === "unknown" ? "Check whether a relevant medical or lipid constraint exists." : "Review the dose and monitoring plan with an appropriate clinician.",
-    };
+  const queryCaseId = new URLSearchParams(window.location.search).get("caseId");
+  let brief: ResearchBrief | null = null;
+  let workspaceCaseId: string | null = null;
+  let preferences: Preferences = {};
+  let promptOverrides: AgentPromptOverrides = {};
+  try {
+    const parsed = researchBriefSchema.safeParse(
+      JSON.parse(window.localStorage.getItem(researchBriefStorageKey) || "null"),
+    );
+    if (parsed.success) brief = parsed.data;
+  } catch {
+    // The missing-brief state below explains how to recover.
   }
-  if (replacement === "unknown") {
-    return {
-      stance: "Do not decide until the counterfactual is named.",
-      action: "Eggs replacing a refined breakfast, replacing a protein-matched meal, and being added on top are different interventions. The current graph cannot combine them.",
-      stability: "Unstable: the unnamed comparator can reverse the practical interpretation.",
-      next: "Write down the exact breakfast, ingredients, quantity, and calories that two eggs would displace.",
+  try {
+    const workspace = JSON.parse(window.localStorage.getItem("epistack:workspace:v1") || "{}") as {
+      result?: { caseId?: string } | null;
     };
+    workspaceCaseId = workspace.result?.caseId || null;
+  } catch {
+    // Query and brief identifiers remain available.
   }
-  if (replacement === "adding") {
-    return {
-      stance: "Do not expect an egg-specific weight-loss advantage from addition.",
-      action: "The represented free-living result does not support adding an egg breakfast as a weight-loss intervention. Reframe the action as a substitution or justify the additional intake for another goal.",
-      stability: "Stable against the current weight-loss claim; other nutrition goals remain outside this result.",
-      next: "Name what would be displaced, or state that extra energy intake is intentional.",
-    };
+  try {
+    preferences = JSON.parse(window.localStorage.getItem("epistack:preferences:v1") || "{}") as Preferences;
+  } catch {
+    preferences = {};
   }
-  if (replacement === "skip-breakfast") {
-    return {
-      stance: "The egg-specific ledger does not identify the better action.",
-      action: "The extracted egg comparisons are mostly against another breakfast, not against skipping breakfast. Do not borrow the cereal or bagel result for this contrast.",
-      stability: "Unstable because the desired comparator is missing from the promoted result set.",
-      next: "Promote controlled breakfast-versus-no-breakfast evidence and assess whether it transports to your routine.",
-    };
+  try {
+    promptOverrides = sanitizeAgentPromptOverrides(
+      JSON.parse(window.localStorage.getItem(agentPromptStorageKey) || "{}"),
+    );
+  } catch {
+    promptOverrides = {};
   }
-
-  const proteinMatched = replacement === "protein-matched";
-  const farmBoundary = farmChecked
-    ? "Local handling and feasibility were checked separately from the clinical literature."
-    : "Farm handling, price, feed, freshness, and welfare remain unexamined primary facts.";
-  if (goal === "weight") {
-    return {
-      stance: "A reversible trial may test adherence, not egg-specific weight loss.",
-      action: `Substitute two eggs for the named breakfast only if the meal fits the intended energy plan. ${farmBoundary}`,
-      stability: "Stable against claiming superior weight loss; unstable with respect to personal adherence and the exact replacement meal.",
-      next: proteinMatched ? "Test preference and adherence; the satiety advantage is less supported against a protein-matched meal." : "Record hunger and later intake without treating six days of scale weight as causal evidence.",
-    };
-  }
-  if (goal === "lipids") {
-    return {
-      stance: "Short-term LDL harm is partly bounded, not personally settled.",
-      action: `The represented six-month trial did not show differential LDL worsening, but one family cannot establish individual or long-term safety. ${farmBoundary}`,
-      stability: "Unstable to baseline lipids, dose response, and individual hyper-response.",
-      next: "Define an appropriate clinical monitoring horizon; a six-day subjective log cannot answer this outcome.",
-    };
-  }
+  const caseId = queryCaseId || brief?.caseId || workspaceCaseId || "";
   return {
-    stance: proteinMatched ? "A strong egg-specific satiety advantage is not established." : "A short substitution trial is reasonable if feasibility matters.",
-    action: `${proteinMatched ? "Use the trial to compare preference, tolerance, and adherence—not to confirm a presumed protein advantage." : "Measure whether replacing the refined breakfast changes hunger, later intake, preference, and adherence."} ${farmBoundary}`,
-    stability: proteinMatched ? "Unstable: the closest protein-matched evidence is less favorable." : "Conditionally stable for a short usability test, not a universal health claim.",
-    next: "Predefine the breakfast, six planned days, hunger scale, later intake, symptoms, and stopping condition.",
+    caseId,
+    brief: brief?.caseId === caseId ? brief : null,
+    preferences,
+    promptOverrides,
   };
 }
 
+function formatDate(value: string | null | undefined) {
+  if (!value) return "not recorded";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function downloadJson(filename: string, payload: unknown) {
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function cacheLabel(cache: StoredDecision["cache"]) {
+  if (!cache) return "persisted decision";
+  if (cache.status === "hit") return "reused · no model call";
+  if (cache.status === "bypass") return "recomputed live";
+  return "fresh synthesis";
+}
+
 export function DecisionWorkbench() {
-  const [replacement, setReplacement] = useState<Replacement>("unknown");
-  const [goal, setGoal] = useState<Goal>("satiety");
-  const [risk, setRisk] = useState<RiskContext>("unknown");
-  const [farmChecked, setFarmChecked] = useState(false);
-  const [decisionContext, setDecisionContext] = useState("");
-  const [workspace, setWorkspace] = useState<SavedWorkspace>({});
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const read = useMemo(() => decisionFor(replacement, goal, risk, farmChecked), [replacement, goal, risk, farmChecked]);
+  const [session, setSession] = useState<ReturnType<typeof getSession> | null>(null);
+  const caseId = session?.caseId ?? "";
+  const brief = session?.brief ?? null;
+  const preferences = session?.preferences ?? {};
+  const promptOverrides = session?.promptOverrides ?? {};
+  const [artifact, setArtifact] = useState<ArtifactSummary | null>(null);
+  const [decision, setDecision] = useState<StoredDecision | null>(null);
+  const [load, setLoad] = useState<LoadState>({ status: "loading", message: "Loading the accepted evidence basis…" });
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [waitingStep, setWaitingStep] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(window.localStorage.getItem("epistack:workspace:v1") || "{}") as SavedWorkspace;
-      setWorkspace(saved);
-      if (typeof saved.decisionContext === "string") setDecisionContext(saved.decisionContext);
-    } catch {
-      // The decision surface remains usable without a framing cache.
-    }
+    const timer = window.setTimeout(() => setSession(getSession()), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
-  async function saveSnapshot() {
-    setSaveState("saving");
+  const loadCurrent = useCallback(async () => {
+    if (!caseId) {
+      setArtifact(null);
+      setDecision(null);
+      setLoad({ status: "empty", message: "No active case identity was found. Start with a question before synthesizing a decision." });
+      return;
+    }
+    setLoad({ status: "loading", message: "Loading the accepted evidence basis…" });
     try {
-      const originalPrompt = workspace.prompt || workspace.result?.prompt || "Are eggs good to eat for my next breakfast decision?";
-      const response = await fetch("/api/cases", {
+      const [artifactResponse, decisionResponse] = await Promise.all([
+        fetch(`/api/artifact?caseId=${encodeURIComponent(caseId)}`, { cache: "no-store" }),
+        fetch(`/api/synthesize?caseId=${encodeURIComponent(caseId)}`, { cache: "no-store" }),
+      ]);
+      const artifactPayload = await artifactResponse.json().catch(() => null) as ArtifactSummary | { error?: { message?: string } | string } | null;
+      if (!artifactResponse.ok || !artifactPayload || !("contractVersion" in artifactPayload)) {
+        const rawError = artifactPayload && "error" in artifactPayload ? artifactPayload.error : null;
+        const message = typeof rawError === "string" ? rawError : rawError?.message;
+        throw new Error(message || "The accepted evidence graph could not be loaded.");
+      }
+      const decisionPayload = await decisionResponse.json().catch(() => null) as StoredDecision | null;
+      setArtifact(artifactPayload);
+      if (!decisionResponse.ok) {
+        const message = typeof decisionPayload?.error === "string"
+          ? decisionPayload.error
+          : "The accepted graph loaded, but its recorded decision could not be read.";
+        throw new Error(message);
+      }
+      setDecision(decisionPayload?.synthesis ? decisionPayload : null);
+      if (artifactPayload.counts.results === 0) {
+        setLoad({ status: "empty", message: "No accepted result-level evidence exists yet." });
+      } else {
+        setLoad({ status: "ready", message: artifactPayload.status.label });
+      }
+    } catch (error) {
+      setLoad({
+        status: "error",
+        message: error instanceof Error ? error.message : "The decision basis could not be loaded.",
+      });
+    }
+  }, [caseId]);
+
+  useEffect(() => {
+    if (!session) return;
+    const timer = window.setTimeout(() => void loadCurrent(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadCurrent, session]);
+
+  useEffect(() => {
+    if (!isSynthesizing) return;
+    const started = window.performance.now();
+    const stepTimer = window.setInterval(
+      () => setWaitingStep((current) => (current + 1) % waitingSteps.length),
+      2800,
+    );
+    const elapsedTimer = window.setInterval(
+      () => setElapsed(window.performance.now() - started),
+      200,
+    );
+    return () => {
+      window.clearInterval(stepTimer);
+      window.clearInterval(elapsedTimer);
+    };
+  }, [isSynthesizing]);
+
+  async function synthesize(refresh = false) {
+    if (!brief) {
+      setLoad({ status: "error", message: "Return to Contextualize and compile the human-edited action space before synthesis." });
+      return;
+    }
+    setIsSynthesizing(true);
+    setWaitingStep(0);
+    setElapsed(0);
+    setLoad({ status: "ready", message: "Synthesizing a conditional action from accepted evidence…" });
+    try {
+      const response = await fetch("/api/synthesize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          caseId: workspace.result?.caseId,
-          originalPrompt,
-          compiledClaim: { statement: read.stance },
-          decisionEpisode: {
-            question: "Should I buy 12 eggs from a local Muttichur farmer and substitute two per day next week?",
-            replacement,
-            goal,
-            riskContext: risk,
-            farmFactsChecked: farmChecked,
-            suppliedContext: decisionContext,
-            synthesis: read,
-            evidenceBasis: { resultRelationships: atomicResults.length, evidenceFamilies: evidenceFamilies.length },
-          },
+          caseId,
+          researchBrief: brief,
+          openRouterApiKey: preferences.apiKey,
+          openRouterModel: preferences.model,
+          promptOverrides,
+          refresh,
         }),
       });
-      if (!response.ok) throw new Error("Snapshot could not be saved");
-      setSaveState("saved");
-    } catch {
-      setSaveState("error");
+      const payload = await response.json().catch(() => null) as StoredDecision | null;
+      if (!response.ok || !payload?.synthesis) {
+        throw new Error(payload?.error || "The selected model did not return a valid decision synthesis.");
+      }
+      setDecision(payload);
+      await loadCurrent();
+      setDecision(payload);
+      setLoad({ status: "ready", message: "Decision synthesized and bound to its accepted-evidence version." });
+    } catch (error) {
+      setLoad({
+        status: "error",
+        message: error instanceof Error ? error.message : "The decision could not be synthesized.",
+      });
+    } finally {
+      setIsSynthesizing(false);
     }
   }
 
+  const synthesis = decision?.synthesis ?? null;
+  const resultById = useMemo(
+    () => new Map(artifact?.graph.results.map((result) => [result.id, result]) ?? []),
+    [artifact],
+  );
+  const familyById = useMemo(
+    () => new Map(artifact?.graph.dependenceGroups.map((family) => [family.id, family]) ?? []),
+    [artifact],
+  );
+  const stale = artifact?.latestDecision?.isStale === true
+    || artifact?.status.isStale === true
+    || artifact?.latestDecision?.status === "stale";
+  const canSynthesize = Boolean(
+    caseId
+    && brief
+    && artifact
+    && artifact.counts.results > 0
+    && artifact.integrityWarnings.length === 0
+    && load.status !== "error"
+    && !isSynthesizing,
+  );
+
+  function exportPrivate() {
+    if (!artifact || !synthesis) return;
+    downloadJson(`epistack-${caseId}-private.json`, {
+      contractVersion: "epistack-private-decision-bundle.v1",
+      warning: "Contains local stakeholder context and a personalized decision. Keep private unless manually reviewed.",
+      exportedAt: new Date().toISOString(),
+      researchBrief: brief,
+      artifact,
+      decision,
+    });
+  }
+
+  function exportShareable() {
+    if (!artifact || !synthesis) return;
+    downloadJson(`epistack-${caseId}-shareable-evidence.json`, {
+      contractVersion: "epistack-redacted-evidence-bundle.v1",
+      warning: "Automatic redaction removes the stakeholder profile and recommendation, but claim text, excerpts, and source metadata still require human review before sharing.",
+      exportedAt: new Date().toISOString(),
+      evidenceVersion: decision?.evidenceVersion,
+      graph: artifact.graph,
+      decisionStructure: {
+        loadBearingResultIds: synthesis.loadBearingResultIds,
+        loadBearingFamilyIds: synthesis.loadBearingFamilyIds,
+        cruxes: synthesis.cruxes,
+        missingEvidence: synthesis.missingEvidence,
+        stabilityTests: {
+          survives: synthesis.stability.survives,
+          flipsUnder: synthesis.stability.flipsUnder,
+        },
+        observationCannotEstablish: synthesis.observationProtocol.cannotEstablish,
+      },
+      removed: ["case prompt", "stakeholder profile", "values", "constraints", "recommendation", "action descriptions"],
+    });
+  }
+
   return (
-    <section className="decision-workbench" aria-labelledby="decision-workbench-title">
+    <section className="decision-workbench live-decision-workbench" aria-labelledby="decision-workbench-title">
       <header>
         <div>
-          <span>Live decision episode · Human-controlled</span>
-          <h2 id="decision-workbench-title">Should I buy 12 local eggs and substitute two per day next week?</h2>
+          <span>Accepted graph → contextualized action</span>
+          <h2 id="decision-workbench-title">{brief?.actionSpace.decision || "Compile a decision from the evidence artifact."}</h2>
+          <p>{brief?.actionSpace.decisionHorizon || "The decision horizon will come from Contextualize."}</p>
         </div>
-        <div className="decision-basis-count"><b>{atomicResults.length}</b><span>result relations</span><b>{evidenceFamilies.length}</b><span>families</span></div>
+        <div className="decision-basis-count">
+          <b>{artifact?.counts.results ?? 0}</b><span>results</span>
+          <b>{artifact?.counts.dependenceGroups ?? 0}</b><span>families</span>
+          <b>{artifact?.counts.missingClaims ?? 0}</b><span>uncovered claims</span>
+        </div>
       </header>
 
-      <div className="decision-controls">
-        <fieldset>
-          <legend>What will the eggs replace?</legend>
-          {replacementOptions.map((option) => (
-            <button key={option.id} className={replacement === option.id ? "active" : ""} onClick={() => setReplacement(option.id)} aria-pressed={replacement === option.id}>{option.label}</button>
-          ))}
-        </fieldset>
-        <fieldset>
-          <legend>What is the main objective?</legend>
-          {goalOptions.map((option) => (
-            <button key={option.id} className={goal === option.id ? "active" : ""} onClick={() => setGoal(option.id)} aria-pressed={goal === option.id}>{option.label}</button>
-          ))}
-        </fieldset>
-        <fieldset>
-          <legend>Which safety context applies?</legend>
-          {riskOptions.map((option) => (
-            <button key={option.id} className={risk === option.id ? "active" : ""} onClick={() => setRisk(option.id)} aria-pressed={risk === option.id}>{option.label}</button>
-          ))}
-        </fieldset>
+      <div className={`decision-runtime-state ${load.status}`}>
+        <span aria-hidden="true">{load.status === "error" ? "!" : load.status === "empty" ? "○" : "●"}</span>
+        <div>
+          <strong>{load.message}</strong>
+          {artifact?.latestEvidenceSnapshot && (
+            <small>Evidence basis {artifact.latestEvidenceSnapshot.id} · {formatDate(artifact.latestEvidenceSnapshot.createdAt)}</small>
+          )}
+        </div>
+        {load.status === "error" && /key|model|credit/i.test(load.message) && <Link href="/?settings=1">Open Settings</Link>}
       </div>
 
-      <label className="decision-context-input">
-        <span>Context inherited from framing · Edit freely</span>
-        <textarea value={decisionContext} onChange={(event) => setDecisionContext(event.target.value)} rows={3} placeholder="Age, location, training, current breakfast, constraints, preferences, realistic alternatives…" />
-      </label>
-      <label className="farm-check">
-        <input type="checkbox" checked={farmChecked} onChange={(event) => setFarmChecked(event.target.checked)} />
-        <span>I separately checked price, freshness, handling, feed/certification claims, and whether this farmer is a feasible source.</span>
-      </label>
+      {!brief && (
+        <div className="decision-prerequisite">
+          <div>
+            <span>Human context missing</span>
+            <strong>Synthesis will not infer your action space from evidence.</strong>
+            <p>Return to Contextualize, prune the interpretation map, and compile the realistic options and constraints for this case.</p>
+          </div>
+          <Link className="primary-button" href="/map">Contextualize first</Link>
+        </div>
+      )}
 
-      <article className="computed-decision" aria-live="polite">
-        <span>Current conditional policy</span>
-        <h3>{read.stance}</h3>
-        <p>{read.action}</p>
-        <dl>
-          <div><dt>Decision stability</dt><dd>{read.stability}</dd></div>
-          <div><dt>Highest-value next information</dt><dd>{read.next}</dd></div>
-        </dl>
-        <footer>
-          <button className="primary-button" onClick={saveSnapshot} disabled={saveState === "saving"}>{saveState === "saving" ? "Saving…" : "Save decision snapshot"}</button>
-          <span>{saveState === "saved" ? "Saved with its context and evidence counts." : saveState === "error" ? "Could not save; the live decision remains visible." : "Saving records what this decision rested on."}</span>
-        </footer>
-      </article>
+      {stale && (
+        <div className="decision-stale-alert">
+          <strong>This decision is stale.</strong>
+          <span>Accepted evidence changed after its recorded basis. Re-synthesize to see whether the action survives.</span>
+        </div>
+      )}
+
+      {artifact && artifact.integrityWarnings.length > 0 && (
+        <div className="decision-integrity-alert" role="alert">
+          <div>
+            <strong>Synthesis is paused for this degraded artifact.</strong>
+            <span>Resolve the stored-data integrity warnings before asking a model to turn this graph into an action.</span>
+          </div>
+          <details>
+            <summary>Inspect {artifact.integrityWarnings.length} {artifact.integrityWarnings.length === 1 ? "warning" : "warnings"}</summary>
+            <ul>{artifact.integrityWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+          </details>
+        </div>
+      )}
+
+      <div className="decision-synthesis-actions">
+        <button className="primary-button" onClick={() => synthesize(false)} disabled={!canSynthesize}>
+          {isSynthesizing ? "Synthesizing…" : synthesis ? "Re-run from current evidence" : "Synthesize decision"}
+        </button>
+        {synthesis && (
+          <button className="cache-refresh-button" onClick={() => synthesize(true)} disabled={!canSynthesize}>
+            Bypass cache
+          </button>
+        )}
+        <span>Only accepted D1 result records are sent to this specialist. Discovery leads remain outside.</span>
+      </div>
+
+      {isSynthesizing && (
+        <div className="decision-agent-progress" aria-live="polite">
+          <i aria-hidden="true" />
+          <div>
+            <strong>{waitingSteps[waitingStep]}…</strong>
+            <small>{Math.floor(elapsed / 1000)}s elapsed · one specialist, with one contract-repair attempt if needed</small>
+          </div>
+        </div>
+      )}
+
+      {synthesis && (
+        <>
+          <article className={`computed-decision stance-${synthesis.recommendation.stance}`} aria-live="polite">
+            <div className="decision-version-line">
+              <span>{synthesis.recommendation.stance.replaceAll("-", " ")}</span>
+              <small>{cacheLabel(decision?.cache)} · {decision?.model || "model not recorded"}</small>
+            </div>
+            <h3>{synthesis.recommendation.headline}</h3>
+            <p>{synthesis.recommendation.action}</p>
+            <div className="decision-broad-applicable">
+              <strong>Broad evidence vs. this decision</strong>
+              <span>{synthesis.broadVsApplicable}</span>
+            </div>
+          </article>
+
+          <section className="decision-option-grid" aria-labelledby="decision-options-title">
+            <header>
+              <span>Options × outcomes</span>
+              <h3 id="decision-options-title">No result count becomes a vote.</h3>
+            </header>
+            <div>
+              {synthesis.options.map((option) => (
+                <article key={option.optionId}>
+                  <div><span>{option.feasibility.replaceAll("-", " ")}</span><strong>{option.label}</strong></div>
+                  {option.outcomeReads.map((outcome) => (
+                    <section key={`${option.optionId}-${outcome.outcome}`}>
+                      <header><b>{outcome.outcome}</b><span className={`decision-direction ${outcome.direction}`}>{outcome.direction.replaceAll("-", " ")}</span></header>
+                      <p>{outcome.interpretation}</p>
+                      <small>{outcome.applicabilityCaveat}</small>
+                      <div className="decision-basis-links">
+                        {outcome.basisResultIds.length
+                          ? outcome.basisResultIds.map((id) => (
+                              <a href={`/artifact?caseId=${encodeURIComponent(caseId)}#${encodeURIComponent(id)}`} key={id} title={resultById.get(id)?.resultText || id}>
+                                {id}
+                              </a>
+                            ))
+                          : <em>no accepted result cited</em>}
+                      </div>
+                    </section>
+                  ))}
+                  {option.tradeoffs.length > 0 && <footer>{option.tradeoffs.map((tradeoff) => <span key={tradeoff}>{tradeoff}</span>)}</footer>}
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <div className="decision-audit-grid">
+            <section>
+              <span>Load-bearing results</span>
+              <h3>These IDs carry the action.</h3>
+              <div className="decision-id-list">
+                {synthesis.loadBearingResultIds.map((id) => (
+                  <a href={`/artifact?caseId=${encodeURIComponent(caseId)}#${encodeURIComponent(id)}`} key={id}>
+                    <strong>{id}</strong>
+                    <small>{resultById.get(id)?.resultText || "Open in artifact"}</small>
+                  </a>
+                ))}
+              </div>
+            </section>
+            <section>
+              <span>Dependence families</span>
+              <h3>Correlated results stay bundled.</h3>
+              <div className="decision-family-list">
+                {synthesis.loadBearingFamilyIds.map((id) => (
+                  <article key={id}>
+                    <strong>{familyById.get(id)?.label || id}</strong>
+                    <small>{familyById.get(id)?.reason || "Dependence rationale not loaded."}</small>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <section className="decision-crux-grid">
+            <header><span>Cruxes and flip tests</span><h3>What should we look at next?</h3></header>
+            <div>
+              {synthesis.cruxes.map((crux) => (
+                <article key={crux.question}>
+                  <span>{crux.resolvability.replaceAll("-", " ")}</span>
+                  <strong>{crux.question}</strong>
+                  <p>{crux.whyItMatters}</p>
+                  <small>Would flip if: {crux.wouldFlipDecisionIf}</small>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <div className="decision-separation-grid">
+            <section>
+              <span>Human supplied</span>
+              <ul>{synthesis.valuesAndConstraints.humanSupplied.map((value) => <li key={value}>{value}</li>)}</ul>
+            </section>
+            <section>
+              <span>Model assumptions</span>
+              <ul>{synthesis.valuesAndConstraints.modelAssumptions.length
+                ? synthesis.valuesAndConstraints.modelAssumptions.map((value) => <li key={value}>{value}</li>)
+                : <li>No additional model assumptions were recorded.</li>}</ul>
+            </section>
+            <section>
+              <span>Decision stability · {synthesis.stability.label.replaceAll("-", " ")}</span>
+              <strong>Survives</strong>
+              <ul>{synthesis.stability.survives.map((value) => <li key={value}>{value}</li>)}</ul>
+              <strong>Flips under</strong>
+              <ul>{synthesis.stability.flipsUnder.map((value) => <li key={value}>{value}</li>)}</ul>
+            </section>
+          </div>
+
+          <section className="decision-missing-grid">
+            <header><span>Missing evidence</span><h3>Absence is not reassurance.</h3></header>
+            <div>
+              {synthesis.missingEvidence.map((item) => (
+                <article key={item.gap}>
+                  <strong>{item.gap}</strong>
+                  <p>{item.whyDecisionRelevant}</p>
+                  <small>Next collection action: {item.nextAction}</small>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="protocol-draft live-protocol">
+            <div>
+              <span>Proposed personal observation · Not evidence yet</span>
+              <h3>{synthesis.observationProtocol.title}</h3>
+              <p>{synthesis.observationProtocol.purpose}</p>
+              <small>{synthesis.observationProtocol.duration}</small>
+            </div>
+            <dl>
+              <div><dt>Measure</dt><dd>{synthesis.observationProtocol.measurements.join(" · ")}</dd></div>
+              <div><dt>Stop when</dt><dd>{synthesis.observationProtocol.stoppingConditions.join(" · ") || "No stopping condition recorded."}</dd></div>
+              <div><dt>Cannot establish</dt><dd>{synthesis.observationProtocol.cannotEstablish.join(" · ")}</dd></div>
+            </dl>
+          </section>
+
+          <section className="decision-export">
+            <div>
+              <span>Compounding artifact</span>
+              <strong>Export the private decision or a stripped evidence bundle.</strong>
+              <small>Automatic redaction is a first pass. Inspect claim text, excerpts, and metadata before sharing.</small>
+            </div>
+            <button onClick={exportPrivate}>Export private JSON</button>
+            <button onClick={exportShareable}>Export shareable skeleton</button>
+          </section>
+        </>
+      )}
     </section>
   );
 }

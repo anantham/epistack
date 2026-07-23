@@ -3,18 +3,17 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  knownSourceByPmid,
-  laneAudit,
   researchCapabilities,
-  researchLanes,
-  verticalSliceAudit,
   type ResearchLane,
 } from "../../data/eggs-investigation";
-import { atomicResults, claimFrames as legacyClaimFrames } from "../../data/eggs-result-ledger";
 import type { DeepDiveResponse } from "../../lib/deep-dive";
 import type { DualReviewResponse } from "../../lib/dual-review";
 import type { PublicationFilter, PubmedDiscovery, ResearchResponse } from "../../lib/research";
 import { agentPromptStorageKey, sanitizeAgentPromptOverrides } from "../../lib/agent-prompts";
+import type {
+  RecallResponse,
+  RecallToolTraceEvent,
+} from "../../lib/broad-recall";
 import {
   researchBriefSchema,
   researchBriefStorageKey,
@@ -39,9 +38,17 @@ type DeepDiveRun = {
 };
 
 type CompanionHealth = {
-  status: "checking" | "online" | "offline";
+  status: "checking" | "online" | "offline" | "hosted";
   models: { primary: string; adversary: string } | null;
   detail: string;
+};
+
+type RecallRun = {
+  status: "idle" | "running" | "complete" | "error";
+  response: RecallResponse | null;
+  error: string;
+  progress: string;
+  liveTrace: RecallToolTraceEvent[];
 };
 
 type PromotionRecord = {
@@ -70,6 +77,8 @@ type CachedDashboardState = {
   runs: Record<string, LaneRun>;
   deepDives: Record<string, DeepDiveRun>;
   openLane: string;
+  recall?: RecallRun;
+  recallSelectedClaimIds?: string[];
 };
 
 const dashboardCacheKey = "epistack:research-ui-cache:v2";
@@ -79,11 +88,11 @@ function isDualReviewPayload(payload: DeepDiveResponse | DualReviewResponse): pa
   return payload.verificationStatus === "ai-cross-checked-full-text";
 }
 
-function defaultQueries(lanes: ResearchLane[] = researchLanes) {
+function defaultQueries(lanes: ResearchLane[]) {
   return Object.fromEntries(lanes.map((lane) => [lane.id, lane.defaultQuery])) as Record<string, string>;
 }
 
-function freshRuns(lanes: ResearchLane[] = researchLanes) {
+function freshRuns(lanes: ResearchLane[]) {
   return Object.fromEntries(
     lanes.map((lane) => [lane.id, { status: "ready", response: null, error: "" }]),
   ) as Record<string, LaneRun>;
@@ -109,10 +118,6 @@ const publicationOptions: Array<{ id: PublicationFilter; label: string }> = [
   { id: "observational", label: "Observational" },
 ];
 
-function firstResultForSource(sourceId: string) {
-  return atomicResults.find((result) => result.sourceId === sourceId)?.id;
-}
-
 function statusLabel(status: LaneRun["status"]) {
   if (status === "running") return "searching live";
   if (status === "complete") return "sweep complete";
@@ -120,15 +125,30 @@ function statusLabel(status: LaneRun["status"]) {
   return "ready for human launch";
 }
 
+function boundedUnique(values: Array<string | null | undefined>, maximumLength: number) {
+  return Array.from(new Set(values
+    .map((value) => value?.trim().slice(0, maximumLength) || "")
+    .filter(Boolean))).slice(0, 12);
+}
+
 export function ResearchDashboard() {
   const [brief, setBrief] = useState<ResearchBrief | null>(null);
-  const activeLanes = useMemo(() => brief ? researchLanesFromBrief(brief) : researchLanes, [brief]);
-  const [queries, setQueries] = useState<Record<string, string>>(defaultQueries);
+  const activeLanes = useMemo(() => brief ? researchLanesFromBrief(brief) : [], [brief]);
+  const [caseId, setCaseId] = useState("");
+  const [queries, setQueries] = useState<Record<string, string>>({});
   const [filters, setFilters] = useState<PublicationFilter[]>(["trials", "reviews"]);
-  const [runs, setRuns] = useState<Record<string, LaneRun>>(freshRuns);
+  const [runs, setRuns] = useState<Record<string, LaneRun>>({});
   const [deepDives, setDeepDives] = useState<Record<string, DeepDiveRun>>({});
   const [promotionRecords, setPromotionRecords] = useState<PromotionRecord[]>([]);
-  const [openLane, setOpenLane] = useState<string>(researchLanes[0].id);
+  const [openLane, setOpenLane] = useState<string>("");
+  const [recallSelectedClaimIds, setRecallSelectedClaimIds] = useState<string[]>([]);
+  const [recall, setRecall] = useState<RecallRun>({
+    status: "idle",
+    response: null,
+    error: "",
+    progress: "Choose the claims that deserve broad and applicability-specific recall.",
+    liveTrace: [],
+  });
   const [storageReady, setStorageReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionHealth>({ status: "checking", models: null, detail: "Checking the local Claude companion…" });
 
@@ -138,13 +158,7 @@ export function ResearchDashboard() {
   );
 
   function currentCaseId() {
-    if (brief?.caseId) return brief.caseId;
-    try {
-      const workspace = JSON.parse(window.localStorage.getItem("epistack:workspace:v1") || "{}") as { result?: { caseId?: string } | null };
-      return workspace.result?.caseId || "eggs-live-mvp";
-    } catch {
-      return "eggs-live-mvp";
-    }
+    return caseId || brief?.caseId || "";
   }
 
   function currentWorkspace() {
@@ -156,20 +170,18 @@ export function ResearchDashboard() {
         result: { caseId: brief.caseId, decisionContext: brief.decisionContext },
       };
     }
-    try {
-      return JSON.parse(window.localStorage.getItem("epistack:workspace:v1") || "{}") as {
-        prompt?: string;
-        decisionContext?: string;
-        result?: { caseId?: string; decisionContext?: string } | null;
-        compiledQuestion?: string;
-      };
-    } catch {
-      return {};
-    }
+    return {};
   }
 
   async function checkCompanion() {
-    setCompanion((current) => ({ ...current, status: "checking", detail: "Checking the local Claude companion…" }));
+    const localHost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+    setCompanion((current) => ({
+      ...current,
+      status: "checking",
+      detail: localHost
+        ? "Checking the local Claude companion…"
+        : "Checking whether the local companion explicitly authorizes this hosted origin…",
+    }));
     try {
       const response = await fetch(`${localClaudeCompanionUrl}/health`, { cache: "no-store" });
       const payload = await response.json() as { ok?: boolean; models?: { primary?: string; adversary?: string } };
@@ -181,16 +193,23 @@ export function ResearchDashboard() {
       });
     } catch {
       setCompanion({
-        status: "offline",
+        status: localHost ? "offline" : "hosted",
         models: null,
-        detail: "Start npm run agents in the app directory, then retry this check.",
+        detail: localHost
+          ? "Start npm run agents in the app directory, then retry this check."
+          : "Hosted controls stay disabled unless the local companion explicitly authorizes this exact site origin with EPISTACK_ALLOWED_BROWSER_ORIGINS.",
       });
     }
   }
 
   async function loadPromotionRegister() {
+    const activeCaseId = currentCaseId();
+    if (!activeCaseId) {
+      setPromotionRecords([]);
+      return;
+    }
     try {
-      const response = await fetch(`/api/promote?caseId=${encodeURIComponent(currentCaseId())}`);
+      const response = await fetch(`/api/promote?caseId=${encodeURIComponent(activeCaseId)}`);
       const payload = await response.json() as { records?: PromotionRecord[] };
       if (response.ok) setPromotionRecords(payload.records ?? []);
     } catch {
@@ -205,22 +224,28 @@ export function ResearchDashboard() {
   useEffect(() => {
     try {
       let loadedBrief: ResearchBrief | null = null;
+      const queryCaseId = new URLSearchParams(window.location.search).get("caseId")?.trim() || "";
       const rawBrief = window.localStorage.getItem(researchBriefStorageKey);
       if (rawBrief) {
         const parsedBrief = researchBriefSchema.safeParse(JSON.parse(rawBrief));
-        if (parsedBrief.success) loadedBrief = parsedBrief.data;
-        else window.localStorage.removeItem(researchBriefStorageKey);
+        if (parsedBrief.success) {
+          if (!queryCaseId || parsedBrief.data.caseId === queryCaseId) loadedBrief = parsedBrief.data;
+        } else {
+          window.localStorage.removeItem(researchBriefStorageKey);
+        }
       }
-      const lanes = loadedBrief ? researchLanesFromBrief(loadedBrief) : researchLanes;
+      const lanes = loadedBrief ? researchLanesFromBrief(loadedBrief) : [];
+      setCaseId(queryCaseId || loadedBrief?.caseId || "");
       setBrief(loadedBrief);
       setQueries(defaultQueries(lanes));
       setRuns(freshRuns(lanes));
-      setOpenLane(lanes[0]?.id ?? researchLanes[0].id);
+      setOpenLane(lanes[0]?.id ?? "");
+      setRecallSelectedClaimIds(loadedBrief?.claims.map((claim) => claim.id) ?? []);
 
       const raw = window.localStorage.getItem(dashboardCacheKey);
       if (!raw) return;
       const cached = JSON.parse(raw) as Partial<CachedDashboardState>;
-      const briefId = loadedBrief?.briefId ?? "legacy-eggs-fixture";
+      const briefId = loadedBrief?.briefId ?? "";
       if (cached.version !== 2 || !cached.savedAt || cached.briefId !== briefId) return;
 
       const restoredQueries = defaultQueries(lanes);
@@ -267,6 +292,20 @@ export function ResearchDashboard() {
       setDeepDives(restoredDeepDives);
 
       if (typeof cached.openLane === "string" && lanes.some((lane) => lane.id === cached.openLane)) setOpenLane(cached.openLane);
+      if (loadedBrief && Array.isArray(cached.recallSelectedClaimIds)) {
+        const allowed = new Set(loadedBrief.claims.map((claim) => claim.id));
+        const restoredSelection = cached.recallSelectedClaimIds.filter((id): id is string => typeof id === "string" && allowed.has(id));
+        if (restoredSelection.length) setRecallSelectedClaimIds(restoredSelection);
+      }
+      if (cached.recall?.response) {
+        setRecall({
+          status: "complete",
+          response: cached.recall.response,
+          error: "",
+          progress: "Restored the last lead-only discovery run from this browser.",
+          liveTrace: cached.recall.response.toolTrace,
+        });
+      }
     } catch {
       window.localStorage.removeItem(dashboardCacheKey);
     } finally {
@@ -279,7 +318,7 @@ export function ResearchDashboard() {
     void loadPromotionRegister();
     // The register is reloaded when a newly compiled brief changes the case scope.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brief?.caseId, storageReady]);
+  }, [brief?.caseId, caseId, storageReady]);
 
   useEffect(() => {
     if (!storageReady) return;
@@ -304,18 +343,26 @@ export function ResearchDashboard() {
       ) as Record<string, DeepDiveRun>;
       const cache: CachedDashboardState = {
         version: 2,
-        briefId: brief?.briefId ?? "legacy-eggs-fixture",
+        briefId: brief?.briefId ?? "",
         savedAt: new Date().toISOString(),
         queries,
         filters,
         runs: reusableRuns,
         deepDives: reusableDeepDives,
         openLane,
+        recall: recall.response ? {
+          status: "complete",
+          response: recall.response,
+          error: "",
+          progress: "Restored from this browser.",
+          liveTrace: recall.response.toolTrace,
+        } : undefined,
+        recallSelectedClaimIds,
       };
       window.localStorage.setItem(dashboardCacheKey, JSON.stringify(cache));
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [activeLanes, brief?.briefId, deepDives, filters, openLane, queries, runs, storageReady]);
+  }, [activeLanes, brief?.briefId, deepDives, filters, openLane, queries, recall.response, recallSelectedClaimIds, runs, storageReady]);
 
   function clearDashboardCache() {
     window.localStorage.removeItem(dashboardCacheKey);
@@ -323,7 +370,15 @@ export function ResearchDashboard() {
     setFilters(["trials", "reviews"]);
     setRuns(freshRuns(activeLanes));
     setDeepDives({});
-    setOpenLane(activeLanes[0]?.id ?? researchLanes[0].id);
+    setOpenLane(activeLanes[0]?.id ?? "");
+    setRecallSelectedClaimIds(brief?.claims.map((claim) => claim.id) ?? []);
+    setRecall({
+      status: "idle",
+      response: null,
+      error: "",
+      progress: "Choose the claims that deserve broad and applicability-specific recall.",
+      liveTrace: [],
+    });
   }
 
   function toggleFilter(filter: PublicationFilter) {
@@ -368,6 +423,159 @@ export function ResearchDashboard() {
     for (const lane of activeLanes) await runLane(lane);
   }
 
+  function toggleRecallClaim(claimId: string) {
+    setRecallSelectedClaimIds((current) =>
+      current.includes(claimId)
+        ? current.filter((candidate) => candidate !== claimId)
+        : [...current, claimId]);
+  }
+
+  function shareableRecallProfile() {
+    if (!brief) {
+      return {
+        populationTerms: [],
+        settingTerms: [],
+        actionTerms: [],
+        outcomeTerms: [],
+        constraints: [],
+        knownUnknowns: [],
+      };
+    }
+    const selectedClaims = brief.claims.filter((claim) => recallSelectedClaimIds.includes(claim.id));
+    const applicabilityAssignments = brief.dimensionAssignments.filter((assignment) =>
+      assignment.role === "applicability-only" || assignment.role === "monitored-unknown");
+    const settingPattern = /(where|setting|geograph|location|jurisdiction|market)/i;
+    return {
+      populationTerms: boundedUnique(selectedClaims.map((claim) => claim.population), 120),
+      settingTerms: boundedUnique(applicabilityAssignments
+        .filter((assignment) => settingPattern.test(`${assignment.label} ${assignment.axisId}`))
+        .flatMap((assignment) => assignment.searchConcepts), 120),
+      actionTerms: boundedUnique(selectedClaims.flatMap((claim) => [claim.exposure, claim.comparator]), 160),
+      outcomeTerms: boundedUnique(selectedClaims.map((claim) => claim.outcome), 120),
+      constraints: boundedUnique(selectedClaims.flatMap((claim) => claim.applicabilityFields), 220),
+      knownUnknowns: boundedUnique(applicabilityAssignments.flatMap((assignment) => assignment.mismatchRisks), 220),
+    };
+  }
+
+  async function runRecall(refresh = false) {
+    if (!brief || recallSelectedClaimIds.length === 0) {
+      setRecall((current) => ({
+        ...current,
+        status: "error",
+        error: brief ? "Select at least one scoped claim." : "Compile a research brief before launching broad recall.",
+      }));
+      return;
+    }
+    const claims = brief.claims
+      .filter((claim) => recallSelectedClaimIds.includes(claim.id))
+      .map((claim) => ({
+        id: claim.id,
+        statement: claim.statement,
+        population: claim.population,
+        exposure: claim.exposure,
+        comparator: claim.comparator,
+        outcome: claim.outcome,
+        timeHorizon: claim.timeHorizon,
+        decisionLeverage: claim.decisionLeverage,
+        applicabilityFields: claim.applicabilityFields,
+      }));
+    setRecall({
+      status: "running",
+      response: refresh ? recall.response : null,
+      error: "",
+      progress: "Launching broad-recall and applicability specialists in parallel…",
+      liveTrace: [],
+    });
+    try {
+      const response = await fetch(`${localClaudeCompanionUrl}/recall`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: brief.originalQuestion,
+          compiledQuestion: brief.compiledQuestion,
+          claims,
+          applicabilityProfile: shareableRecallProfile(),
+          promptOverrides: promptOverrides(),
+          refresh,
+        }),
+      });
+      if (!response.ok || !response.body) throw new Error("The local Claude companion did not start the lead-discovery stream.");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffered = "";
+      let completed: RecallResponse | null = null;
+      let recallError = "";
+      const consumeLine = (line: string) => {
+        if (!line.trim()) return;
+        const event = JSON.parse(line) as {
+          type?: "status" | "tool" | "complete" | "error";
+          phase?: string;
+          lane?: string;
+          label?: string;
+          event?: RecallToolTraceEvent;
+          payload?: RecallResponse;
+          message?: string;
+        };
+        if (event.type === "status") {
+          setRecall((current) => ({
+            ...current,
+            status: "running",
+            progress: event.label || "Lead-discovery agents are working…",
+          }));
+        } else if (event.type === "tool" && event.event) {
+          setRecall((current) => ({
+            ...current,
+            liveTrace: current.liveTrace.some((trace) => trace.id === event.event?.id)
+              ? current.liveTrace
+              : [...current.liveTrace, event.event as RecallToolTraceEvent],
+          }));
+        } else if (event.type === "complete" && event.payload) {
+          completed = event.payload;
+        } else if (event.type === "error") {
+          recallError = event.message || "The lead-discovery agents stopped without a result.";
+        }
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        buffered += decoder.decode(value, { stream: !done });
+        const lines = buffered.split("\n");
+        buffered = lines.pop() || "";
+        lines.forEach(consumeLine);
+        if (done) break;
+      }
+      if (buffered.trim()) consumeLine(buffered);
+      if (recallError) throw new Error(recallError);
+      const final = completed as RecallResponse | null;
+      if (!final) throw new Error("The local Claude companion ended without a completed lead-discovery result.");
+      setRecall({
+        status: "complete",
+        response: final,
+        error: "",
+        progress: `${final.leads.length} lead-only records returned across two search lanes.`,
+        liveTrace: final.toolTrace,
+      });
+    } catch (error) {
+      const offline = error instanceof TypeError && /fetch/i.test(error.message);
+      if (offline) {
+        setCompanion({ status: "offline", models: null, detail: "Start npm run agents in the app directory, then retry this check." });
+      }
+      setRecall((current) => ({
+        ...current,
+        status: "error",
+        error: error instanceof Error ? error.message : "The broad-recall sweep failed.",
+        progress: "Lead discovery stopped.",
+      }));
+    }
+  }
+
+  function adoptRecallQuery(lead: RecallResponse["leads"][number]) {
+    const laneId = lead.claimIds.find((claimId) => activeLanes.some((lane) => lane.id === claimId));
+    if (!laneId) return;
+    setQueries((current) => ({ ...current, [laneId]: lead.discovery.reportedQuery }));
+    setOpenLane(laneId);
+    document.querySelector(".research-lanes")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function modelPreferences() {
     try {
       const preferences = JSON.parse(window.localStorage.getItem("epistack:preferences:v1") || "{}") as { apiKey?: string; model?: string };
@@ -386,28 +594,37 @@ export function ResearchDashboard() {
   }
 
   function compiledClaimFrames(): ResearchClaimFrame[] {
-    if (brief) return brief.claims;
-    return legacyClaimFrames.map((claim, index) => ({
-      ...claim,
-      kind: index === 2 ? "mechanism" : index === 3 ? "harm" : "effectiveness",
-      priority: index + 1,
-      budgetShare: 25,
-      decisionLeverage: "Legacy egg fixture claim retained until a human-edited ResearchBrief is compiled.",
-      axisIds: ["legacy-eggs-fixture"],
-      queryUsesAxisIds: ["legacy-eggs-fixture"],
-      applicabilityUsesAxisIds: [],
-      retrieval: {
-        searchQuery: "egg breakfast randomized trial",
-        inclusionRule: "Human comparative evidence with an explicit egg exposure and comparator.",
-        exclusionSignals: ["No explicit egg exposure or comparison"],
-        relaxationOrder: ["Broaden duration while preserving exposure, comparator, and outcome"],
-      },
-      applicabilityFields: ["population", "exposure", "comparator", "outcome", "time horizon"],
-    } satisfies ResearchClaimFrame));
+    return brief?.claims ?? [];
   }
 
-  function applicabilityProfile() {
-    if (!brief) return { summary: "Legacy egg fixture; no compiled stakeholder profile is available." };
+  function outboundApplicabilityProfile() {
+    if (!brief) {
+      return {
+        populationTerms: [],
+        settingTerms: [],
+        actionTerms: [],
+        outcomeTerms: [],
+        constraints: [],
+        knownUnknowns: [],
+      };
+    }
+    const routedDimensions = brief.dimensionAssignments.filter((assignment) =>
+      assignment.role === "applicability-only" || assignment.role === "monitored-unknown");
+    const settingPattern = /(where|setting|geograph|location|jurisdiction|market)/i;
+    return {
+      populationTerms: boundedUnique(brief.claims.map((claim) => claim.population), 120),
+      settingTerms: boundedUnique(routedDimensions
+        .filter((assignment) => settingPattern.test(`${assignment.label} ${assignment.axisId}`))
+        .flatMap((assignment) => assignment.searchConcepts), 120),
+      actionTerms: boundedUnique(brief.claims.flatMap((claim) => [claim.exposure, claim.comparator]), 160),
+      outcomeTerms: boundedUnique(brief.claims.map((claim) => claim.outcome), 120),
+      constraints: boundedUnique(brief.claims.flatMap((claim) => claim.applicabilityFields), 220),
+      knownUnknowns: boundedUnique(routedDimensions.flatMap((assignment) => assignment.mismatchRisks), 220),
+    };
+  }
+
+  function localApplicabilityProfile() {
+    if (!brief) return { summary: "No compiled stakeholder profile is available." };
     return {
       stakeholder: brief.stakeholderProfile,
       actionSpace: brief.actionSpace,
@@ -430,7 +647,7 @@ export function ResearchDashboard() {
         body: JSON.stringify({
           record,
           claimFrames: compiledClaimFrames(),
-          applicabilityProfile: applicabilityProfile(),
+          applicabilityProfile: outboundApplicabilityProfile(),
           openRouterApiKey: preferences.apiKey,
           openRouterModel: preferences.model,
           promptOverrides: promptOverrides(),
@@ -550,7 +767,7 @@ export function ResearchDashboard() {
           question: workspace.prompt,
           decisionContext: workspace.decisionContext || workspace.result?.decisionContext,
           claimFrames: compiledClaimFrames(),
-          applicabilityProfile: applicabilityProfile(),
+          applicabilityProfile: localApplicabilityProfile(),
           promptOverrides: promptOverrides(),
           refresh,
         }),
@@ -614,17 +831,63 @@ export function ResearchDashboard() {
     }
   }
 
+  const localAgentControlsAvailable = companion.status === "online";
+  const artifactHref = caseId ? `/artifact?caseId=${encodeURIComponent(caseId)}` : "/artifact";
+
+  if (!storageReady) {
+    return (
+      <section className="research-prerequisite" aria-live="polite">
+        <span className="live-artifact-pulse" aria-hidden="true" />
+        <div>
+          <strong>Loading the human-edited research contract…</strong>
+          <p>No retrieval or promotion control is enabled until its case identity and claim frames are verified.</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (!brief) {
+    return (
+      <>
+        <header className="page-hero research-hero">
+          <div>
+            <div className="eyebrow">Investigation cockpit · Research contract required</div>
+            <h1>Compile the question before spending retrieval attention.</h1>
+            <p className="lede">
+              This case has no matching human-edited ResearchBrief in this browser. Epistack will not substitute a demo,
+              infer an action space, or write evidence into a fallback case.
+            </p>
+          </div>
+          <button className="primary-button run-all" disabled>Research unavailable</button>
+        </header>
+        <section className="research-prerequisite">
+          <div>
+            <span>Required handoff</span>
+            <strong>Decompose, contextualize, and compile a case-specific research contract.</strong>
+            <p>
+              {caseId
+                ? `The requested case “${caseId}” does not match the locally stored brief.`
+                : "No active case identity or compiled brief was found."}{" "}
+              Return to the question compiler to create the claims, action options, privacy boundary, and retrieval budget that agents are allowed to use.
+            </p>
+          </div>
+          <Link className="primary-button" href="/">Start with a question</Link>
+        </section>
+      </>
+    );
+  }
+
   return (
     <>
       <header className="page-hero research-hero">
         <div>
-          <div className="eyebrow">Investigation cockpit · {brief ? "Compiled research contract" : "Egg fixture fallback"}</div>
+          <div className="eyebrow">Investigation cockpit · Compiled research contract</div>
           <h1>Direct the search. Let independent agents do the first audit.</h1>
           <p className="lede">
             Each lane is traced to the human-edited scope, runs a real editable PubMed sweep, and keeps personal context local for applicability checks. A local Claude companion preserves full text, extracts atomic results, and attacks them with a different model.
           </p>
         </div>
-        <button className="primary-button run-all" onClick={runAll} disabled={activeCount > 0}>
+        <button className="primary-button run-all" onClick={runAll} disabled={activeCount > 0 || activeLanes.length === 0}>
           {activeCount > 0 ? `${activeCount} lanes searching` : `Run all ${activeLanes.length} lanes`}
         </button>
       </header>
@@ -664,7 +927,7 @@ export function ResearchDashboard() {
       <section className="research-boundary" aria-label="MVP evidence boundary">
         <div>
           <span>Working vertical slice</span>
-          <strong>{brief ? `${brief.claims.length} compiled claims → live discovery → atomic results` : `${verticalSliceAudit.lanes} live queries → ${verticalSliceAudit.results} atomic result relationships`}</strong>
+          <strong>{brief.claims.length} compiled claims → live discovery → atomic results</strong>
         </div>
         <p>
           Search rank is not evidential weight. A new record must be scoped, decomposed, checked, given an applicability-distance vector, and assigned to a justified dependence family before it can affect the decision.
@@ -676,6 +939,145 @@ export function ResearchDashboard() {
         <p><strong>Local Claude companion</strong>{companion.models ? ` · ${companion.models.primary} extracts, ${companion.models.adversary} challenges` : ""}</p>
         <small>{companion.detail}</small>
         <button type="button" onClick={() => void checkCompanion()} disabled={companion.status === "checking"}>{companion.status === "checking" ? "Checking…" : "Check again"}</button>
+      </section>
+
+      <section className="recall-cockpit" aria-labelledby="recall-cockpit-title">
+        <header>
+          <div>
+            <span>Recall layer · Lead-only</span>
+            <h2 id="recall-cockpit-title">Search beyond the obvious corpus without weakening the evidence gate.</h2>
+            <p>One specialist looks broadly for direct, negative, corrective, and boundary-setting sources. Another searches for transportability to the shareable parts of this action context. Neither can promote a claim.</p>
+          </div>
+          <div className="recall-launch">
+            <button
+              className="primary-button"
+              onClick={() => void runRecall(false)}
+              disabled={!localAgentControlsAvailable || recallSelectedClaimIds.length === 0 || recall.status === "running"}
+              title={localAgentControlsAvailable ? "Launch both local recall agents." : companion.detail}
+            >
+              {recall.status === "running" ? "Agents searching…" : "Launch both agents"}
+            </button>
+            {recall.response && (
+              <button className="cache-refresh-button" onClick={() => void runRecall(true)} disabled={!localAgentControlsAvailable || recall.status === "running"}>
+                Bypass local cache
+              </button>
+            )}
+          </div>
+        </header>
+
+        <div className="recall-focus">
+          <div>
+            <span>Spend recall tokens on</span>
+            <small>Multi-select · the agent receives only these claim frames</small>
+          </div>
+          <div className="recall-claim-pills">
+            {brief?.claims.map((claim) => (
+              <button
+                className={recallSelectedClaimIds.includes(claim.id) ? "active" : ""}
+                key={claim.id}
+                onClick={() => toggleRecallClaim(claim.id)}
+                aria-pressed={recallSelectedClaimIds.includes(claim.id)}
+                title={claim.statement}
+              >
+                {claim.shortLabel}
+              </button>
+            ))}
+            {brief && (
+              <button
+                className="recall-select-all"
+                onClick={() => setRecallSelectedClaimIds(
+                  recallSelectedClaimIds.length === brief.claims.length ? [] : brief.claims.map((claim) => claim.id),
+                )}
+              >
+                {recallSelectedClaimIds.length === brief.claims.length ? "clear all" : "select all"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className={`recall-progress ${recall.status}`}>
+          <i aria-hidden="true" />
+          <span>{recall.error || recall.progress}</span>
+          {recall.response && <small>{recall.response.cache.status === "hit" ? "exact local run reused" : recall.response.cache.status === "bypass" ? "recomputed live" : "fresh local run"} · {recall.response.model}</small>}
+        </div>
+
+        {(recall.liveTrace.length > 0 || recall.response) && (
+          <details className="recall-trace" open={recall.status === "running"}>
+            <summary>
+              Inspect actual search/fetch events
+              <span>{recall.liveTrace.filter((event) => event.state === "requested").length} observed invocations</span>
+            </summary>
+            <div>
+              {recall.liveTrace.map((event) => (
+                <article key={event.id}>
+                  <span>{event.lane.replaceAll("-", " ")}</span>
+                  <strong>{event.tool} · {event.state}</strong>
+                  <code>{event.query || event.url || "Invocation input not present in the CLI event."}</code>
+                </article>
+              ))}
+              {recall.liveTrace.length === 0 && (
+                <p>No tool invocation inputs were visible in the Claude stream; reported queries must be treated as model-authored.</p>
+              )}
+            </div>
+            {recall.response && <small>{recall.response.observability.boundary}</small>}
+          </details>
+        )}
+
+        {recall.response && (
+          <div className="recall-lanes">
+            {recall.response.lanes.map((recallLane) => {
+              const leads = recall.response?.leads.filter((lead) => recallLane.leadIds.includes(lead.id)) ?? [];
+              return (
+                <section key={recallLane.lane}>
+                  <header>
+                    <div>
+                      <span>{recallLane.lane.replaceAll("-", " ")}</span>
+                      <strong>{leads.length} leads · outside accepted graph</strong>
+                    </div>
+                    <p>{recallLane.searchSummary}</p>
+                  </header>
+                  <div>
+                    {leads.map((lead) => (
+                      <article className={lead.disconfirming ? "disconfirming" : ""} key={lead.id}>
+                        <div className="recall-lead-status">
+                          <span>{lead.status}</span>
+                          <small>{lead.source.type.replaceAll("-", " ")}</small>
+                          {lead.disconfirming && <b>could disconfirm</b>}
+                        </div>
+                        <h3>{lead.source.title}</h3>
+                        <p>{lead.whyRelevant}</p>
+                        <dl>
+                          <div><dt>Claim links</dt><dd>{lead.claimIds.join(" · ")}</dd></div>
+                          <div><dt>Limitation</dt><dd>{lead.limitation}</dd></div>
+                          <div><dt>Reported query</dt><dd>{lead.discovery.reportedQuery}</dd></div>
+                        </dl>
+                        <div className="recall-observation-badges">
+                          <span className={lead.discovery.queryObserved ? "observed" : ""}>{lead.discovery.queryObserved ? "query observed" : "query model-reported"}</span>
+                          <span className={lead.discovery.sourceFetchObserved ? "observed" : ""}>{lead.discovery.sourceFetchObserved ? "fetch observed" : "fetch not observed"}</span>
+                        </div>
+                        <footer>
+                          <a href={lead.source.url} target="_blank" rel="noreferrer">Open lead ↗</a>
+                          <button onClick={() => adoptRecallQuery(lead)}>Use query in PubMed lane</button>
+                        </footer>
+                      </article>
+                    ))}
+                  </div>
+                  {recallLane.unsearchedBoundaries.length > 0 && (
+                    <details className="recall-boundaries">
+                      <summary>Unsearched boundaries</summary>
+                      <ul>{recallLane.unsearchedBoundaries.map((boundary) => <li key={boundary}>{boundary}</li>)}</ul>
+                    </details>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        )}
+
+        <footer className="recall-boundary-note">
+          <strong>Hard boundary:</strong>
+          <span>Opening a lead or copying its query does not create evidence. Acquisition, atomic extraction, dependence assignment, and adversarial verification still have to succeed.</span>
+        </footer>
       </section>
 
       <section className="capability-rail" aria-label="Investigation capability status">
@@ -716,11 +1118,10 @@ export function ResearchDashboard() {
       <div className="research-lanes">
         {activeLanes.map((lane, index) => {
           const run = runs[lane.id];
-          const audit = laneAudit(lane);
           const expanded = openLane === lane.id;
           return (
             <article className={`research-lane ${run.status} ${expanded ? "expanded" : ""}`} key={lane.id}>
-              <button className="lane-heading" onClick={() => setOpenLane(lane.id)} aria-expanded={expanded}>
+              <button className="lane-heading" onClick={() => setOpenLane((current) => current === lane.id ? "" : lane.id)} aria-expanded={expanded}>
                 <span className="lane-number">0{index + 1}</span>
                 <span>
                   <small>{statusLabel(run.status)}</small>
@@ -756,7 +1157,7 @@ export function ResearchDashboard() {
                         Refresh live
                       </button>
                     )}
-                    <span>{audit.resultCount > 0 ? `${audit.resultCount} reviewed results from ${audit.familyCount} independent families already anchor this lane.` : "No result is pre-promoted for this generated lane; discovery begins as leads, not evidence."}</span>
+                    <span>Discovery begins as leads. Only case-scoped records that cross the declared promotion policy appear in the live artifact.</span>
                   </div>
 
                   {run.error && <p className="lane-error" role="alert">{run.error}</p>}
@@ -773,14 +1174,16 @@ export function ResearchDashboard() {
                       <div className="executed-query"><span>Executed</span><code>{run.response.executedQuery}</code></div>
                       <div className="discovery-records">
                         {run.response.records.map((record) => {
-                          const known = knownSourceByPmid.get(record.pmid);
-                          const resultId = known ? firstResultForSource(known.id) : undefined;
+                          const promoted = promotionRecords.find((candidate) => candidate.pmid === record.pmid);
+                          const resultId = promoted?.result_id;
                           const deepDive = deepDives[record.pmid] ?? { status: "idle", payload: null, checked: false, error: "", progress: "", fallbackAvailable: false };
                           const dualPayload = deepDive.payload && isDualReviewPayload(deepDive.payload) ? deepDive.payload : null;
                           const abstractPayload = deepDive.payload && !isDualReviewPayload(deepDive.payload) ? deepDive.payload : null;
                           const agentBusy = ["acquiring", "extracting", "reviewing", "adjudicating", "promoting"].includes(deepDive.status);
                           const actionLabel = deepDive.status === "persisted"
                             ? "Persisted with provenance"
+                            : companion.status === "hosted"
+                              ? "Run locally for full text"
                             : deepDive.status === "acquiring" || deepDive.status === "extracting"
                               ? "Reading full paper…"
                               : deepDive.status === "reviewing"
@@ -791,26 +1194,32 @@ export function ResearchDashboard() {
                                     ? "Auto-promoting…"
                                     : "Run full-paper cross-check";
                           return (
-                            <article className={known ? "promoted" : "unreviewed"} key={record.pmid}>
+                            <article className={promoted ? "promoted" : "unreviewed"} key={record.pmid}>
                               <div className="record-status">
-                                <span>{known ? "deep dive available" : "unreviewed lead"}</span>
+                                <span>{promoted ? "accepted in this case" : "unreviewed lead"}</span>
                                 <small>PMID {record.pmid}</small>
                               </div>
                               <h3>{record.title}</h3>
                               <p>{record.authors}</p>
                               <small>{record.journal} · {record.published}</small>
                               <footer>
-                                {known && resultId && <Link href={`/evidence?result=${resultId}`}>Inspect atomic results <span aria-hidden="true">→</span></Link>}
-                                <button onClick={() => investigateFullText(record)} disabled={agentBusy || deepDive.status === "persisted"}>{actionLabel}</button>
+                                {resultId && <Link href={`/artifact?caseId=${encodeURIComponent(caseId)}#${encodeURIComponent(resultId)}`}>Inspect atomic results <span aria-hidden="true">→</span></Link>}
+                                <button
+                                  onClick={() => investigateFullText(record)}
+                                  disabled={!localAgentControlsAvailable || agentBusy || deepDive.status === "persisted"}
+                                  title={localAgentControlsAvailable ? "Acquire and cross-check the full paper with the local companion." : companion.detail}
+                                >
+                                  {actionLabel}
+                                </button>
                                 <a href={record.url} target="_blank" rel="noreferrer">Open PubMed ↗</a>
                               </footer>
                               {agentBusy && <div className="local-agent-progress"><i aria-hidden="true" /><span>{deepDive.progress}</span></div>}
                               {deepDive.error && (
-                                <p className="deep-dive-error" role="alert">{deepDive.error} {deepDive.error.includes("bring-your-own") && <Link href="/">Open Settings on the Frame page.</Link>}</p>
+                                <p className="deep-dive-error" role="alert">{deepDive.error} {deepDive.error.includes("bring-your-own") && <Link href="/?settings=1">Open Settings on the Frame page.</Link>}</p>
                               )}
                               {deepDive.fallbackAvailable && (
                                 <div className="candidate-actions fallback-actions">
-                                  <button className="cache-refresh-button" onClick={() => void checkCompanion()}>Retry local companion</button>
+                                  <button className="cache-refresh-button" onClick={() => void checkCompanion()}>Recheck companion status</button>
                                   <button className="cache-refresh-button" onClick={() => extractAbstractRecord(record)}>Use abstract-only fallback</button>
                                 </div>
                               )}
@@ -872,7 +1281,7 @@ export function ResearchDashboard() {
                                   </p>
                                   <div className="candidate-actions">
                                     <a className="cache-refresh-button" href={dualPayload.source.url} target="_blank" rel="noreferrer">Open preserved full text ↗</a>
-                                    <button className="cache-refresh-button" onClick={() => investigateFullText(record, true)} disabled={agentBusy}>Re-run both models</button>
+                                    <button className="cache-refresh-button" onClick={() => investigateFullText(record, true)} disabled={!localAgentControlsAvailable || agentBusy}>Re-run both models</button>
                                   </div>
                                 </div>
                               )}
@@ -939,22 +1348,6 @@ export function ResearchDashboard() {
                     </section>
                   )}
 
-                  <section className="reviewed-anchor">
-                    <header><span>Already promoted into the canonical graph</span><strong>{audit.sourceCount} source containers · {audit.checkedCount} source-checked results</strong></header>
-                    <div>
-                      {lane.knownSourceIds.map((sourceId) => {
-                        const knownSource = Array.from(knownSourceByPmid.values()).find((source) => source.id === sourceId);
-                        const resultId = firstResultForSource(sourceId);
-                        return knownSource && resultId ? (
-                          <Link href={`/evidence?result=${resultId}`} key={sourceId}>
-                            <span>{knownSource.sourceType} · {knownSource.year}</span>
-                            <strong>{knownSource.title}</strong>
-                            <small>Open result-level deep dive →</small>
-                          </Link>
-                        ) : null;
-                      })}
-                    </div>
-                  </section>
                 </div>
               )}
             </article>
@@ -980,7 +1373,7 @@ export function ResearchDashboard() {
             ))}
           </div>
         ) : (
-          <p>No live discovery has crossed the gate in this case yet. The reviewed egg fixture remains separate; run a full-paper cross-check to create the first dual-model, provenance-bearing record.</p>
+          <p>No live discovery has crossed the gate in this case yet. Run a local full-paper cross-check, or explicitly inspect and promote an abstract-only fallback, to create the first provenance-bearing record.</p>
         )}
       </section>
 
@@ -990,7 +1383,7 @@ export function ResearchDashboard() {
           <h2>Automation carries the routine attention. Humans inspect the cruxes.</h2>
           <p>Automatic promotion requires a hashed PMC artifact, two different model processes, full review coverage, an affirmative adversarial verdict, and a literal passage match. Rejections stay visible; “AI cross-checked” never masquerades as human verification.</p>
         </div>
-        <Link className="primary-button" href="/evidence">Inspect promoted results</Link>
+        <Link className="primary-button" href={artifactHref}>Open live artifact</Link>
       </section>
     </>
   );

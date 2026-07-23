@@ -18,10 +18,11 @@ test("operation cache keys are stable across object key ordering and contract-ve
 });
 
 test("live research and model extraction use a bypassable shared cache", async () => {
-  const [researchRoute, deepDiveRoute, decompositionRoute, cacheStore] = await Promise.all([
+  const [researchRoute, deepDiveRoute, decompositionRoute, synthesisRoute, cacheStore] = await Promise.all([
     readFile(new URL("../app/api/research/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/deep-dive/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/decompose/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/synthesize/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/cache.ts", import.meta.url), "utf8"),
   ]);
   for (const route of [researchRoute, deepDiveRoute, decompositionRoute]) {
@@ -30,9 +31,15 @@ test("live research and model extraction use a bypassable shared cache", async (
     assert.match(route, /status: "hit"/);
     assert.match(route, /status: refresh \? "bypass" : "miss"/);
   }
+  assert.match(synthesisRoute, /readOperationCache/);
+  assert.match(synthesisRoute, /writeOperationCache/);
+  assert.match(synthesisRoute, /cacheStatus = "hit"/);
+  assert.match(synthesisRoute, /status: cacheStatus/);
+  assert.match(synthesisRoute, /refresh \? "bypass" : "miss"/);
   assert.match(researchRoute, /body\.refresh === true/);
   assert.match(deepDiveRoute, /body\.refresh === true/);
   assert.match(decompositionRoute, /refresh = body\.refresh === true/);
+  assert.match(synthesisRoute, /const refresh = body\.refresh === true/);
   assert.match(deepDiveRoute, /const cached = await readOperationCache[\s\S]+const openRouterApiKey/);
   assert.match(decompositionRoute, /const cached = await readOperationCache[\s\S]+const openRouterApiKey/);
   assert.match(cacheStore, /Cache failure must never block the underlying research operation/);

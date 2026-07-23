@@ -9,6 +9,13 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { renderAgentPrompt, resolveAgentPrompt, sanitizeAgentPromptOverrides } from "../lib/agent-prompts.ts";
 import {
+  normalizeRecallLane,
+  recallLaneDraftSchema,
+  recallRequestSchema,
+  recallResponseSchema,
+  recallToolTraceEventSchema,
+} from "../lib/broad-recall.ts";
+import {
   adversarialReviewSchema,
   adjudicateDualReview,
   dualReviewPolicyId,
@@ -28,6 +35,7 @@ const storeRoot = process.env.EPISTACK_AGENT_STORE || join(appRoot, ".epistack")
 const sourceRoot = join(storeRoot, "sources");
 const cacheRoot = join(storeRoot, "agent-cache");
 const briefCacheRoot = join(storeRoot, "brief-cache");
+const recallCacheRoot = join(storeRoot, "recall-cache");
 const port = Number(process.env.EPISTACK_AGENT_PORT || 4317);
 const claudeBinary = process.env.EPISTACK_CLAUDE_BIN || "claude";
 const primaryModel = process.env.EPISTACK_PRIMARY_CLAUDE_MODEL || "opus";
@@ -35,7 +43,9 @@ const adversaryModel = process.env.EPISTACK_ADVERSARY_CLAUDE_MODEL || "sonnet";
 const primaryBudget = process.env.EPISTACK_PRIMARY_MAX_USD || "8";
 const adversaryBudget = process.env.EPISTACK_ADVERSARY_MAX_USD || "6";
 const compilerBudget = process.env.EPISTACK_COMPILER_MAX_USD || "5";
+const recallBudget = process.env.EPISTACK_RECALL_MAX_USD || "4";
 const researchBriefCompilerCacheContract = "research-brief-compiler-v1";
+const broadRecallCacheContract = "broad-recall-v1";
 
 function claimFramesText(claimFrames) {
   return claimFrames.map((frame) => [
@@ -47,6 +57,20 @@ function claimFramesText(claimFrames) {
     `Comparator: ${frame.comparator}`,
     `Outcome: ${frame.outcome}`,
     `Time horizon: ${frame.timeHorizon}`,
+    `Applicability fields: ${frame.applicabilityFields.join(", ")}`,
+  ].join("\n")).join("\n\n");
+}
+
+function recallClaimFramesText(claimFrames) {
+  return claimFrames.map((frame) => [
+    frame.id,
+    frame.statement,
+    `Population: ${frame.population}`,
+    `Exposure/action: ${frame.exposure}`,
+    `Comparator: ${frame.comparator}`,
+    `Outcome: ${frame.outcome}`,
+    `Time horizon: ${frame.timeHorizon}`,
+    `Decision leverage: ${frame.decisionLeverage}`,
     `Applicability fields: ${frame.applicabilityFields.join(", ")}`,
   ].join("\n")).join("\n\n");
 }
@@ -98,7 +122,7 @@ async function resolvePmcNumeric(pmid) {
   return safePmcNumeric(record?.pmcid);
 }
 
-export async function acquirePmcArtifact(pmid) {
+export async function acquirePmcArtifact(pmid, refresh = false) {
   await mkdir(sourceRoot, { recursive: true });
   const pmcNumeric = await resolvePmcNumeric(pmid);
   if (!pmcNumeric) {
@@ -112,6 +136,7 @@ export async function acquirePmcArtifact(pmid) {
   let xml;
   let retrievedAt;
   try {
+    if (refresh) throw new Error("refresh requested");
     xml = await readFile(localXmlPath, "utf8");
     retrievedAt = (await stat(localXmlPath)).mtime.toISOString();
   } catch {
@@ -208,6 +233,144 @@ async function runClaudeAgent({ name, model, budget, prompt, schema }) {
   });
 }
 
+function toolInputText(input, keys) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  for (const key of keys) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) return value.trim().slice(0, 2_000);
+  }
+  return null;
+}
+
+/**
+ * Extract only invocation metadata from Claude's actual stream. Fetched page
+ * bodies are deliberately not copied into the event log.
+ */
+export function extractRecallToolTraceEvents(event, lane, pendingTools = new Map(), observedAt = new Date().toISOString()) {
+  const events = [];
+  if (event?.type === "assistant" && Array.isArray(event?.message?.content)) {
+    for (const block of event.message.content) {
+      if (block?.type !== "tool_use" || !["WebSearch", "WebFetch"].includes(block.name) || typeof block.id !== "string") continue;
+      const requested = recallToolTraceEventSchema.parse({
+        id: `${lane}:${block.id}:requested`,
+        toolUseId: block.id,
+        lane,
+        tool: block.name,
+        state: "requested",
+        query: block.name === "WebSearch" ? toolInputText(block.input, ["query", "search_query", "q"]) : null,
+        url: block.name === "WebFetch" ? toolInputText(block.input, ["url", "uri"]) : null,
+        observedAt,
+        provenance: "claude-cli-stream",
+      });
+      pendingTools.set(block.id, requested);
+      events.push(requested);
+    }
+  }
+  if (event?.type === "user" && Array.isArray(event?.message?.content)) {
+    for (const block of event.message.content) {
+      if (block?.type !== "tool_result" || typeof block.tool_use_id !== "string") continue;
+      const requested = pendingTools.get(block.tool_use_id);
+      if (!requested) continue;
+      const completed = recallToolTraceEventSchema.parse({
+        ...requested,
+        id: `${lane}:${block.tool_use_id}:${block.is_error === true ? "failed" : "completed"}`,
+        state: block.is_error === true ? "failed" : "completed",
+        observedAt,
+      });
+      pendingTools.delete(block.tool_use_id);
+      events.push(completed);
+    }
+  }
+  return events;
+}
+
+async function runClaudeStreamingAgent({ name, model, budget, prompt, schema, lane, emit }) {
+  const schemaObject = z.toJSONSchema(schema);
+  delete schemaObject.$schema;
+  const args = [
+    "-p",
+    "--name", name,
+    "--model", model,
+    "--effort", "max",
+    "--verbose",
+    "--output-format", "stream-json",
+    "--json-schema", JSON.stringify(schemaObject),
+    "--permission-mode", "dontAsk",
+    "--no-session-persistence",
+    "--no-chrome",
+    "--safe-mode",
+    "--max-budget-usd", budget,
+    "--tools", "WebSearch,WebFetch",
+    "--allowedTools", "WebSearch,WebFetch",
+  ];
+  return new Promise((resolve, reject) => {
+    const child = spawn(claudeBinary, args, { cwd: appRoot, env: process.env, stdio: ["pipe", "pipe", "pipe"] });
+    let stderr = "";
+    let buffered = "";
+    let resultEvent = null;
+    const trace = [];
+    const seenTraceIds = new Set();
+    const pendingTools = new Map();
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error(`${name} exceeded the 12-minute local-agent timeout.`));
+    }, 12 * 60 * 1000);
+    const processLine = (line) => {
+      if (!line.trim()) return;
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        return;
+      }
+      if (event?.type === "result") resultEvent = event;
+      const observed = extractRecallToolTraceEvents(event, lane, pendingTools);
+      for (const traceEvent of observed) {
+        if (seenTraceIds.has(traceEvent.id)) continue;
+        seenTraceIds.add(traceEvent.id);
+        trace.push(traceEvent);
+        emit({ type: "tool", event: traceEvent });
+      }
+    };
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      buffered += chunk;
+      let newline = buffered.indexOf("\n");
+      while (newline >= 0) {
+        processLine(buffered.slice(0, newline));
+        buffered = buffered.slice(newline + 1);
+        newline = buffered.indexOf("\n");
+      }
+    });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error.code === "ENOENT"
+        ? new Error("Claude CLI is not installed or is not on PATH. Install it and authenticate, then restart npm run agents.")
+        : error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      processLine(buffered);
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || resultEvent?.result || `${name} exited with code ${code}.`));
+        return;
+      }
+      try {
+        resolve({
+          structured: parseClaudeStructuredOutput(JSON.stringify(resultEvent)),
+          trace,
+          serverToolUse: resultEvent?.usage?.server_tool_use ?? null,
+        });
+      } catch (error) {
+        reject(new Error(`${name} returned unusable structured output: ${error instanceof Error ? error.message : String(error)}`));
+      }
+    });
+    child.stdin.end(prompt);
+  });
+}
+
 function citationFor(record) {
   return [record.title, record.authors, `${record.journal} · ${record.published}`, `PMID ${record.pmid}${record.doi ? ` · DOI ${record.doi}` : ""}`].join("\n");
 }
@@ -259,7 +422,7 @@ export async function investigateWithClaude(inputValue, emit = () => {}) {
   await mkdir(cacheRoot, { recursive: true });
 
   emit({ type: "status", phase: "acquiring", label: "Acquiring and hashing PMC full text" });
-  const { artifact, plainText } = await acquirePmcArtifact(input.record.pmid);
+  const { artifact, plainText } = await acquirePmcArtifact(input.record.pmid, input.refresh);
   const extractorPrompt = resolveAgentPrompt("full-paper-extractor", input.promptOverrides);
   const reviewerPrompt = resolveAgentPrompt("adversarial-reviewer", input.promptOverrides);
   const cacheKey = hash(JSON.stringify({
@@ -457,15 +620,142 @@ export async function compileResearchBriefWithClaude(inputValue, emit = () => {}
   return { brief, model: primaryModel, cache: { status: input.refresh ? "bypass" : "miss", key: cacheKey, createdAt: generatedAt } };
 }
 
-function localOrigin(origin) {
-  return !origin || /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(origin);
+function cleanRecallInput(value) {
+  const parsed = recallRequestSchema.parse(value);
+  return {
+    ...parsed,
+    compiledQuestion: parsed.compiledQuestion || parsed.question,
+    promptOverrides: sanitizeAgentPromptOverrides(parsed.promptOverrides),
+  };
+}
+
+export async function discoverRecallWithClaude(inputValue, emit = () => {}) {
+  const input = cleanRecallInput(inputValue);
+  await mkdir(recallCacheRoot, { recursive: true });
+  const specialistPrompt = resolveAgentPrompt("broad-recall-specialist", input.promptOverrides);
+  const cacheKey = hash(JSON.stringify({
+    contract: broadRecallCacheContract,
+    model: primaryModel,
+    question: input.question,
+    compiledQuestion: input.compiledQuestion,
+    claims: input.claims,
+    applicabilityProfile: input.applicabilityProfile,
+    specialistPrompt,
+  }));
+  const cachePath = join(recallCacheRoot, `${cacheKey}.json`);
+  if (!input.refresh) {
+    try {
+      const cached = recallResponseSchema.parse(JSON.parse(await readFile(cachePath, "utf8")));
+      emit({ type: "status", phase: "cache-hit", label: "Reusing the exact lead-discovery run" });
+      return recallResponseSchema.parse({
+        ...cached,
+        cache: { ...cached.cache, status: "hit" },
+      });
+    } catch {
+      // A miss or stale schema proceeds to a fresh discovery run.
+    }
+  }
+
+  const lanes = ["broad-recall", "applicability"];
+  const commonValues = {
+    question: input.question,
+    compiledQuestion: input.compiledQuestion,
+    claimFrames: recallClaimFramesText(input.claims),
+    applicabilityProfile: JSON.stringify(input.applicabilityProfile, null, 2),
+  };
+  const laneRuns = await Promise.all(lanes.map(async (lane) => {
+    emit({
+      type: "status",
+      phase: lane,
+      lane,
+      label: lane === "broad-recall"
+        ? `${primaryModel} is searching for broad and disconfirming leads`
+        : `${primaryModel} is searching for transportability leads`,
+    });
+    const task = renderAgentPrompt(specialistPrompt.taskTemplate, { ...commonValues, lane });
+    const run = await runClaudeStreamingAgent({
+      name: `epistack-${lane}-${cacheKey.slice(0, 10)}`,
+      model: primaryModel,
+      budget: recallBudget,
+      prompt: `${specialistPrompt.instructions}\n\n${task}`,
+      schema: recallLaneDraftSchema,
+      lane,
+      emit,
+    });
+    const draft = recallLaneDraftSchema.parse(run.structured);
+    const validClaimIds = new Set(input.claims.map((claim) => claim.id));
+    const invalidClaimIds = draft.leads.flatMap((lead) => lead.claimIds).filter((claimId) => !validClaimIds.has(claimId));
+    if (invalidClaimIds.length) {
+      throw new Error(`${lane} returned unknown claim ids: ${Array.from(new Set(invalidClaimIds)).join(", ")}.`);
+    }
+    return { lane, draft, trace: run.trace, serverToolUse: run.serverToolUse };
+  }));
+
+  const toolTrace = laneRuns.flatMap((run) => run.trace);
+  const normalized = laneRuns.map((run) => normalizeRecallLane(run.lane, run.draft, toolTrace));
+  const leads = normalized.flatMap((result) => result.leads);
+  const capturedToolEvents = toolTrace.filter((event) => event.state === "requested").length;
+  const generatedAt = new Date().toISOString();
+  const response = recallResponseSchema.parse({
+    schemaVersion: "0.1.0",
+    status: "lead-only",
+    question: input.question,
+    compiledQuestion: input.compiledQuestion,
+    generatedAt,
+    model: primaryModel,
+    lanes: normalized.map((result) => result.lane),
+    leads,
+    toolTrace,
+    observability: capturedToolEvents
+      ? {
+        mode: "cli-tool-events",
+        capturedToolEvents,
+        boundary: "The local companion observed WebSearch and WebFetch invocation inputs and completion states in Claude CLI's stream. It cannot observe the search engine's ranking, omitted candidates, or guarantee that an accessible page was complete.",
+      }
+      : {
+        mode: "model-reported-only",
+        capturedToolEvents: 0,
+        boundary: "No WebSearch or WebFetch invocation inputs were present in the Claude CLI stream. Lead queries are model-reported and must not be described as observed execution traces.",
+      },
+    cache: {
+      status: input.refresh ? "bypass" : "miss",
+      key: cacheKey,
+      createdAt: generatedAt,
+    },
+  });
+  await writeFile(cachePath, JSON.stringify(response, null, 2), "utf8");
+  return response;
+}
+
+const configuredBrowserOrigins = new Set(
+  String(process.env.EPISTACK_ALLOWED_BROWSER_ORIGINS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .flatMap((value) => {
+      try {
+        const parsed = new URL(value);
+        return /^https?:$/.test(parsed.protocol) ? [parsed.origin] : [];
+      } catch {
+        return [];
+      }
+    }),
+);
+
+function allowedBrowserOrigin(origin) {
+  return !origin
+    || /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(origin)
+    || configuredBrowserOrigins.has(origin);
 }
 
 function setCors(request, response) {
   const origin = request.headers.origin;
-  if (origin && localOrigin(origin)) response.setHeader("Access-Control-Allow-Origin", origin);
+  if (origin && allowedBrowserOrigin(origin)) response.setHeader("Access-Control-Allow-Origin", origin);
   response.setHeader("Access-Control-Allow-Headers", "Content-Type");
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  if (request.headers["access-control-request-private-network"] === "true" && allowedBrowserOrigin(origin)) {
+    response.setHeader("Access-Control-Allow-Private-Network", "true");
+  }
   response.setHeader("Vary", "Origin");
 }
 
@@ -483,9 +773,11 @@ async function readBody(request) {
 export function createLocalAgentServer() {
   return createServer(async (request, response) => {
     setCors(request, response);
-    if (!localOrigin(request.headers.origin)) {
+    if (!allowedBrowserOrigin(request.headers.origin)) {
       response.writeHead(403, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ error: "The local Claude companion accepts requests only from localhost." }));
+      response.end(JSON.stringify({
+        error: "This browser origin is not authorized for the local Claude companion. Run the web app locally or add its exact origin to EPISTACK_ALLOWED_BROWSER_ORIGINS and restart npm run agents.",
+      }));
       return;
     }
     if (request.method === "OPTIONS") {
@@ -500,7 +792,7 @@ export function createLocalAgentServer() {
         service: "epistack-local-claude",
         policyId: dualReviewPolicyId,
         models: { primary: primaryModel, adversary: adversaryModel },
-        capabilities: ["research-brief-compiler", "full-paper-extraction", "adversarial-review"],
+        capabilities: ["research-brief-compiler", "lead-only-broad-recall", "full-paper-extraction", "adversarial-review"],
         store: relative(appRoot, storeRoot),
       }));
       return;
@@ -515,6 +807,23 @@ export function createLocalAgentServer() {
         emit({
           type: "error",
           code: "RESEARCH_BRIEF_FAILURE",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        response.end();
+      }
+      return;
+    }
+    if (request.method === "POST" && request.url === "/recall") {
+      response.writeHead(200, { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" });
+      const emit = (event) => response.write(`${JSON.stringify(event)}\n`);
+      try {
+        const payload = await discoverRecallWithClaude(await readBody(request), emit);
+        emit({ type: "complete", payload });
+      } catch (error) {
+        emit({
+          type: "error",
+          code: "RECALL_DISCOVERY_FAILURE",
           message: error instanceof Error ? error.message : String(error),
         });
       } finally {

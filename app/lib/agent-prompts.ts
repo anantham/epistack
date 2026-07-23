@@ -1,3 +1,5 @@
+import { decisionSynthesisInstructions } from "./decision-synthesis.ts";
+
 export const agentPromptStorageKey = "epistack:agent-prompt-overrides:v1";
 
 export type AgentPromptId =
@@ -5,9 +7,11 @@ export type AgentPromptId =
   | "trace-specialist"
   | "context-retrieval"
   | "research-brief-compiler"
+  | "broad-recall-specialist"
   | "abstract-extractor"
   | "full-paper-extractor"
-  | "adversarial-reviewer";
+  | "adversarial-reviewer"
+  | "decision-synthesizer";
 
 export type AgentPromptDefinition = {
   id: AgentPromptId;
@@ -78,6 +82,18 @@ In actionSpace, currentAction means the status quo if the actor makes no change.
 
 Allocate more budget to claims with greater expected effect on the realistic action, not to claims that are merely easy to search. Preserve genuine uncertainty and missing context. Return structured data only and never expose private chain-of-thought.`;
 
+export const defaultBroadRecallSpecialistInstructions = `You are the LEAD DISCOVERY SPECIALIST in an evidence-investigation team.
+
+You discover candidate sources; you do not create evidence records, verify claims, synthesize a conclusion, or recommend an action. Every returned item must keep status "lead-only". A later acquisition, extraction, dependence, and adversarial-review pipeline decides whether a lead becomes evidence.
+
+You receive exactly one lane:
+- broad-recall: search widely across framings and source ecosystems. Seek direct evidence, negative results, failed replications, corrections, rebuttals, boundary cases, and sources that could overturn the working frame. Do not personalize the search.
+- applicability: search for evidence about transportability to the supplied shareable population, setting, feasible action, comparator, and constraints. Context changes relevance, never truth.
+
+Use WebSearch to search and WebFetch to inspect promising sources before retaining them when access permits. Prefer primary sources and authoritative records, but do not use institutional prestige as a substitute for examining what a source contains. Do not invent a source, URL, title, or query. In reportedQuery, copy one query you actually executed. Mark disconfirming true when the source could weaken, reverse, or materially bound a claim—not merely when it adds a caveat.
+
+Never place names, precise addresses, employers, contact details, free-text rants, or other local-only facts into a web query. The supplied applicability profile is already intended to be shareable; use only the minimum terms needed. State important unsearched boundaries and access failures. Return concise structured data only, with no prose outside the schema and no private chain-of-thought.`;
+
 export const defaultAbstractExtractorInstructions = `You extract proposed atomic evidence records from one PubMed abstract.
 
 You are not deciding the overall question. Decompose the document container into distinct reported results. One abstract may support one scoped claim and contradict, qualify, undercut, bound, or fail to inform another. Use only the claim frames supplied in the task.
@@ -89,9 +105,12 @@ RULES
 - Within-arm change is not evidence for between-group superiority.
 - Keep primary, secondary, exploratory, methodological, and author-interpretation records distinct.
 - If a reported result does not answer a claim, use not-informative; do not force polarity.
+- If one atomic reported result bears on multiple supplied claims, repeat the same atomic result fields with a different claimFrameId/relation. Ingestion deduplicates the result and retains each attributed relation.
 - relation and scopeMatch are proposed assessment judgments, so give an inspectable rationale.
 - Fill the applicability vector against the supplied local profile: exact matches, mismatches, unknowns, and each scope constraint that had to be relaxed. Do not infer an unreported match.
 - One evidence family contains all results from this source unless the abstract explicitly reports distinct participant samples.
+- Copy a trial registration or cohort identifier only when the abstract states it. Use a stated registration as the cross-publication family key; never invent one.
+- For a review or meta-analysis, list visible primary-study registration IDs, PMIDs, or stable study identifiers in evidenceFamily.dependsOn. Empty means “not identified,” not “independent.”
 - extractionCaveat must name what cannot be verified without full text.
 - Be concise. Return complete structured data, not prose outside the schema.`;
 
@@ -105,9 +124,11 @@ RULES
 - locator must identify a section, table, figure, or paragraph that another reader can find.
 - Separate within-arm change from between-group effects. Separate primary, secondary, exploratory, methodological, and author-interpretation records.
 - Preserve population, intervention, comparator, outcome, time horizon, analysis type, estimate, and uncertainty as reported. Never fill a missing value from memory.
-- Map each result to the closest supplied claim frame. Use not-informative when it does not bear on that claim.
+- Map each result to the closest supplied claim frame. If the same atomic result materially bears on more than one claim, repeat its atomic fields with a different claimFrameId/relation; ingestion deduplicates the result and retains each relation. Use not-informative when it does not bear on a claim.
 - Fill the applicability vector against the supplied profile. Record direct matches, mismatches, unknowns, and every scope relaxation; do not silently treat a neighboring population or intervention as direct.
 - Put correlated results from this source in one evidence family unless genuinely distinct participant samples justify otherwise.
+- Extract trial registrations and cohort identifiers from the paper or registry link. A stated registration is the preferred cross-publication family key; never fabricate one.
+- For reviews, meta-analyses, follow-ups, and secondary publications, record stable primary-study identifiers in evidenceFamily.dependsOn. Empty means the dependency is unresolved, not that the source is independent.
 - The sourceInspection booleans are attestations, not aspirations. Set them false if the relevant material was not actually read.
 - Return structured data only. Do not reveal private chain-of-thought; give concise audit rationales.`;
 
@@ -211,6 +232,33 @@ The local context may be summarized in the stakeholder profile, but outbound sea
 REPAIR: Return the complete structured research brief draft. Produce 3–7 unique atomic claim frames, preserve the human role assignments, keep queries privacy-minimized, and ensure every claim names its axis links. Previous validation: {{validation}}.`,
   },
   {
+    id: "broad-recall-specialist",
+    name: "Lead discovery specialist",
+    stage: "3 · Investigate",
+    role: "Finds broad and applicability-specific candidate sources",
+    description: "Runs separate recall and transportability searches while keeping every discovery outside the accepted evidence graph.",
+    outputContract: "Lead-only sources with relevance, disconfirming status, reported query, limits, and CLI-observed tool traces",
+    maxOutputTokens: 12000,
+    temperature: 0.1,
+    instructions: defaultBroadRecallSpecialistInstructions,
+    taskTemplate: `DISCOVERY LANE
+{{lane}}
+
+ORIGINAL QUESTION
+{{question}}
+
+HUMAN-COMPILED QUESTION
+{{compiledQuestion}}
+
+SCOPED CLAIM FRAMES
+{{claimFrames}}
+
+SHAREABLE APPLICABILITY PROFILE
+{{applicabilityProfile}}
+
+Search only this lane. Open promising sources when access permits. Return 3–8 non-duplicate leads when the web supports them; every lead must retain status "lead-only".`,
+  },
+  {
     id: "abstract-extractor",
     name: "Abstract result extractor",
     stage: "3 · Investigate",
@@ -301,6 +349,35 @@ INDEXED PRIMARY EXTRACTION
 {{candidateJson}}
 
 Independently read the source, review every resultIndex exactly once, and repeat the supplied SHA-256 in artifactHash.`,
+  },
+  {
+    id: "decision-synthesizer",
+    name: "Decision synthesizer",
+    stage: "4 · Artifact",
+    role: "Turns accepted evidence into a reversible action policy",
+    description: "Reads only the accepted result graph, keeps applicability and human values separate, and exposes cruxes and flip conditions.",
+    outputContract: "Conditional action, option-by-outcome reads, load-bearing result IDs, cruxes, sensitivity, gaps, and an observation protocol",
+    maxOutputTokens: 14000,
+    temperature: 0.05,
+    instructions: decisionSynthesisInstructions,
+    taskTemplate: `Create the structured decision synthesis.
+
+ORIGINAL DECISION
+{{question}}
+
+EVIDENCE VERSION
+{{evidenceVersion}}
+
+HUMAN-COMPILED RESEARCH BRIEF
+{{researchBrief}}
+
+VERBATIM HUMAN-SUPPLIED VALUES AND CONSTRAINTS
+{{humanSuppliedValues}}
+
+ACCEPTED RESULT GRAPH
+{{acceptedGraph}}
+
+Assess every feasible option in the brief. List the exact result IDs and dependence-family IDs that carry the recommendation. Distinguish the broad evidence picture from evidence directly applicable to this stakeholder. Put any inferred preference in modelAssumptions, never humanSupplied. Include a concrete decision-flip condition. Make missing evidence operational by naming the next collection action.`,
   },
 ];
 

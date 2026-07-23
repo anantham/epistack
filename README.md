@@ -8,9 +8,9 @@ The central idea is simple:
 
 > Ask a difficult question, and Epistack turns it into a structured, sourceable map of what must be true, what the evidence shows, where uncertainty remains, and what would change the answer.
 
-The project is currently in the methodology and prototype-design phase.
+The project is currently a runnable vertical slice: the methodology is encoded as typed contracts, promotion policies, a persistent accepted-evidence graph, and human control surfaces that can be exercised on arbitrary questions.
 
-The current vertical slice is organized as a small case workspace rather than one long report. A submitted paragraph is first annotated phrase by phrase, then moved into a separate editable Interpretation Map. Evidence, Assess, and Synthesize remain separate routes, with dedicated Trial Inventory and Discovery Queue views. This keeps wording analysis, source inspection, unassessed intake, and conclusions from collapsing into an overwhelming scroll.
+The workspace has four explicit stages rather than one long report: Decompose, Contextualize, Investigate, and Artifact. A submitted paragraph is annotated phrase by phrase; the human edits the interpretation map and action space; specialized agents search, acquire, extract, challenge, and promote atomic results; then a live artifact and decision workbench read only what crossed the evidence gate. Curated evidence views remain available as an inspectable eggs reference case.
 
 ## The problem
 
@@ -112,7 +112,7 @@ Produce a versioned package that another investigator can inspect, challenge, ex
 
 ## Candidate artifact model
 
-The initial schema is expected to include:
+The implemented schema includes:
 
 | Object | Purpose |
 |---|---|
@@ -128,7 +128,7 @@ The initial schema is expected to include:
 | Synthesis | Conditional conclusion with uncertainty and decision implications |
 | Revision | History of changes and affected downstream objects |
 
-This schema is provisional. It should evolve through real investigations rather than be designed entirely in the abstract.
+The schema remains provisional and should evolve through real investigations rather than be designed entirely in the abstract. The current implementation already separates sources, studies, analyses, results, evidence relations, dependence groups, assessments, snapshots, decisions, options, outcomes, protocols, observations, and update events.
 
 ## What should make Epistack better than deep research?
 
@@ -198,10 +198,10 @@ Epistack is not intended to be:
 
 ## Near-term direction
 
-The next phase should test the workflow on several differently shaped cases:
+The next phase should harden the live slice on several differently shaped cases:
 
 1. a curated debate containing explicit opposing positions;
 2. a confident public answer resting on complex scientific evidence; and
 3. a mundane but contested practical question.
 
-For each case, we should produce a baseline report, an Epistack artifact, an adversarial audit, and an evaluation showing where the structured workflow materially changed the reasoning.
+For each case, we should produce a baseline report, an Epistack artifact, an adversarial audit, and an evaluation showing where the structured workflow materially changed the reasoning. The largest remaining engineering gaps are lawful acquisition for non-PMC and paywalled sources, retraction/correction subscriptions with dependency propagation, adjudicating unresolved cross-publication dependence, multi-investigator merge semantics, and contributed-observation governance. The current PMC path independently refetches and hashes the public artifact at promotion time; this verifies provenance and quoted passages, not the correctness of the models’ methodological judgment.
