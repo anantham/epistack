@@ -1814,6 +1814,7 @@ export default function App() {
   }, [])
   const [promptsOpen, setPromptsOpen] = useState(false)
   const [prompts, setPrompts] = useState(null)
+  const [promptsErr, setPromptsErr] = useState(null)
   // research state lives HERE (not inside a step) so it survives step 3↔4 and the
   // Stage-4 artifact renders live as agents/deep-dives stream in
   const R = useResearch({ question, data, pdata, context: ctxSummary, committed: phase === 'clustered' })
@@ -1837,17 +1838,24 @@ export default function App() {
       setTimeout(() => setImportMsg(null), 9000)
     }
   }
+  async function loadPrompts() {
+    setPrompts(null)
+    setPromptsErr(null)
+    try {
+      const r = await fetch('/api/prompts')
+      if (!r.ok) throw new Error(`server returned HTTP ${r.status}`)
+      const j = await r.json()
+      if (!Array.isArray(j)) throw new Error('unexpected response (not a list)')
+      if (j.length && !j.some((p) => p && p.text)) throw new Error('the prompts came back empty — the dev server may have restarted')
+      setPrompts(j)
+    } catch (e) {
+      setPromptsErr(String(e.message || e))
+    }
+  }
   async function openPrompts() {
     setSettingsOpen(false)
     setPromptsOpen(true)
-    if (!prompts) {
-      try {
-        const r = await fetch('/api/prompts')
-        setPrompts(await r.json())
-      } catch {
-        setPrompts([])
-      }
-    }
+    loadPrompts() // always refetch — a stale/failed load self-heals on re-open
   }
 
   const wordRefs = useRef({})
@@ -2166,16 +2174,23 @@ export default function App() {
             <button className="po-close" onClick={() => setPromptsOpen(false)}>✕ close</button>
           </div>
           <div className="po-body">
-            {!prompts && <div className="po-loading">loading…</div>}
-            {prompts && !prompts.length && <div className="po-loading">couldn't load the prompts.</div>}
+            {!prompts && !promptsErr && <div className="po-loading">loading…</div>}
+            {promptsErr && (
+              <div className="po-loading po-err">
+                Couldn't load the prompts — {promptsErr}.<br />
+                If the dev server was restarted, hard-refresh the page (⌘⇧R / Ctrl+Shift+R).
+                <div><button className="po-retry" onClick={loadPrompts}>↻ retry</button></div>
+              </div>
+            )}
+            {prompts && !prompts.length && <div className="po-loading">no prompts returned.</div>}
             {(prompts || []).map((p, i) => (
               <div className="po-item" key={i}>
                 <div className="po-item-head">
-                  <b>{p.name}</b>
+                  <b>{p.name || '(unnamed)'}</b>
                   <span className="po-route">{p.route}</span>
                   <span className={`po-tools${p.tools !== 'none' ? ' web' : ''}`}>{p.tools === 'none' ? 'no tools' : `⟨${p.tools}⟩`}</span>
                 </div>
-                <pre className="po-text">{p.text}</pre>
+                <pre className="po-text">{p.text || '(this prompt came back empty — hard-refresh the page)'}</pre>
               </div>
             ))}
           </div>
