@@ -1,7 +1,28 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { spawn } from 'node:child_process'
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+// Resolve what `claude -p` (no --model) actually defaults to, mirroring the CLI's precedence:
+// env var, then settings files local > project(cwd) > user-global. Best-effort + honest about source.
+function resolveDefaultModel() {
+  const env = process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL
+  if (env) return { model: env, source: 'ANTHROPIC_MODEL env var' }
+  const candidates = [
+    [join(process.cwd(), '.claude', 'settings.local.json'), 'project settings.local.json'],
+    [join(process.cwd(), '.claude', 'settings.json'), 'project settings.json'],
+    [join(homedir(), '.claude', 'settings.json'), 'your ~/.claude/settings.json'],
+  ]
+  for (const [path, source] of candidates) {
+    try {
+      const j = JSON.parse(readFileSync(path, 'utf8'))
+      if (j && typeof j.model === 'string' && j.model.trim()) return { model: j.model.trim(), source }
+    } catch {}
+  }
+  return { model: null, source: 'no override found — the claude CLI picks it' }
+}
 
 // --- observability: log every agent call (start / retry / success / failure) to terminal + epistack.log ---
 const LOG_PATH = new URL('./epistack.log', import.meta.url).pathname
@@ -487,6 +508,10 @@ function apiPlugin() {
       server.middlewares.use('/api/prompts', (req, res) => {
         res.setHeader('content-type', 'application/json')
         res.end(JSON.stringify(promptCatalog()))
+      })
+      server.middlewares.use('/api/default-model', (req, res) => {
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify(resolveDefaultModel()))
       })
     },
   }

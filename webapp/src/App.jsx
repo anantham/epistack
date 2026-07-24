@@ -1808,6 +1808,10 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [modelPref, setModelPrefState] = useState(() => getModel() || '')
   const [meName, setMeNameState] = useState(() => getMe().name || '')
+  const [defaultModel, setDefaultModel] = useState(null) // { model, source } — what `claude -p` resolves to
+  useEffect(() => {
+    fetch('/api/default-model').then((r) => r.json()).then(setDefaultModel).catch(() => {})
+  }, [])
   const [promptsOpen, setPromptsOpen] = useState(false)
   const [prompts, setPrompts] = useState(null)
   // research state lives HERE (not inside a step) so it survives step 3↔4 and the
@@ -2124,7 +2128,16 @@ export default function App() {
                   }}
                 >
                   <span className="sp-name">{m.label}</span>
-                  <span className="sp-note">{m.note}</span>
+                  <span
+                    className="sp-note"
+                    title={m.v === '' && defaultModel ? `resolved from ${defaultModel.source}` : undefined}
+                  >
+                    {m.v === '' && defaultModel
+                      ? defaultModel.model
+                        ? `→ ${defaultModel.model}`
+                        : m.note
+                      : m.note}
+                  </span>
                 </button>
               ))}
               <button className="sp-link" onClick={openPrompts}>⌗ inspect the prompts →</button>
