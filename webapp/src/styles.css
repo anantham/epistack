@@ -382,7 +382,10 @@ body{margin:0}
 
 /* stage 1 — two-column: pinned question rail (left) + active dimension (right) */
 .expand-layout{ display:grid; grid-template-columns:minmax(280px,37%) 1fr; gap:36px; align-items:start; margin:1vh 0 6vh }
-.q-rail{ position:sticky; top:78px; display:flex; flex-direction:column; gap:20px; max-height:calc(100vh - 96px); overflow-y:auto; padding-right:4px }
+/* sticky so it pins when it fits, but NEVER an internal-scroll trap: when the question +
+   dimension list is taller than the viewport it flows with the PAGE, so every dimension
+   (and the add button) is reachable by normal scrolling. */
+.q-rail{ position:sticky; top:78px; align-self:start; display:flex; flex-direction:column; gap:20px; padding-right:4px }
 .q-rail-sentence{ font-family:var(--font-serif); font-size:clamp(20px,2.3vw,27px); line-height:1.55; color:var(--ink-3) }
 .qw{ transition:color .2s ease, background .2s ease; border-radius:4px }
 .qw.live{ color:var(--ink); cursor:pointer }
