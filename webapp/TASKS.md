@@ -3,6 +3,11 @@
 Every UI/behavior ask from the session, with status.
 ✅ done · 🔨 in progress · ⏳ pending · ⚠️ superseded/reconciled
 
+> **Reconciled 2026-08-09:** the 🔨/⏳ markers in the sections BELOW predate this date
+> and are mostly resolved — the one-char intro typewriter + auto-grow box (§Landing),
+> Stage-2 elicitation UI (§pipeline), and Stage-3 research are all BUILT and shipped.
+> The authoritative current backlog is the **"Tracked / pending" section at the bottom.**
+
 ## Landing / intro
 - ✅ Remove "Step 1 of 3 — shape the question"
 - ✅ Remove the word "decompose" from the top brand
@@ -59,8 +64,22 @@ Done this pass:
 - ✅ **Robustness floor** (tolerant JSON parse + retry + timeout) — fixes intermittent invalid-JSON
 - ✅ **Two-phase chunked deep-dive** (enumerate → detail) — reliable, source-checked results
 
-Tracked / pending (bigger builds):
-- ⏳ **Stage 4 · the final artifact** — a 4th stepper tab: navigable **typed graph** of the whole investigation (dimensions → claims → results → evidence families) with uncertainty, high-level claims, confidence intervals, the underlying data points, and **missing data**. (User: "at the end can I view the filtered graph… into a typed graph?")
-- ⏳ **Streaming + editable/approvable orchestrator plan** — see the orchestrator planning in real time (streaming stdout), and **edit / approve** the strategy + briefs before agents dispatch (right now it's read-only). Data-collection agents should visibly steer where to spend tokens.
-- ⏳ **Adaptive follow-up elicitation** — selecting an option asks a follow-up: "extra on top" → *on top of what?*; "weight" → *current weight, target weight, and why?*; budget → *can you afford eggs that often?*; cooking → *which oil?*
-- ⏳ **Fuzzy/normalized decompose cache** — near-identical questions hit cache (today: exact-string only, so a reworded question re-runs — working as designed, not a bug)
+Tracked / pending (bigger builds) — authoritative backlog, reconciled 2026-08-09:
+
+Shipped since this list was written:
+- ✅ **Stage 4 · the final artifact** — navigable typed-graph tab, fills in live as agents stream in
+- ✅ **Research compiler** (Stage 2→3) — scoped claim portfolio + applicability profile + retrieval plans
+- ✅ **Recall vs applicability** — 2-channel research (broad-literature + your-subgroup), no cherry-picking
+- ✅ **Import / merge** — collaborate on one question; `src/merge.js` + `npm test` (8 invariants)
+- ✅ **Honest counts** — killed the fake "graph uncertainty %"; stale-flagging on merge; redacted export
+
+Still pending:
+- ⏳ **Independent-fetch locus-check** — BLOCKED on user greenlight (adds outbound web-fetching); deterministic check that a quoted number appears in independently-fetched source text
+- ⏳ **Streaming + editable/approvable orchestrator plan** — still read-only; stream the planning, edit/approve strategy + briefs before dispatch
+- ⏳ **Adaptive follow-up elicitation** — selecting an option asks a follow-up: "extra on top" → *on top of what?*; "weight" → *current + target weight, why?*; budget → *can you afford eggs that often?*; cooking → *which oil?*
+- ⏳ **Deterministic Playwright e2e suite** — make the manual browser verification durable (import/merge, redacted export, honest-counts, stale banner, prompt inspector)
+- ⏳ **Gap→feedback loop** — reactivate parked axes / targeted follow-ups when a gap has decision value
+- ⏳ **Fuzzy/normalized decompose cache** — reworded questions hit cache (today: exact-string only)
+- ⏳ **Multi-provider fan-out** — Exa/Grok/Gemini (today: 100% Claude subagents)
+- ⏳ **Live prompt EDITING** — inspector is view-only
+- ⏳ **Typed persistent graph substrate** — stable result IDs (replacing `axisId#index`) + source snapshots (weeks-scale)
