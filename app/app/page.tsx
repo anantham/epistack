@@ -251,8 +251,7 @@ export default function Home() {
           setResult(restoredWithCache);
           if (!savedWorkspace.prompt) setPrompt(restoredResult.prompt);
           if (!savedWorkspace.decisionContext) setDecisionContext(restoredResult.decisionContext ?? "");
-          const canResumeInterview = savedWorkspace.phase === "eliciting" && restoredResult.decomposition.clusters.length > 0;
-          setPhase(canResumeInterview ? "eliciting" : "review");
+          setPhase("review");
         }
       } catch {
         // A stale investigation cache can be replaced by the next successful run.
@@ -279,7 +278,7 @@ export default function Home() {
     if (!storageReady || phase === "analyzing" || phase === "transitioning") return;
     const timer = setTimeout(() => {
       try {
-        const persistedPhase = phase === "eliciting" ? "eliciting" : result ? "review" : "idle";
+        const persistedPhase = result ? "review" : "idle";
         const workspace = JSON.stringify({
           prompt,
           decisionContext,
@@ -528,9 +527,7 @@ export default function Home() {
               // The in-memory result can still continue to contextualization.
             }
             setDecisionContext(contextForRequest);
-            setPhase(!skipElicitation && !contextForRequest && browserResult.decomposition.clusters.length
-              ? "eliciting"
-              : "review");
+            setPhase("review");
             return;
           }
         } catch {
@@ -591,9 +588,7 @@ export default function Home() {
       setDecisionContext(contextForRequest);
       setActiveCluster(-1);
       setActiveTraceStep(0);
-      setPhase(!skipElicitation && !contextForRequest && payload.decomposition.clusters.length
-        ? "eliciting"
-        : "review");
+      setPhase("review");
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "The decomposition could not be generated.";
       setError(message);
