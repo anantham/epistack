@@ -9582,3 +9582,76 @@ button.primary-link:disabled {
 .quiet-button.danger {
   color: #b4342a;
 }
+
+/* Edit flow: cards must be fully visible (no scroll-reveal) and compact */
+.cluster-edit-flow .story-step {
+  justify-content: flex-start;
+  min-height: auto;
+  opacity: 1;
+  transform: none;
+}
+
+.cluster-edit-flow .story-step > span {
+  font-size: 10px;
+  margin-bottom: 12px;
+}
+
+.cluster-edit-flow .inline-edit-title {
+  font-size: clamp(28px, 3.4vw, 46px);
+}
+
+.cluster-edit-flow .inline-edit-h4 {
+  font-size: clamp(22px, 2.8vw, 36px);
+}
+
+.cluster-edit-flow .inline-edit-p {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.cluster-edit-flow .inline-edit-input {
+  font-size: 15px;
+}
+
+.cluster-edit-flow .inline-edit-list > strong {
+  font-size: 11px;
+}
+
+.cluster-edit-flow .ingestion-grid strong {
+  font-size: 13px;
+}
+
+.cluster-edit-flow .ingestion-grid li,
+.ingestion-grid li {
+  font-size: 12px;
+}
+
+/* Dark evidence contract card: fields must read on the dark surface */
+.cluster-edit-flow .evidence-story-step {
+  color: var(--surface);
+}
+
+.cluster-edit-flow .evidence-story-step > span {
+  color: #9fd3b6;
+}
+
+.cluster-edit-flow .evidence-story-step .inline-edit-list > strong {
+  color: #cfe0d6;
+}
+
+.cluster-edit-flow .evidence-story-step .inline-edit-input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #f3f6f4;
+}
+
+.cluster-edit-flow .evidence-story-step .inline-edit-remove,
+.cluster-edit-flow .evidence-story-step .inline-edit-add {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #cfe0d6;
+}
+
+.cluster-edit-flow .evidence-story-step .inline-edit-add:hover,
+.cluster-edit-flow .evidence-story-step .inline-edit-remove:hover {
+  color: #ffffff;
+}
