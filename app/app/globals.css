@@ -9655,3 +9655,34 @@ button.primary-link:disabled {
 .cluster-edit-flow .evidence-story-step .inline-edit-remove:hover {
   color: #ffffff;
 }
+
+/* /map compile overlay: center it and keep it off the viewport edge */
+.compile-overlay {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  justify-content: center;
+  min-height: 60vh;
+  padding: clamp(28px, 8vw, 120px);
+  text-align: center;
+}
+
+.compile-overlay h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(30px, 4.5vw, 54px);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.compile-overlay p {
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.compile-overlay .ai-orb {
+  margin: 0 0 4px;
+}

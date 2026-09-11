@@ -114,7 +114,7 @@ test("research requires a matching case contract and minimizes outbound applicab
   assert.doesNotMatch(dashboard, /legacyClaimFrames|Egg fixture fallback|eggs-live-mvp/);
   assert.match(dashboard, /setOpenLane\(\(current\) => current === lane\.id \? "" : lane\.id\)/);
   assert.match(dashboard, /Recheck companion status/);
-  assert.match(dashboard, /explicitly authorizes this exact site origin with EPISTACK_ALLOWED_BROWSER_ORIGINS/);
+  assert.match(dashboard, /\/api\/recall/);
   assert.match(dashboard, /applicabilityProfile: outboundApplicabilityProfile\(\)/);
   assert.match(dashboard, /applicabilityProfile: localApplicabilityProfile\(\)/);
 

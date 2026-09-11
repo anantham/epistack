@@ -174,32 +174,14 @@ export function ResearchDashboard() {
   }
 
   async function checkCompanion() {
-    const localHost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
-    setCompanion((current) => ({
-      ...current,
-      status: "checking",
-      detail: localHost
-        ? "Checking the local Claude companion…"
-        : "Checking whether the local companion explicitly authorizes this hosted origin…",
-    }));
-    try {
-      const response = await fetch(`${localClaudeCompanionUrl}/health`, { cache: "no-store" });
-      const payload = await response.json() as { ok?: boolean; models?: { primary?: string; adversary?: string } };
-      if (!response.ok || !payload.ok || !payload.models?.primary || !payload.models.adversary) throw new Error("Health check failed.");
-      setCompanion({
-        status: "online",
-        models: { primary: payload.models.primary, adversary: payload.models.adversary },
-        detail: "Full-text acquisition, dual-model review, and local run cache are ready.",
-      });
-    } catch {
-      setCompanion({
-        status: localHost ? "offline" : "hosted",
-        models: null,
-        detail: localHost
-          ? "Start npm run agents in the app directory, then retry this check."
-          : "Hosted controls stay disabled unless the local companion explicitly authorizes this exact site origin with EPISTACK_ALLOWED_BROWSER_ORIGINS.",
-      });
-    }
+    // Everything runs on Lyra now. No local companion and no localhost fetch —
+    // a public HTTPS page calling http://127.0.0.1 triggers Chrome's Local
+    // Network Access permission prompt, so nothing here may touch loopback.
+    setCompanion({
+      status: "online",
+      models: { primary: "Lyra · lyra-chatgpt-pro", adversary: "Lyra · lyra-chatgpt-pro" },
+      detail: "Lead discovery, full-text extraction, adversarial review, and synthesis run on Lyra.",
+    });
   }
 
   async function loadPromotionRegister() {
