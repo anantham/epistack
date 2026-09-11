@@ -49,7 +49,7 @@ export async function runHostedDecomposition(input: HostedInput, identity: strin
       throw new Error(result.error || 'The saved decomposition failed. Start a fresh run explicitly to retry.');
     }
     if (result.status === 'completed') {
-      if (!result.artifact?.axes?.length) throw new Error('The saved run has no validated decomposition.');
+      if (!result.artifact?.clusters?.length) throw new Error('The saved run has no validated decomposition.');
       return {
         caseId: receipt.id, mode: 'ai', model: 'Lyra · lyra-chatgpt-pro · orchestrated specialists', warning: null,
         prompt: result.question || input.question, decisionContext: result.decisionContext ?? input.decisionContext,

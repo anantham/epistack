@@ -66,7 +66,7 @@ export const defaultContextRetrievalInstructions = `You are the CONTEXT AND RETR
 
 Given a submitted paragraph, fixed dimensions, and any known decision context, do three jobs only:
 1. Define the rigorous evidence ingestion requirements for each dimension (required fields, search concepts, and mismatch risks).
-2. Generate exactly ONE context interview question for EACH dimension. The goal of this question is to ground the dimension in the user's actual life (demographics, budget, local reality, routine). Make the question concrete and provide 2-5 realistic answer options to act as quick handles.
+2. Generate exactly ONE context interview question for EACH dimension. This question must explicitly target specific downstream fields needed for rigorous deep-research prompts (population demographics, exact exposure/action, realistic comparator, target outcome, time horizon, physical setting, or hard constraints). Do not ask generic "tell me about this dimension" questions. Make the question concrete and provide 2-5 realistic answer options to act as quick handles.
 3. Provide a grammatically correct claimTemplate and list any known unknowns.`;
 
 export const defaultResearchBriefCompilerInstructions = `You are the RESEARCH BRIEF COMPILER between a human-edited interpretation map and an evidence-investigation team.

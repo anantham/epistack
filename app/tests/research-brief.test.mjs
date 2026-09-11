@@ -29,19 +29,49 @@ const axes = [
   },
 ];
 
-const clusters = axes.map((axis) => ({
-  id: `${axis.id}-trace`,
-  label: axis.label,
-  axisId: axis.id,
-  highlightQuotes: [axis.id],
-  latentVariable: axis.question,
-  rationale: "This is a public audit trace for the selected dimension.",
-  ingestionRequirements: {
-    requiredFields: [`${axis.id} field`],
-    searchConcepts: [`${axis.id} concept`],
-    mismatchRisks: [`${axis.id} mismatch`],
+
+const clusters = [
+  {
+    id: "outcome",
+    label: "Good for what?",
+    highlightQuotes: ["outcome"],
+    latentVariable: "Which outcome carries the decision?",
+    rationale: "This is a public audit trace for the selected dimension.",
+    contextQuestion: { id: "outcome-q", question: "q", options: ["a"], whyItMatters: "w", effect: "e" },
+    ingestionRequirements: {
+      requiredFields: ["outcome field"],
+      searchConcepts: ["outcome concept"],
+      mismatchRisks: ["outcome mismatch"],
+    },
   },
-}));
+  {
+    id: "population",
+    label: "For whom?",
+    highlightQuotes: ["population"],
+    latentVariable: "Which person must the evidence transport to?",
+    rationale: "This is a public audit trace for the selected dimension.",
+    contextQuestion: { id: "pop-q", question: "q", options: ["a"], whyItMatters: "w", effect: "e" },
+    ingestionRequirements: {
+      requiredFields: ["population field"],
+      searchConcepts: ["population concept"],
+      mismatchRisks: ["population mismatch"],
+    },
+  },
+  {
+    id: "production",
+    label: "Chicken feed",
+    highlightQuotes: ["production"],
+    latentVariable: "What did the chicken eat?",
+    rationale: "This is a public audit trace for the selected dimension.",
+    contextQuestion: { id: "prod-q", question: "q", options: ["a"], whyItMatters: "w", effect: "e" },
+    ingestionRequirements: {
+      requiredFields: ["production field"],
+      searchConcepts: ["production concept"],
+      mismatchRisks: ["production mismatch"],
+    },
+  },
+];
+
 
 function claim(id, budgetShare, axisIds) {
   return {
@@ -72,12 +102,12 @@ function claim(id, budgetShare, axisIds) {
 }
 
 test("human role assignments deterministically route dimensions into the research contract", () => {
-  const roles = completeDimensionRoles(axes, { production: "parked" });
+  const roles = completeDimensionRoles(clusters, { production: "parked" });
   assert.equal(roles.outcome, "decision-active");
   assert.equal(roles.population, "applicability-only");
   assert.equal(roles.production, "parked");
-  const assignments = buildDimensionAssignments({ axes, clusters, dimensionRoles: roles });
-  assert.equal(assignments.find((item) => item.axisId === "outcome").selectedValue, "lower body fat");
+  const assignments = buildDimensionAssignments({ clusters, dimensionRoles: roles });
+  assert.equal(assignments.find((item) => item.axisId === "outcome").label, "Good for what?");
   assert.deepEqual(assignments.find((item) => item.axisId === "population").requiredEvidenceFields, ["population field"]);
 });
 
@@ -116,7 +146,7 @@ test("the compiler contract normalizes a small claim portfolio to a 100-point bu
     originalQuestion: "Are eggs good to eat for this actor?",
     compiledQuestion: "Do two eggs improve body composition versus the available breakfast?",
     decisionContext: "Local context stays on device.",
-    dimensionAssignments: buildDimensionAssignments({ axes, clusters, dimensionRoles: completeDimensionRoles(axes, { production: "parked" }) }),
+    dimensionAssignments: buildDimensionAssignments({ axes, clusters, dimensionRoles: completeDimensionRoles(clusters, { production: "parked" }) }),
     privacy: { localContextPolicy: "Keep personal context local to the companion.", outboundQueryPolicy: "Send only compact scientific search concepts to PubMed." },
     generatedAt: "2026-07-20T00:00:00.000Z",
     compiledBy: "local Claude · opus",

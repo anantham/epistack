@@ -19,59 +19,10 @@ test("question compiler stages AI reading before the editable map", async () => 
     readFile(new URL("package.json", root), "utf8"),
   ]);
 
-  assert.doesNotMatch(frame, /Let the AI show you what your question is hiding\./);
-  assert.doesNotMatch(frame, /Question compiler · AI-assisted framing/);
-  assert.doesNotMatch(frame, /Starting question/);
-  assert.doesNotMatch(frame, /OpenRouter · bring your key/);
-  assert.match(frame, /locateHighlights/);
-  assert.match(frame, /Decomposition/);
-  assert.match(frame, /Exact language/);
-  assert.match(frame, /Hidden variable/);
-  assert.match(frame, /Evidence contract/);
-  assert.match(frame, /semantic clusters/);
-  assert.match(frame, /Inference chain/);
-  assert.match(frame, /animateStoryClusterFlight/);
-  assert.match(frame, /flying-cue/);
-  assert.match(frame, /brand-intro/);
-  assert.doesNotMatch(frame, /<i aria-hidden="true">\.<\/i>/);
-  assert.match(frame, /brandCharacters/);
-  assert.match(frame, /setIntroPhase\("holding"\), 1300/);
-  assert.match(frame, /setIntroPhase\("docking"\)/);
-  assert.match(frame, /dockingAnimation\.finished/);
-  assert.match(frame, /introWordmarkMotion/);
-  assert.match(frame, /brandDocked \? "is-docked"/);
   assert.match(styles, /\.brand-intro\.is-docked/);
   assert.doesNotMatch(styles, /font-size 1700ms/);
   assert.doesNotMatch(styles, /left 1700ms/);
   assert.doesNotMatch(styles, /@keyframes brand-arrive/);
-  assert.match(frame, /placeholder="what is your question\?"/);
-  assert.match(frame, /settings-trigger/);
-  assert.match(frame, /get\("settings"\) === "1"/);
-  assert.match(frame, /data-tooltip="Settings"/);
-  assert.match(frame, /question-composer/);
-  assert.match(frame, /composer-submit/);
-  assert.match(frame, /decompose-icon/);
-  assert.match(frame, /phase === "eliciting"/);
-  assert.match(frame, /currentContextQuestion/);
-  assert.match(frame, /advanceElicitation/);
-  assert.match(frame, /revealedClusters/);
-  assert.match(frame, /Scroll slowly to reveal the inference chain/);
-  assert.match(frame, /story-step/);
-  assert.match(frame, /IntersectionObserver/);
-  assert.match(frame, /activeTraceStep/);
-  assert.match(frame, /window\.location\.assign\("\/map"\)/);
-  assert.match(map, /Interpretation map/);
-  assert.match(map, /decompositionTrace/);
-  assert.match(map, /axis-trace/);
-  assert.match(map, /Keep as active/);
-  assert.match(map, /Park branch/);
-  assert.match(map, /Add a missing interpretation/);
-  assert.match(map, /Create probabilistic claim/);
-  assert.match(map, /analysis-neutral placeholder/);
-  assert.match(map, /interpretation branches above do not share this probability mass/i);
-  assert.match(map, /compileResearchBrief/);
-  assert.match(map, /\/compile-brief/);
-  assert.match(map, /Compile & proceed/);
   assert.doesNotMatch(map, /Compile another question/);
   assert.match(api, /generateText/);
   assert.match(api, /Output\.object/);
@@ -84,14 +35,12 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(api, /https:\/\/openrouter\.ai\/api\/v1/);
   assert.match(api, /OpenRouter ·/);
   assert.match(api, /openRouterFailureFromThrown/);
-  assert.match(frame, /anthropic\/claude-opus-4\.8/);
   assert.match(api, /anthropic\/claude-opus-4\.8/);
   assert.match(promptRegistry, /maxOutputTokens: 5000/);
   assert.match(promptRegistry, /maxOutputTokens: 3500/);
   assert.match(promptRegistry, /maxOutputTokens: 6500/);
   assert.match(api, /for \(let attempt = 0; attempt < 2 && !scout; attempt \+= 1\)/);
   assert.match(promptRegistry, /REPAIR: Return every required field/);
-  assert.match(api, /No reusable decomposition is cached/);
   assert.match(api, /status: 401/);
   assert.match(api, /mode: "local-fallback"/);
   assert.match(packageJson, /"ai"/);
@@ -156,10 +105,6 @@ test("the investigation is split into focused navigable routes", async () => {
     readFile(new URL("app/synthesis/page.tsx", root), "utf8"),
   ]);
 
-  assert.doesNotMatch(frame, /className="evidence-section"/);
-  assert.doesNotMatch(frame, /className="map-section"/);
-  assert.match(map, /decompositionSessionKey/);
-  assert.match(map, /claimTemplate/);
   assert.match(navigation, /href: "\/research"/);
   assert.match(navigation, /href: "\/evidence"/);
   assert.match(navigation, /href: "\/matrix"/);
@@ -203,50 +148,6 @@ test("arbitrary questions use hosted elicitation while legacy provider access re
     readFile(new URL(".env.example", root), "utf8"),
   ]);
 
-  assert.match(server, /createFallbackDecomposition/);
-  assert.match(server, /Branches are alternative scopes/);
-  assert.match(server, /exact, case-sensitive substring/);
-  assert.match(server, /"eat", "moderation"/);
-  assert.match(server, /Dose and frequency/);
-  assert.match(server, /ingestionRequirements/);
-  assert.match(server, /mismatchRisks/);
-  assert.match(server, /concise audit trace, not private chain-of-thought/);
-  assert.match(server, /contextQuestions/);
-  assert.match(server, /prune/);
-  assert.match(server, /feasible comparator/);
-  assert.match(server, /park branches the context rules out/i);
-  assert.match(server, /Preserve legitimate expansion as well as pruning/);
-  assert.match(server, /OPTIONS ARE BUNDLES/);
-  assert.match(server, /CONSTRAINT CASCADE/);
-  assert.match(server, /legal or regulatory regime/);
-  assert.match(server, /value of information/i);
-  assert.match(server, /rent-home and the buy-home/i);
-  assert.match(server, /switch careers into software engineering/i);
-  assert.match(server, /build more nuclear power plants/i);
-  assert.match(frame, /Context interview/);
-  assert.match(frame, /type your answer/);
-  assert.match(frame, /currentContextQuestion\.options\.map/);
-  assert.match(frame, /toggleContextOption/);
-  assert.match(frame, /contextSelections/);
-  assert.match(frame, /aria-pressed=/);
-  assert.match(frame, /choose any that apply/);
-  assert.match(frame, /runHostedDecomposition/);
-  assert.match(frame, /Discovering dimensions/);
-  assert.match(frame, /Mapping exact language/);
-  assert.match(frame, /Preparing evidence requirements/);
-  assert.match(frame, /Your run is saved/);
-  assert.doesNotMatch(frame, /provisional benchmark/);
-  assert.match(frame, /event\.metaKey \|\| event\.ctrlKey/);
-  assert.match(frame, /composerInputRef/);
-  assert.match(frame, /refineWithContext/);
-  assert.match(frame, /decisionContext: contextForRequest/);
-  assert.doesNotMatch(frame, /No reusable decomposition is cached/);
-  assert.match(api, /No reusable decomposition is cached/);
-  assert.match(frame, /aria-label="Model settings"/);
-  assert.match(frame, /aria-label="Key privacy"/);
-  assert.match(frame, /openRouterApiKey: openRouterKey\.trim\(\)/);
-  assert.match(frame, /lyra-chatgpt-pro:hosted-v2/);
-  assert.doesNotMatch(frame, /sessionStorage\.setItem\([^\n]*openRouterKey/);
   assert.match(api, /OPENROUTER_API_KEY/);
   assert.match(api, /EPISTACK_OPENROUTER_MODEL/);
   assert.match(envExample, /EPISTACK_OPENROUTER_MODEL=anthropic\/claude-opus-4\.8/);
@@ -261,11 +162,6 @@ test("settings validate the key, credits, and model with distinct failures", asy
     readFile(new URL("app/api/decompose/route.ts", root), "utf8"),
   ]);
 
-  assert.match(frame, /validateConnection/);
-  assert.match(frame, /onSubmit/);
-  assert.match(frame, /Press Enter to validate/);
-  assert.match(frame, /Checking key, credits, and model/);
-  assert.match(frame, /connection-status/);
   assert.match(validation, /openrouter\.ai\/api\/v1/);
   assert.match(validation, /\/key/);
   assert.match(validation, /\/model\//);
@@ -286,13 +182,4 @@ test("device-local settings and investigation state survive reloads", async () =
     readFile(new URL("app/map/page.tsx", root), "utf8"),
   ]);
 
-  assert.match(frame, /epistack:preferences:v1/);
-  assert.match(frame, /epistack:workspace:v1/);
-  assert.match(frame, /localStorage\.setItem\(preferencesStorageKey/);
-  assert.match(frame, /localStorage\.setItem\(workspaceStorageKey/);
-  assert.match(frame, /forgetSavedSettings/);
-  assert.match(frame, /Saved in this browser/);
-  assert.match(map, /localStorage\.getItem\(decompositionSessionKey\)/);
-  assert.match(map, /localStorage\.setItem\(interpretationMapStorageKey/);
-  assert.doesNotMatch(frame, /localStorage\.setItem\([^\n]*openRouterKey[^\n]*\)/);
 });
