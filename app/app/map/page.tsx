@@ -234,6 +234,20 @@ export default function ContextualizeMap() {
       </main>
     );
   }
+  if (!clusters.some((cluster) => cluster.contextQuestion)) {
+    return (
+      <main className="case-layout map-layout">
+        <CaseHeader active="contextualize" />
+        <div className="case-bounds">
+          <p>
+            This saved decomposition has no interview questions — it was created before the Contextualize
+            step existed. Go back and re-decompose your question to generate them.
+          </p>
+          <a className="primary-button" href="/">Back to decomposition</a>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="case-layout map-layout">
