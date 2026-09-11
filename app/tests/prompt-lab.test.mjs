@@ -89,5 +89,5 @@ test("the settings link opens an editable Prompt Lab wired into model requests",
     assert.match(source, /promptConfig/);
   }
   assert.match(dashboard, /promptOverrides: promptOverrides\(\)/);
-  assert.match(dashboard, /localClaudeCompanionUrl/);
+  assert.match(dashboard, /\/api\/investigate/);
 });

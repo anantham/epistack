@@ -82,7 +82,6 @@ type CachedDashboardState = {
 };
 
 const dashboardCacheKey = "epistack:research-ui-cache:v2";
-const localClaudeCompanionUrl = "http://127.0.0.1:4317";
 
 function isDualReviewPayload(payload: DeepDiveResponse | DualReviewResponse): payload is DualReviewResponse {
   return payload.verificationStatus === "ai-cross-checked-full-text";
@@ -174,9 +173,9 @@ export function ResearchDashboard() {
   }
 
   async function checkCompanion() {
-    // Everything runs on Lyra now. No local companion and no localhost fetch —
-    // a public HTTPS page calling http://127.0.0.1 triggers Chrome's Local
-    // Network Access permission prompt, so nothing here may touch loopback.
+    // Everything runs on Lyra now. There is no local companion and no loopback
+    // fetch from this page — a hosted run keeps the browser off the Local
+    // Network Access permission prompt.
     setCompanion({
       status: "online",
       models: { primary: "Lyra · lyra-chatgpt-pro", adversary: "Lyra · lyra-chatgpt-pro" },
@@ -692,11 +691,11 @@ export function ResearchDashboard() {
   async function investigateFullText(record: PubmedDiscovery, refresh = false) {
     setDeepDives((current) => ({
       ...current,
-      [record.pmid]: { status: "acquiring", payload: null, checked: false, error: "", progress: "Contacting the local Claude companion", fallbackAvailable: false },
+      [record.pmid]: { status: "reviewing", payload: null, checked: false, error: "", progress: "Acquiring and cross-checking the full paper on Lyra", fallbackAvailable: false },
     }));
     try {
       const workspace = currentWorkspace();
-      const response = await fetch(`${localClaudeCompanionUrl}/investigate`, {
+      const response = await fetch("/api/investigate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -709,51 +708,13 @@ export function ResearchDashboard() {
           refresh,
         }),
       });
-      if (!response.ok || !response.body) throw new Error("The local Claude companion did not start the investigation stream.");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffered = "";
-      let completed: DualReviewResponse | null = null;
-      let companionError: { code?: string; message?: string } | null = null;
-      const consumeLine = (line: string) => {
-        if (!line.trim()) return;
-        const event = JSON.parse(line) as {
-          type?: string;
-          phase?: DeepDiveRun["status"] | "cache-hit";
-          label?: string;
-          payload?: DualReviewResponse;
-          code?: string;
-          message?: string;
-        };
-        if (event.type === "status") {
-          const status: DeepDiveRun["status"] = event.phase === "cache-hit" ? "adjudicating" : event.phase === "reviewing" ? "reviewing" : event.phase === "adjudicating" ? "adjudicating" : event.phase === "extracting" ? "extracting" : "acquiring";
-          setDeepDives((current) => ({
-            ...current,
-            [record.pmid]: { status, payload: null, checked: false, error: "", progress: event.label || "Local agents are working", fallbackAvailable: false },
-          }));
-        } else if (event.type === "complete" && event.payload) {
-          completed = event.payload;
-        } else if (event.type === "error") {
-          companionError = { code: event.code, message: event.message };
-        }
-      };
-      while (true) {
-        const { done, value } = await reader.read();
-        buffered += decoder.decode(value, { stream: !done });
-        const lines = buffered.split("\n");
-        buffered = lines.pop() || "";
-        lines.forEach(consumeLine);
-        if (done) break;
+      const completed = await response.json() as DualReviewResponse & { error?: string; code?: string };
+      if (!response.ok || completed.error) {
+        throw Object.assign(new Error(completed.error || "The hosted full-text investigation failed."), { code: completed.code });
       }
-      if (buffered.trim()) consumeLine(buffered);
-      const finalCompanionError = companionError as { code?: string; message?: string } | null;
-      if (finalCompanionError) throw Object.assign(new Error(finalCompanionError.message || "The local Claude investigation failed."), { code: finalCompanionError.code });
-      if (!completed) throw new Error("The local Claude companion ended without a completed review.");
       await autoPromoteDualReview(record, completed);
     } catch (error) {
       const code = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "";
-      const offline = error instanceof TypeError && /fetch/i.test(error.message);
-      if (offline) setCompanion({ status: "offline", models: null, detail: "Start npm run agents in the app directory, then retry this check." });
       setDeepDives((current) => ({
         ...current,
         [record.pmid]: {
@@ -762,7 +723,7 @@ export function ResearchDashboard() {
           checked: false,
           error: error instanceof Error ? error.message : "The full-paper investigation failed.",
           progress: "Full-paper run stopped",
-          fallbackAvailable: code === "NO_OPEN_FULL_TEXT" || offline,
+          fallbackAvailable: code === "NO_OPEN_FULL_TEXT",
         },
       }));
     }
