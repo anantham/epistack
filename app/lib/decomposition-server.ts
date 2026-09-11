@@ -369,7 +369,7 @@ function genericIngestion(label: string) {
       compact(`${label} operational definition`, 100),
       "measurement, coding, or implementation details",
     ],
-    searchConcepts: [compact(label, 100)],
+    searchConcepts: [compact(label, 100), "related terms or synonyms"],
     mismatchRisks: [compact(`Sources may use a materially different definition of ${label}.`, 140)],
   };
 }

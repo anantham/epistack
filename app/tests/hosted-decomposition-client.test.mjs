@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { runHostedDecomposition } from '../lib/hosted-decomposition-client.ts';
 const input = { question: 'Are eggs good to eat?', decisionContext: 'A general evidence map, not a personal diet.', promptOverrides: {} };
-const artifact = { axes: [{ id: 'dose' }] };
+const artifact = { clusters: [{ id: 'dose' }] };
 function harness(replies, entries = new Map()) {
  const calls = []; let now = 0;
  return { calls, entries, deps: { storage: { getItem: k => entries.get(k) || null, setItem: (k,v) => entries.set(k,v), removeItem: k => entries.delete(k) }, now: () => now, sleep: async ms => { now += ms; }, fetch: async (url, options) => { calls.push({ url, body: JSON.parse(options.body) }); const reply = replies.shift(); if (reply instanceof Error) throw reply; return new Response(JSON.stringify(reply), {status:200}); } } };

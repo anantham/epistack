@@ -7,21 +7,21 @@ const quotes = ['eggs', 'good', 'moderation', 'How can we tell?', 'across people
 const scout = {
   caseTitle: 'Egg question preservation',
   summary: 'Preserve every bounded dimension and its concrete alternatives before human review.',
-  clusters: quotes.map((_, i) => ({ id: `axis-${i}`, label: `Dimension ${i}`, question: 'Which concrete scope matters?',  })),
+  dimensions: quotes.map((_, i) => ({ id: `axis-${i}`, label: `Dimension ${i}`, question: 'Which concrete scope matters?',  })),
 };
-const traces = { traces: scout.clusters.map((d, i) => ({ dimensionId: d.id, label: d.label, quotes: [quotes[i], 'eat'], latentVariable: 'Decision-relevant scope', rationale: 'The submitted words leave a material choice unresolved.' })) };
+const traces = { traces: scout.dimensions.map((d, i) => ({ dimensionId: d.id, label: d.label, quotes: [quotes[i], 'eat'], latentVariable: 'Decision-relevant scope', rationale: 'The submitted words leave a material choice unresolved.' })) };
 
 test('the fifth scout alternative survives assembly and persistent validation', () => {
   const artifact = assembleDecomposition(scout, traces, null, prompt);
-    assert.equal(decompositionSchema.safeParse(artifact).success, true);
+    const parsed = decompositionSchema.safeParse(artifact); if(!parsed.success) console.error(parsed.error); assert.equal(parsed.success, true);
 });
 
 test('the highlight budget preserves a trace for every valid dimension', () => {
   const artifact = assembleDecomposition(scout, traces, null, prompt);
-  assert.deepEqual(artifact.clusters.map(c => c.id), scout.clusters.map(d => d.id));
+  assert.deepEqual(artifact.clusters.map(c => c.id), scout.dimensions.map(d => `${d.id}-cues`));
   assert.ok(artifact.highlights.length <= 8);
   assert.ok(artifact.highlights.every(h => prompt.includes(h.quote)));
-  assert.equal(decompositionSchema.safeParse(artifact).success, true);
+  const parsed = decompositionSchema.safeParse(artifact); if(!parsed.success) console.error(parsed.error); assert.equal(parsed.success, true);
 });
 
 test('invalid and duplicate traces cannot starve later dimensions', () => {
