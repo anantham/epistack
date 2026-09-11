@@ -14,27 +14,39 @@ import {
   sanitizeAgentPromptOverrides,
   type AgentPromptOverrides,
 } from "../lib/agent-prompts";
+import {
+  decompositionBrowserCacheStorageKey,
+  decompositionCacheContract,
+  decompositionCacheEntryKey,
+  findBrowserDecompositionCacheEntry,
+  legacyDecompositionBrowserCacheStorageKey,
+  normalizeDecompositionText,
+  parseBrowserDecompositionCache,
+  upsertBrowserDecompositionCacheEntry,
+} from "../lib/decomposition-cache";
+import { runHostedDecomposition, type HostedProgress } from "../lib/hosted-decomposition-client";
+import {
+  appendDecompositionTelemetryRun,
+  decompositionTelemetryStorageKey,
+  emptyDecompositionTelemetry,
+  formatDuration,
+  parseDecompositionTelemetry,
+  summarizeDecompositionTelemetry,
+  type DecompositionPass,
+  type DecompositionTelemetry,
+} from "../lib/decomposition-telemetry";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
 const previousDefaultOpenRouterModel = "anthropic/claude-sonnet-4.6";
 const brandCharacters = [..."epistack"];
-const analysisDurationsKey = "epistack:analysis-durations:v1";
-const legacyAnalysisDurationsKey = "epistack_decomp_ms";
 const preferencesStorageKey = "epistack:preferences:v1";
 const workspaceStorageKey = "epistack:workspace:v1";
-const decompositionBrowserCacheKey = "epistack:decomposition-operation-cache:v3";
-const decompositionBrowserCacheContract = "question-decomposition-orchestrator-v3";
-const provisionalEstimateMs = 90_000;
-const loadingSteps = [
-  "scouting substantive dimensions",
-  "unbundling concrete resolutions",
-  "mapping exact language cues",
-  "tracing hidden comparators",
-  "planning high-value context questions",
-  "compiling retrieval requirements",
-  "checking construct mismatches",
-  "merging specialist contracts",
+const decompositionStages = [
+  { label: "Discovering dimensions", detail: "The dimension scout proposes the axes that could change the answer." },
+  { label: "Mapping exact language", detail: "The trace specialist ties your exact words to each dimension." },
+  { label: "Preparing evidence requirements", detail: "The context specialist builds the retrieval plan and interview." },
 ];
+const provisionalDecompositionMs = 120_000;
 
 type AnalysisPhase = "idle" | "analyzing" | "eliciting" | "review" | "transitioning" | "error";
 type IntroPhase = "typing" | "holding" | "docking" | "ready";
@@ -49,8 +61,8 @@ type PersistedWorkspace = {
   elicitationIndex?: number;
   phase?: "idle" | "eliciting" | "review";
 };
-type BrowserDecompositionCache = {
-  contract: typeof decompositionBrowserCacheContract;
+type LegacyBrowserDecompositionCache = {
+  contract: typeof decompositionCacheContract;
   prompt: string;
   decisionContext: string;
   model: string;
@@ -95,20 +107,6 @@ function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function median(values: number[]) {
-  if (!values.length) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-}
-
-function formatCountdown(milliseconds: number) {
-  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
 function decompositionCacheLabel(result: DecompositionResponse) {
   if (result.cache.status === "browser") return "restored instantly";
   if (result.cache.status === "hit") return "reused · no model call";
@@ -143,28 +141,40 @@ export default function Home() {
   const [error, setError] = useState("");
   const [editingClusterId, setEditingClusterId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<any>(null);
-  const [loadingStep, setLoadingStep] = useState(0);
+  const [hostedProgress, setHostedProgress] = useState<HostedProgress | null>(null);
   const [analysisElapsed, setAnalysisElapsed] = useState(0);
-  const [analysisDurations, setAnalysisDurations] = useState<number[]>([]);
+  const [analysisPass, setAnalysisPass] = useState<DecompositionPass>("initial");
+  const [telemetry, setTelemetry] = useState<DecompositionTelemetry>(emptyDecompositionTelemetry);
   const [storageReady, setStorageReady] = useState(false);
+  const [requestPending, setRequestPending] = useState(false);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const storyCueRefs = useRef(new Map<number, HTMLButtonElement>());
   const storyLandingRefs = useRef(new Map<number, HTMLElement>());
   const revealedClustersRef = useRef(new Set<number>());
+  const analysisInFlightRef = useRef(false);
+  const runStartedAtRef = useRef(0);
 
   const segments = useMemo(
     () => locateHighlights(prompt, result?.decomposition.highlights ?? []),
     [prompt, result],
   );
   const currentContextQuestion = null;
-  const busy = phase === "analyzing" || phase === "transitioning";
-  const empiricalDuration = useMemo(() => median(analysisDurations), [analysisDurations]);
-  const expectedDuration = empiricalDuration ?? provisionalEstimateMs;
-  const remainingDuration = expectedDuration - analysisElapsed;
-  const countdown = formatCountdown(Math.abs(remainingDuration));
-  const analysisProgress = Math.min(94, Math.max(3, (analysisElapsed / expectedDuration) * 100));
+  const busy = requestPending || phase === "analyzing" || phase === "transitioning";
   const introComplete = introPhase === "ready";
   const brandDocked = introPhase === "docking" || introComplete;
+
+  const telemetrySummary = useMemo(() => summarizeDecompositionTelemetry(telemetry), [telemetry]);
+  const activeStage = Math.min(Math.max(hostedProgress?.stage ?? 0, 0), decompositionStages.length - 1);
+  const passStats = telemetrySummary.byPass[analysisPass];
+  const empiricalTotalMs = passStats.totalMedianMs ?? telemetrySummary.totalMedianMs;
+  const expectedTotalMs = empiricalTotalMs ?? provisionalDecompositionMs;
+  const remainingMs = Math.max(0, expectedTotalMs - analysisElapsed);
+  const empiricalSamples = passStats.samples || telemetrySummary.samples;
+  const stageAttempts = hostedProgress?.attempts?.[activeStage] ?? 1;
+  const retryNote = stageAttempts > 1
+    ? `Stage attempt ${stageAttempts}${hostedProgress?.rateLimits ? ` · ${hostedProgress.rateLimits} rate-limit pause${hostedProgress.rateLimits > 1 ? "s" : ""}` : ""}`
+    : "";
+  const railProgress = ((activeStage + (hostedProgress?.status === "in_progress" ? 0.55 : 0.12)) / decompositionStages.length) * 100;
 
   useEffect(() => {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -184,16 +194,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       try {
-        const current = window.localStorage.getItem(analysisDurationsKey);
-        const legacy = window.localStorage.getItem(legacyAnalysisDurationsKey);
-        const saved = JSON.parse(current || legacy || "[]") as unknown;
-        if (Array.isArray(saved)) {
-          setAnalysisDurations(saved.filter((value) => typeof value === "number" && Number.isFinite(value) && value > 0).slice(-12));
-        }
+        setTelemetry(parseDecompositionTelemetry(window.localStorage.getItem(decompositionTelemetryStorageKey)));
       } catch {
-        setAnalysisDurations([]);
+        setTelemetry(emptyDecompositionTelemetry);
       }
     }, 0);
     return () => window.clearTimeout(timer);
@@ -294,19 +299,10 @@ export default function Home() {
 
   useEffect(() => {
     if (phase !== "analyzing") return;
-    const startedAt = window.performance.now();
-    const stepTimer = window.setInterval(
-      () => setLoadingStep((step) => (step + 1) % loadingSteps.length),
-      3200,
-    );
-    const elapsedTimer = window.setInterval(
-      () => setAnalysisElapsed(window.performance.now() - startedAt),
-      200,
-    );
-    return () => {
-      window.clearInterval(stepTimer);
-      window.clearInterval(elapsedTimer);
-    };
+    const timer = window.setInterval(() => {
+      setAnalysisElapsed(runStartedAtRef.current ? window.performance.now() - runStartedAtRef.current : 0);
+    }, 500);
+    return () => window.clearInterval(timer);
   }, [phase]);
 
   useLayoutEffect(() => {
@@ -430,107 +426,168 @@ export default function Home() {
   }
 
   async function analyze(contextOverride?: string, skipElicitation = false, refresh = false) {
-    if (!prompt.trim() || busy) return;
-    const contextForRequest = typeof contextOverride === "string" ? contextOverride : decisionContext;
-    const normalizedPrompt = prompt.trim();
-    const normalizedModel = openRouterModel.trim() || defaultOpenRouterModel;
+    if (!prompt.trim() || busy || analysisInFlightRef.current) return;
+    analysisInFlightRef.current = true;
+    setRequestPending(true);
+    const contextForRequest = normalizeDecompositionText(
+      typeof contextOverride === "string" ? contextOverride : decisionContext,
+    );
+    const normalizedPrompt = normalizeDecompositionText(prompt);
+    const normalizedModel = "lyra-chatgpt-pro:hosted-v2";
     const promptOverrides = storedAgentPromptOverrides();
     const promptSignature = promptOverridesSignature(promptOverrides);
+    let cacheKey = "";
+    try {
+      cacheKey = await decompositionCacheEntryKey({
+        prompt: normalizedPrompt,
+        decisionContext: contextForRequest,
+        model: normalizedModel,
+        promptSignature,
+      });
+    } catch {
+      analysisInFlightRef.current = false;
+      setRequestPending(false);
+      setError("The saved-result lookup could not be prepared. Reload and try again.");
+      setPhase("error");
+      return;
+    }
+    setPrompt(normalizedPrompt);
     setError("");
     setResult(null);
     setActiveCluster(-1);
     setActiveTraceStep(0);
     setElicitationIndex(0);
     setRevealedClusters([]);
+    setAnalysisPass(skipElicitation && Boolean(contextOverride) ? "refine" : "initial");
+    setAnalysisElapsed(0);
     if (!skipElicitation) {
       setContextAnswers({});
       setContextSelections({});
     }
     revealedClustersRef.current.clear();
-    setLoadingStep(0);
-    setAnalysisElapsed(0);
+    setHostedProgress({ stage: 0, status: "connecting" });
 
-    if (!refresh) {
-      try {
-        const cached = JSON.parse(window.localStorage.getItem(decompositionBrowserCacheKey) || "null") as BrowserDecompositionCache | null;
-        if (cached
-          && cached.contract === decompositionBrowserCacheContract
-          && cached.prompt === normalizedPrompt
-          && cached.decisionContext === contextForRequest
-          && cached.model === normalizedModel
-          && cached.promptSignature === promptSignature
-          && cached.result?.decomposition) {
-          const browserResult: DecompositionResponse = {
-            ...cached.result,
-            cache: { status: "browser", layer: "browser", createdAt: cached.savedAt, expiresAt: null },
-          };
-          setResult(browserResult);
-          window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(browserResult));
-          setDecisionContext(contextForRequest);
-          setPhase(!skipElicitation && !contextForRequest && browserResult.decomposition.clusters.length
-            ? "eliciting"
-            : "review");
-          return;
-        }
-      } catch {
-        window.localStorage.removeItem(decompositionBrowserCacheKey);
-      }
-    }
-
-    if (!openRouterKey.trim()) {
-      setError("No reusable decomposition is cached for this question and model. Add an OpenRouter key in Settings to create one.");
-      setSettingsOpen(true);
-      setPhase("error");
-      return;
-    }
-    setPhase("analyzing");
-    const requestStartedAt = window.performance.now();
-
+    let loadingTimer = 0;
     try {
-      const response = await fetch("/api/decompose", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          decisionContext: contextForRequest,
-          openRouterApiKey: openRouterKey.trim() || undefined,
-          openRouterModel: normalizedModel,
-          promptOverrides,
-          refresh,
-        }),
-      });
-      const payload = await response.json() as DecompositionResponse & { error?: string };
-      if (!response.ok) throw new Error(payload.error || "The decomposition could not be generated.");
-
-      if (payload.cache.status === "miss" || payload.cache.status === "bypass") {
-        const duration = window.performance.now() - requestStartedAt;
-        setAnalysisDurations((current) => {
-          const next = [...current, duration].slice(-12);
-          try {
-            window.localStorage.setItem(analysisDurationsKey, JSON.stringify(next));
-          } catch {
-            // Latency history is optional; never block the decomposition.
+      if (!refresh) {
+        try {
+          let browserStore = parseBrowserDecompositionCache(
+            window.localStorage.getItem(decompositionBrowserCacheStorageKey),
+          );
+          let cachedEntry = findBrowserDecompositionCacheEntry(browserStore, cacheKey);
+          if (!cachedEntry) {
+            try {
+              const legacy = JSON.parse(
+                window.localStorage.getItem(legacyDecompositionBrowserCacheStorageKey) || "null",
+              ) as LegacyBrowserDecompositionCache | null;
+              if (legacy?.result?.decomposition && legacy.contract === decompositionCacheContract) {
+                const legacyKey = await decompositionCacheEntryKey({
+                  prompt: legacy.prompt,
+                  decisionContext: legacy.decisionContext,
+                  model: legacy.model,
+                  promptSignature: legacy.promptSignature,
+                });
+                if (legacyKey === cacheKey) {
+                  const accessedAt = new Date().toISOString();
+                  cachedEntry = {
+                    key: cacheKey,
+                    savedAt: legacy.savedAt,
+                    lastAccessedAt: accessedAt,
+                    result: legacy.result,
+                  };
+                  browserStore = upsertBrowserDecompositionCacheEntry(browserStore, cachedEntry);
+                  window.localStorage.setItem(decompositionBrowserCacheStorageKey, JSON.stringify(browserStore));
+                  window.localStorage.removeItem(legacyDecompositionBrowserCacheStorageKey);
+                }
+              }
+            } catch {
+              window.localStorage.removeItem(legacyDecompositionBrowserCacheStorageKey);
+            }
           }
-          return next;
-        });
+          if (cachedEntry) {
+            const accessedAt = new Date().toISOString();
+            browserStore = upsertBrowserDecompositionCacheEntry(browserStore, {
+              ...cachedEntry,
+              lastAccessedAt: accessedAt,
+            });
+            try {
+              window.localStorage.setItem(decompositionBrowserCacheStorageKey, JSON.stringify(browserStore));
+            } catch {
+              // A readable cache hit remains useful even if LRU metadata cannot be refreshed.
+            }
+            const browserResult: DecompositionResponse = {
+              ...cachedEntry.result,
+              prompt: normalizedPrompt,
+              decisionContext: contextForRequest,
+              cache: { status: "browser", layer: "browser", createdAt: cachedEntry.savedAt, expiresAt: null },
+            };
+            setResult(browserResult);
+            try {
+              window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(browserResult));
+            } catch {
+              // The in-memory result can still continue to contextualization.
+            }
+            setDecisionContext(contextForRequest);
+            setPhase(!skipElicitation && !contextForRequest && browserResult.decomposition.clusters.length
+              ? "eliciting"
+              : "review");
+            return;
+          }
+        } catch {
+          // Browser persistence is an optimization; a shared cache lookup can still proceed.
+        }
       }
+
+      loadingTimer = window.setTimeout(() => setPhase("analyzing"), 350);
+      runStartedAtRef.current = window.performance.now();
+      const stageDurations: number[] = [];
+      const payload = await runHostedDecomposition({
+        question: normalizedPrompt,
+        decisionContext: contextForRequest,
+        promptOverrides,
+      }, cacheKey, refresh, (progress) => {
+        setHostedProgress(progress);
+        if (progress.durationsMs?.length) stageDurations.splice(0, stageDurations.length, ...progress.durationsMs);
+      });
+      window.clearTimeout(loadingTimer);
+      const totalMs = Math.max(0, window.performance.now() - runStartedAtRef.current);
+      setTelemetry((current) => {
+        const next = appendDecompositionTelemetryRun(current, {
+          totalMs,
+          stageMs: [...stageDurations],
+          pass: skipElicitation && Boolean(contextOverride) ? "refine" : "initial",
+          backend: payload.model,
+          at: new Date().toISOString(),
+        });
+        try {
+          window.localStorage.setItem(decompositionTelemetryStorageKey, JSON.stringify(next));
+        } catch {
+          // Telemetry is an estimate; failing to persist it must never block a run.
+        }
+        return next;
+      });
 
       setResult(payload);
-      window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
-      window.localStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
-      if (payload.mode === "ai") {
-        const browserCache: BrowserDecompositionCache = {
-          contract: decompositionBrowserCacheContract,
-          prompt: normalizedPrompt,
-          decisionContext: contextForRequest,
-          model: normalizedModel,
-          promptSignature,
-          savedAt: new Date().toISOString(),
-          result: payload,
-        };
-        window.localStorage.setItem(decompositionBrowserCacheKey, JSON.stringify(browserCache));
+      try {
+        window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
+        window.localStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
+        if (payload.mode === "ai") {
+          const savedAt = new Date().toISOString();
+          const browserStore = upsertBrowserDecompositionCacheEntry(
+            parseBrowserDecompositionCache(window.localStorage.getItem(decompositionBrowserCacheStorageKey)),
+            {
+              key: cacheKey,
+              savedAt,
+              lastAccessedAt: savedAt,
+              result: payload,
+            },
+          );
+          window.localStorage.setItem(decompositionBrowserCacheStorageKey, JSON.stringify(browserStore));
+        }
+        window.localStorage.removeItem(interpretationMapStorageKey);
+      } catch {
+        // A successful shared result remains usable even if browser persistence is unavailable.
       }
-      window.localStorage.removeItem(interpretationMapStorageKey);
       setDecisionContext(contextForRequest);
       setActiveCluster(-1);
       setActiveTraceStep(0);
@@ -540,8 +597,12 @@ export default function Home() {
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "The decomposition could not be generated.";
       setError(message);
-      if (/key|OpenRouter|credits|model|provider|endpoint/i.test(message)) setSettingsOpen(true);
+      // Hosted failures stay inline; they never ask visitors for an OpenRouter key.
       setPhase("error");
+    } finally {
+      window.clearTimeout(loadingTimer);
+      analysisInFlightRef.current = false;
+      setRequestPending(false);
     }
   }
 
@@ -776,17 +837,24 @@ export default function Home() {
             <section className="phase-screen" aria-live="polite">
               <div className="ai-orb thinking" aria-hidden="true"><span /></div>
               <div className="loading-copy">
-                <p className="loading-operation" key={loadingStep}>{loadingSteps[loadingStep]}…</p>
-                <div className="loading-eta" aria-label={remainingDuration > 0 ? `${countdown} estimated time remaining` : `${countdown} past the estimate`}>
-                  <strong>{remainingDuration > 0 ? countdown : `+${countdown}`}</strong>
-                  <span>{remainingDuration > 0 ? "remaining" : "past estimate"}</span>
+                <p className="loading-pass">{analysisPass === "refine" ? "Refining with your context" : "Decomposing your question"}</p>
+                <p className="loading-operation">{hostedProgress ? `${decompositionStages[activeStage].label}…` : "Connecting to the research service…"}</p>
+                <ol className="loading-stages">
+                  {decompositionStages.map((stage, index) => (
+                    <li key={stage.label} className={index < activeStage ? "done" : index === activeStage ? "active" : "pending"}>
+                      <span className="stage-marker" aria-hidden="true">{index < activeStage ? "✓" : index + 1}</span>
+                      <span className="stage-text"><strong>{stage.label}</strong><small>{stage.detail}</small></span>
+                    </li>
+                  ))}
+                </ol>
+                <div className="loading-meters">
+                  <div><strong>{formatDuration(analysisElapsed)}</strong><span>elapsed</span></div>
+                  <div><strong>{formatDuration(remainingMs)}</strong><span>{empiricalSamples ? `est. remaining · ${empiricalSamples} prior run${empiricalSamples > 1 ? "s" : ""}` : "provisional estimate"}</span></div>
+                  <div><strong>{activeStage + 1} / {decompositionStages.length}</strong><span>{hostedProgress?.status === "queued" ? "advancing" : "in progress"}</span></div>
                 </div>
-                <div className="loading-rail" aria-hidden="true"><span style={{ width: `${analysisProgress}%` }} /></div>
-                <small>
-                  {empiricalDuration === null
-                    ? "provisional benchmark · this run will recalibrate it"
-                    : `empirical ETA · median of ${analysisDurations.length} successful run${analysisDurations.length === 1 ? "" : "s"}`}
-                </small>
+                <div className="loading-rail" aria-hidden="true"><span style={{ width: `${railProgress}%` }} /></div>
+                {retryNote && <small className="loading-retry">{retryNote}</small>}
+                <small>Your run is saved. Submitting the same question after a reload resumes it.</small>
               </div>
             </section>
           )}
