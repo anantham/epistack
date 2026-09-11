@@ -478,6 +478,7 @@ export function ResearchDashboard() {
         timeHorizon: claim.timeHorizon,
         decisionLeverage: claim.decisionLeverage,
         applicabilityFields: claim.applicabilityFields,
+        retrieval: claim.retrieval,
       }));
     setRecall({
       status: "running",
@@ -487,7 +488,7 @@ export function ResearchDashboard() {
       liveTrace: [],
     });
     try {
-      const response = await fetch(`${localClaudeCompanionUrl}/recall`, {
+      const response = await fetch("/api/recall", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -499,60 +500,14 @@ export function ResearchDashboard() {
           refresh,
         }),
       });
-      if (!response.ok || !response.body) throw new Error("The local Claude companion did not start the lead-discovery stream.");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffered = "";
-      let completed: RecallResponse | null = null;
-      let recallError = "";
-      const consumeLine = (line: string) => {
-        if (!line.trim()) return;
-        const event = JSON.parse(line) as {
-          type?: "status" | "tool" | "complete" | "error";
-          phase?: string;
-          lane?: string;
-          label?: string;
-          event?: RecallToolTraceEvent;
-          payload?: RecallResponse;
-          message?: string;
-        };
-        if (event.type === "status") {
-          setRecall((current) => ({
-            ...current,
-            status: "running",
-            progress: event.label || "Lead-discovery agents are working…",
-          }));
-        } else if (event.type === "tool" && event.event) {
-          setRecall((current) => ({
-            ...current,
-            liveTrace: current.liveTrace.some((trace) => trace.id === event.event?.id)
-              ? current.liveTrace
-              : [...current.liveTrace, event.event as RecallToolTraceEvent],
-          }));
-        } else if (event.type === "complete" && event.payload) {
-          completed = event.payload;
-        } else if (event.type === "error") {
-          recallError = event.message || "The lead-discovery agents stopped without a result.";
-        }
-      };
-      while (true) {
-        const { done, value } = await reader.read();
-        buffered += decoder.decode(value, { stream: !done });
-        const lines = buffered.split("\n");
-        buffered = lines.pop() || "";
-        lines.forEach(consumeLine);
-        if (done) break;
-      }
-      if (buffered.trim()) consumeLine(buffered);
-      if (recallError) throw new Error(recallError);
-      const final = completed as RecallResponse | null;
-      if (!final) throw new Error("The local Claude companion ended without a completed lead-discovery result.");
+      const payload = await response.json() as RecallResponse & { error?: string };
+      if (!response.ok) throw new Error(payload.error || "The hosted lead-discovery sweep failed.");
       setRecall({
         status: "complete",
-        response: final,
+        response: payload,
         error: "",
-        progress: `${final.leads.length} lead-only records returned across two search lanes.`,
-        liveTrace: final.toolTrace,
+        progress: `${payload.leads.length} lead-only records returned across two search lanes.`,
+        liveTrace: payload.toolTrace,
       });
     } catch (error) {
       const offline = error instanceof TypeError && /fetch/i.test(error.message);

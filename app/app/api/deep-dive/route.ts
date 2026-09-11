@@ -1,6 +1,8 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, Output } from "ai";
 import { env } from "cloudflare:workers";
+import { z } from "zod";
+import { lyraConfigured, runLyraStage } from "../../../lib/lyra-stage";
 import {
   deepDiveOutputSchema,
   deepDiveSchema,
@@ -91,11 +93,13 @@ export async function POST(request: Request) {
   }
   const applicabilityProfile = parsedApplicabilityProfile.data;
   const runtimeEnvironment = env as unknown as DeepDiveEnvironment;
+  const usingLyra = lyraConfigured();
   const openRouterModel = suppliedModel || runtimeEnvironment.EPISTACK_OPENROUTER_MODEL || process.env.EPISTACK_OPENROUTER_MODEL || defaultOpenRouterModel;
+  const extractionModel = usingLyra ? "lyra-chatgpt-pro" : openRouterModel;
   const refresh = body.refresh === true;
   const cacheKey = await operationCacheKey("abstract-result-extraction", deepDiveCacheContract, {
     pmid,
-    model: openRouterModel,
+    model: extractionModel,
     claimFrames: parsedClaimFrames.data,
     applicabilityProfile,
     promptConfig: promptOverridesSignature(promptOverrides),
@@ -111,8 +115,8 @@ export async function POST(request: Request) {
   }
 
   const openRouterApiKey = suppliedKey || runtimeEnvironment.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
-  if (!openRouterApiKey) {
-    return Response.json({ error: "No reusable extraction is cached for this source and model. Add a bring-your-own model key in Settings to create one." }, { status: 401 });
+  if (!usingLyra && !openRouterApiKey) {
+    return Response.json({ error: "Hosted extraction is not configured yet.", code: "hosted-not-configured" }, { status: 503 });
   }
 
   try {
@@ -135,39 +139,54 @@ export async function POST(request: Request) {
       url: typeof record?.url === "string" ? record.url : `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
       abstract,
     };
-    const openRouter = createOpenAI({
-      apiKey: openRouterApiKey,
-      baseURL: openRouterBaseURL,
-      headers: {
-        "HTTP-Referer": request.headers.get("origin") || "https://epistack-evidence-lab.avalokai.chatgpt.site",
-        "X-OpenRouter-Title": "Epistack Evidence Lab",
-        "X-OpenRouter-Metadata": "enabled",
-      },
-    });
     const extractionAgent = resolveAgentPrompt("abstract-extractor", promptOverrides);
     const claimFramesText = formatClaimFrames(parsedClaimFrames.data);
-    const { output } = await generateText({
-      model: openRouter(openRouterModel),
-      output: Output.object({
-        name: "abstract_result_extraction",
-        description: "Proposed study, analysis, result, and claim-relation records extracted from one PubMed abstract.",
-        schema: deepDiveOutputSchema,
-      }),
-      system: extractionAgent.instructions,
-      prompt: renderAgentPrompt(extractionAgent.taskTemplate, {
-        claimFrames: claimFramesText,
-        applicabilityProfile: JSON.stringify(applicabilityProfile, null, 2).slice(0, 20_000),
-        title: source.title,
-        authors: source.authors,
-        journal: source.journal,
-        published: source.published,
-        pmid: source.pmid,
-        doiLine: source.doi ? ` · DOI ${source.doi}` : "",
-        abstract: source.abstract,
-      }),
-      maxOutputTokens: extractionAgent.maxOutputTokens,
-      temperature: extractionAgent.temperature,
+    const extractionInput = renderAgentPrompt(extractionAgent.taskTemplate, {
+      claimFrames: claimFramesText,
+      applicabilityProfile: JSON.stringify(applicabilityProfile, null, 2).slice(0, 20_000),
+      title: source.title,
+      authors: source.authors,
+      journal: source.journal,
+      published: source.published,
+      pmid: source.pmid,
+      doiLine: source.doi ? ` · DOI ${source.doi}` : "",
+      abstract: source.abstract,
     });
+    let output: unknown;
+    if (usingLyra) {
+      const text = await runLyraStage({
+        model: "lyra-chatgpt-pro",
+        effort: "medium",
+        instructions: extractionAgent.instructions
+          + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
+          + JSON.stringify(z.toJSONSchema(deepDiveSchema)),
+        input: extractionInput,
+      });
+      output = JSON.parse(stripMarkdownFences(text));
+    } else {
+      const openRouter = createOpenAI({
+        apiKey: openRouterApiKey,
+        baseURL: openRouterBaseURL,
+        headers: {
+          "HTTP-Referer": request.headers.get("origin") || "https://epistack-evidence-lab.avalokai.chatgpt.site",
+          "X-OpenRouter-Title": "Epistack Evidence Lab",
+          "X-OpenRouter-Metadata": "enabled",
+        },
+      });
+      const fallback = await generateText({
+        model: openRouter(openRouterModel),
+        output: Output.object({
+          name: "abstract_result_extraction",
+          description: "Proposed study, analysis, result, and claim-relation records extracted from one PubMed abstract.",
+          schema: deepDiveOutputSchema,
+        }),
+        system: extractionAgent.instructions,
+        prompt: extractionInput,
+        maxOutputTokens: extractionAgent.maxOutputTokens,
+        temperature: extractionAgent.temperature,
+      });
+      output = fallback.output;
+    }
     const parsed = deepDiveSchema.safeParse(output);
     if (!parsed.success) {
       return Response.json({ error: "The model returned an incomplete result extraction. Retry or choose another frontier model." }, { status: 502 });
@@ -175,7 +194,7 @@ export async function POST(request: Request) {
     const payload: CachedDeepDive = {
       source,
       candidate: parsed.data,
-      model: openRouterModel,
+      model: extractionModel,
       verificationStatus: "abstract-only",
     };
     const stored = await writeOperationCache(
@@ -195,13 +214,19 @@ export async function POST(request: Request) {
       },
     } satisfies DeepDiveResponse);
   } catch (error) {
-    const providerFailure = openRouterFailureFromThrown(error);
-    if (providerFailure.code !== "provider_error") {
-      return Response.json({ error: providerFailure.message, code: providerFailure.code }, { status: providerFailure.status });
+    if (!usingLyra) {
+      const providerFailure = openRouterFailureFromThrown(error);
+      if (providerFailure.code !== "provider_error") {
+        return Response.json({ error: providerFailure.message, code: providerFailure.code }, { status: providerFailure.status });
+      }
     }
     const detail = error instanceof Error ? error.message : "Unknown deep-dive error";
     return Response.json({ error: "The source could not be extracted from PubMed and the selected model.", detail }, { status: 502 });
   }
+}
+
+function stripMarkdownFences(text: string) {
+  return text.trim().replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
 }
 
 function formatClaimFrames(claimFrames: ResearchClaimFrame[]) {

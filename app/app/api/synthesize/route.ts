@@ -1,6 +1,5 @@
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateText, Output } from "ai";
-import { env } from "cloudflare:workers";
+import { z } from "zod";
+import { lyraConfigured, runLyraStage } from "../../../lib/lyra-stage";
 import {
   promptOverridesSignature,
   renderAgentPrompt,
@@ -11,7 +10,6 @@ import {
 import {
   canonicalHumanSuppliedValues,
   decisionGraphProjection,
-  decisionSynthesisOutputSchema,
   decisionSynthesisSchema,
   privacyMinimizedDecisionBrief,
   validateDecisionOptionCoverage,
@@ -19,13 +17,11 @@ import {
   type DecisionSynthesis,
 } from "../../../lib/decision-synthesis";
 import { isD1Unavailable, readLiveArtifact } from "../../../lib/live-artifact-store";
-import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
 import { researchBriefSchema, type ResearchBrief } from "../../../lib/research-brief";
 import { ensureDecisionTables, getD1 } from "../../../db";
 import { operationCacheKey, readOperationCache, writeOperationCache } from "../../../db/cache";
 
-const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
-const openRouterBaseURL = "https://openrouter.ai/api/v1";
+const synthesisModel = "lyra-chatgpt-pro";
 const synthesisCacheContract = "decision-synthesis-v2";
 const synthesisCacheTtlMs = 30 * 24 * 60 * 60 * 1000;
 
@@ -36,11 +32,6 @@ type SynthesisRequest = {
   openRouterModel?: unknown;
   promptOverrides?: unknown;
   refresh?: unknown;
-};
-
-type SynthesisEnvironment = {
-  OPENROUTER_API_KEY?: string;
-  EPISTACK_OPENROUTER_MODEL?: string;
 };
 
 type PersistedSynthesis = {
@@ -94,23 +85,11 @@ function validateSynthesis(
 }
 
 async function generateSynthesis(input: {
-  openRouterApiKey: string;
-  openRouterModel: string;
-  origin: string;
   brief: ResearchBrief;
   shareableBrief: ShareableDecisionBrief;
   projection: ReturnType<typeof decisionGraphProjection>;
   promptOverrides: AgentPromptOverrides;
 }) {
-  const openRouter = createOpenAI({
-    apiKey: input.openRouterApiKey,
-    baseURL: openRouterBaseURL,
-    headers: {
-      "HTTP-Referer": input.origin || "https://epistack-evidence-lab.avalokai.chatgpt.site",
-      "X-OpenRouter-Title": "Epistack Evidence Lab",
-      "X-OpenRouter-Metadata": "enabled",
-    },
-  });
   const agent = resolveAgentPrompt("decision-synthesizer", input.promptOverrides);
   const humanValues = canonicalHumanSuppliedValues(input.brief);
   const basePrompt = renderAgentPrompt(agent.taskTemplate, {
@@ -120,6 +99,9 @@ async function generateSynthesis(input: {
     humanSuppliedValues: JSON.stringify(humanValues, null, 2),
     acceptedGraph: JSON.stringify(input.projection, null, 2),
   });
+  const instructions = agent.instructions
+    + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
+    + JSON.stringify(z.toJSONSchema(decisionSynthesisSchema));
   const resultIds = input.projection.results.map((result) => result.id);
   const familyIds = input.projection.dependenceFamilies.map((family) => family.id);
   const resultFamilyById = new Map(
@@ -155,18 +137,18 @@ Options with changed feasibility: ${JSON.stringify(lastValidation.options.mismat
 Unknown recommendation option ID: ${JSON.stringify(lastValidation.options.unknownRecommendationOptionId)}
 Values incorrectly labeled human-supplied: ${JSON.stringify(lastValidation.mislabeledHumanValues)}
 Use only exact IDs and copy human-supplied values verbatim from the supplied list. Return the complete object again.`;
-    const { output } = await generateText({
-      model: openRouter(input.openRouterModel),
-      output: Output.object({
-        name: "accepted_graph_decision_synthesis",
-        description: "A conditional, reversible decision synthesis grounded only in accepted result-level evidence.",
-        schema: decisionSynthesisOutputSchema,
-      }),
-      system: agent.instructions,
-      prompt: `${basePrompt}${repair}`,
-      maxOutputTokens: agent.maxOutputTokens,
-      temperature: agent.temperature,
+    const text = await runLyraStage({
+      model: "lyra-chatgpt-pro",
+      effort: "medium",
+      instructions,
+      input: `${basePrompt}${repair}`,
     });
+    let output: unknown;
+    try {
+      output = JSON.parse(text.trim().replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""));
+    } catch {
+      continue;
+    }
     const parsed = decisionSynthesisSchema.safeParse(output);
     if (!parsed.success) continue;
     lastValidation = validateSynthesis(
@@ -463,13 +445,6 @@ export async function POST(request: Request) {
     if (serializedProjection.length > 600_000) {
       return Response.json({ error: "The accepted graph is too large for one synthesis pass. Split the decision into claim-scoped views first." }, { status: 413 });
     }
-    const suppliedKey = typeof body.openRouterApiKey === "string" ? body.openRouterApiKey.trim() : "";
-    const suppliedModel = typeof body.openRouterModel === "string" ? body.openRouterModel.trim() : "";
-    const runtimeEnvironment = env as unknown as SynthesisEnvironment;
-    const openRouterModel = suppliedModel
-      || runtimeEnvironment.EPISTACK_OPENROUTER_MODEL
-      || process.env.EPISTACK_OPENROUTER_MODEL
-      || defaultOpenRouterModel;
     const promptOverrides = sanitizeAgentPromptOverrides(body.promptOverrides);
     const shareableBrief = privacyMinimizedDecisionBrief(parsedBrief.data);
     const promptPolicySignature = await operationCacheKey(
@@ -484,7 +459,7 @@ export async function POST(request: Request) {
     );
     const cacheKey = await operationCacheKey("decision-synthesis", synthesisCacheContract, {
       caseId,
-      model: openRouterModel,
+      model: synthesisModel,
       brief: shareableBrief,
       projectionHash,
       promptPolicySignature,
@@ -521,18 +496,10 @@ export async function POST(request: Request) {
     }
 
     if (!synthesis) {
-      const openRouterApiKey = suppliedKey
-        || runtimeEnvironment.OPENROUTER_API_KEY
-        || process.env.OPENROUTER_API_KEY;
-      if (!openRouterApiKey) {
-        return Response.json({
-          error: "No reusable synthesis is cached for this evidence version and model. Add a bring-your-own model key in Settings to create one.",
-        }, { status: 401 });
+      if (!lyraConfigured()) {
+        return Response.json({ error: "Hosted decision synthesis is not configured yet.", code: "hosted-not-configured" }, { status: 503 });
       }
       synthesis = await generateSynthesis({
-        openRouterApiKey,
-        openRouterModel,
-        origin: request.headers.get("origin") || "",
         brief: parsedBrief.data,
         shareableBrief,
         projection,
@@ -558,13 +525,13 @@ export async function POST(request: Request) {
       projectionHash,
       promptPolicySignature,
       parentSnapshotId: artifact.latestSnapshot?.id ?? null,
-      model: openRouterModel,
+      model: synthesisModel,
     });
     const payload: PersistedSynthesis = {
       caseId,
       ...persisted,
       evidenceVersion: projection.evidenceVersion,
-      model: openRouterModel,
+      model: synthesisModel,
       synthesis: normalizedSynthesis,
     };
     const stored = cacheStatus === "hit"
@@ -594,10 +561,7 @@ export async function POST(request: Request) {
     if (isD1Unavailable(error)) {
       return Response.json({ error: "The durable evidence store is unavailable in this runtime.", code: "D1_UNAVAILABLE" }, { status: 503 });
     }
-    const providerFailure = openRouterFailureFromThrown(error);
-    return Response.json(
-      { error: providerFailure.message, code: providerFailure.code },
-      { status: providerFailure.status },
-    );
+    const detail = error instanceof Error ? error.message : "Unknown synthesis error";
+    return Response.json({ error: "The decision synthesis could not be generated.", detail }, { status: 502 });
   }
 }
