@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import {
+  browserDecompositionCacheLimit,
+  decompositionCacheEntryKey,
+  emptyBrowserDecompositionCache,
+  findBrowserDecompositionCacheEntry,
+  normalizeDecompositionText,
+  parseBrowserDecompositionCache,
+  upsertBrowserDecompositionCacheEntry,
+} from "../lib/decomposition-cache.ts";
 import { operationCacheKey, stableSerialize } from "../lib/operation-cache.ts";
 
 test("operation cache keys are stable across object key ordering and contract-versioned", async () => {
@@ -46,15 +55,133 @@ test("live research and model extraction use a bypassable shared cache", async (
   assert.match(cacheStore, /ON CONFLICT\(id\) DO UPDATE SET/);
 });
 
-test("decomposition reuses an exact browser result before requiring a model key", async () => {
-  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /epistack:decomposition-operation-cache:v3/);
-  assert.match(page, /cached\.prompt === normalizedPrompt/);
-  assert.match(page, /cached\.decisionContext === contextForRequest/);
-  assert.match(page, /cached\.model === normalizedModel/);
-  assert.match(page, /cached\.promptSignature === promptSignature/);
+function cachedDecomposition(caseId) {
+  return {
+    caseId,
+    mode: "ai",
+    model: "test model",
+    warning: null,
+    prompt: "Are eggs good to eat?",
+    decisionContext: "",
+    decomposition: {
+      caseTitle: "Eggs",
+      summary: "Test",
+      highlights: [],
+      clusters: [],
+      axes: [],
+      claimTemplate: "Test",
+      knownUnknowns: [],
+      contextQuestions: [],
+    },
+    cache: { status: "miss", layer: "d1", createdAt: null, expiresAt: null },
+  };
+}
+
+test("decomposition cache identity canonicalizes insignificant whitespace", async () => {
+  const base = {
+    prompt: "Are eggs good?\nHow can we tell?",
+    decisionContext: "",
+    model: "anthropic/claude-opus-4.8",
+    promptSignature: "prompts-a",
+  };
+  assert.equal(normalizeDecompositionText("  Are eggs good?\r\n\tHow can we tell?  "), "Are eggs good? How can we tell?");
+  assert.equal(
+    await decompositionCacheEntryKey(base),
+    await decompositionCacheEntryKey({
+      ...base,
+      prompt: "  Are eggs good?\r\n\tHow can we tell?  ",
+      decisionContext: " ",
+      model: ` ${base.model} `,
+    }),
+  );
+  assert.notEqual(
+    await decompositionCacheEntryKey(base),
+    await decompositionCacheEntryKey({ ...base, decisionContext: "Age: 31" }),
+  );
+  assert.notEqual(
+    await decompositionCacheEntryKey(base),
+    await decompositionCacheEntryKey({ ...base, model: "google/gemini-3-pro" }),
+  );
+  assert.notEqual(
+    await decompositionCacheEntryKey(base),
+    await decompositionCacheEntryKey({ ...base, promptSignature: "prompts-b" }),
+  );
+});
+
+test("base and contextualized decompositions coexist in the browser cache", async () => {
+  const baseKey = await decompositionCacheEntryKey({
+    prompt: "Are eggs good to eat?",
+    decisionContext: "",
+    model: "anthropic/claude-opus-4.8",
+    promptSignature: "prompts-a",
+  });
+  const contextualKey = await decompositionCacheEntryKey({
+    prompt: "Are eggs good to eat?",
+    decisionContext: "Age: 31; Location: Kerala",
+    model: "anthropic/claude-opus-4.8",
+    promptSignature: "prompts-a",
+  });
+  let store = emptyBrowserDecompositionCache();
+  store = upsertBrowserDecompositionCacheEntry(store, {
+    key: baseKey,
+    savedAt: "2026-07-24T00:00:00.000Z",
+    lastAccessedAt: "2026-07-24T00:00:00.000Z",
+    result: cachedDecomposition("base"),
+  });
+  store = upsertBrowserDecompositionCacheEntry(store, {
+    key: contextualKey,
+    savedAt: "2026-07-24T00:01:00.000Z",
+    lastAccessedAt: "2026-07-24T00:01:00.000Z",
+    result: { ...cachedDecomposition("contextual"), decisionContext: "Age: 31; Location: Kerala" },
+  });
+  assert.equal(findBrowserDecompositionCacheEntry(store, baseKey)?.result.caseId, "base");
+  assert.equal(findBrowserDecompositionCacheEntry(store, contextualKey)?.result.caseId, "contextual");
+  assert.equal(store.entries.length, 2);
+
+  store = upsertBrowserDecompositionCacheEntry(store, {
+    key: baseKey,
+    savedAt: "2026-07-24T00:02:00.000Z",
+    lastAccessedAt: "2026-07-24T00:02:00.000Z",
+    result: cachedDecomposition("base-new"),
+  });
+  assert.equal(store.entries.length, 2);
+  assert.equal(findBrowserDecompositionCacheEntry(store, baseKey)?.result.caseId, "base-new");
+});
+
+test("browser decomposition cache bounds and validates persisted entries", () => {
+  let store = emptyBrowserDecompositionCache();
+  for (let index = 0; index <= browserDecompositionCacheLimit; index += 1) {
+    const timestamp = new Date(Date.UTC(2026, 6, 24, 0, index)).toISOString();
+    store = upsertBrowserDecompositionCacheEntry(store, {
+      key: `key-${index}`,
+      savedAt: timestamp,
+      lastAccessedAt: timestamp,
+      result: cachedDecomposition(`case-${index}`),
+    });
+  }
+  assert.equal(store.entries.length, browserDecompositionCacheLimit);
+  assert.equal(findBrowserDecompositionCacheEntry(store, "key-0"), null);
+  const restored = parseBrowserDecompositionCache(JSON.stringify(store), Date.UTC(2026, 6, 24, 2));
+  assert.equal(restored.entries.length, browserDecompositionCacheLimit);
+  assert.deepEqual(parseBrowserDecompositionCache("{not json"), emptyBrowserDecompositionCache());
+});
+
+test("decomposition checks browser cache before the hosted service without requiring a local model key", async () => {
+  const [page, cacheModule] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/decomposition-cache.ts", import.meta.url), "utf8"),
+  ]);
+  const analyze = page.slice(page.indexOf("async function analyze"), page.indexOf("async function validateConnection"));
+  assert.match(cacheModule, /epistack:decomposition-operation-cache:v4/);
+  assert.match(analyze, /findBrowserDecompositionCacheEntry/);
+  assert.match(analyze, /decompositionCacheEntryKey/);
   assert.match(page, /cache: \{ status: "browser", layer: "browser"/);
-  assert.match(page, /if \(!openRouterKey\.trim\(\)\)/);
+  assert.doesNotMatch(analyze, /if \(!openRouterKey\.trim\(\)\)/);
+  assert.ok(analyze.indexOf("findBrowserDecompositionCacheEntry") < analyze.indexOf('runHostedDecomposition('));
+  assert.ok(analyze.indexOf('setPhase("analyzing")') < analyze.indexOf('runHostedDecomposition('));
+  assert.doesNotMatch(analyze, /openRouterApiKey/);
+  assert.match(analyze, /lyra-chatgpt-pro:hosted-v2/);
+  assert.match(analyze, /window\.clearTimeout\(loadingTimer\)/);
   assert.match(page, /Recompute/);
 });
 

@@ -1,0 +1,539 @@
+{
+  "nodes": [
+    {
+      "id": "title",
+      "type": "text",
+      "x": 0,
+      "y": -340,
+      "width": 2860,
+      "height": 150,
+      "text": "# 🥚 Epistack egg investigation — a human–AI exoskeleton\n**Open question:** *Are eggs good to eat?*  →  **Decision episode:** *Should I buy 12 eggs from the Muttichur farmer next week and substitute two per day for my current breakfast?*\nThe human owns framing, judgment, and action. AI expands, searches, structures, challenges, and keeps the investigation alive."
+    },
+    {
+      "id": "legend",
+      "type": "text",
+      "x": 0,
+      "y": -170,
+      "width": 2860,
+      "height": 110,
+      "text": "**LEGEND**  🟦 **Human affordance** · 🟪 **AI interaction** · 🟩 **Structured artifact / enrichment** · 🟨 **Proposed control or agent** · 🟥 **Epistemic guardrail**\n**Status:** ✅ working vertical slice · ◐ partially implemented · ◇ designed, not yet wired end-to-end"
+    },
+
+    {
+      "id": "g0",
+      "type": "group",
+      "x": -40,
+      "y": 0,
+      "width": 2940,
+      "height": 400,
+      "label": "0 · ANCHOR THE INVESTIGATION IN A DECISION — not a fixed theory of eggs"
+    },
+    {
+      "id": "h-open",
+      "type": "text",
+      "x": 20,
+      "y": 80,
+      "width": 560,
+      "height": 230,
+      "text": "## 🟦 Human enters an open-ended phrase\n\n> Are eggs good to eat? Bad? Fine in moderation? How can we tell?\n\nThe ambiguity is preserved rather than silently answered.",
+      "color": "5"
+    },
+    {
+      "id": "ai-decision-reframe",
+      "type": "text",
+      "x": 660,
+      "y": 80,
+      "width": 600,
+      "height": 230,
+      "text": "## 🟪 AI proposes the actionable form\n\nWho must act, by when, between which feasible options, toward which outcomes, under what constraints?\n\nAI proposes; it does **not** choose the values.",
+      "color": "6"
+    },
+    {
+      "id": "h-own-frame",
+      "type": "text",
+      "x": 1340,
+      "y": 80,
+      "width": 600,
+      "height": 230,
+      "text": "## 🟦 Human accepts, edits, or rejects\n\n*Next week · Muttichur · buy 12 · eat 2/day · replace what breakfast?*\n\nThe user can keep several decision formulations alive if the choice is not yet clear.",
+      "color": "5"
+    },
+    {
+      "id": "decision-episode",
+      "type": "text",
+      "x": 2020,
+      "y": 80,
+      "width": 800,
+      "height": 230,
+      "text": "## 🟩 Decision episode object\n\n**Actor · context · time · options · outcomes · values · constraints · reversibility · stakes**\n\nEvery later claim is linked by: *could this change the action?*",
+      "color": "4"
+    },
+
+    {
+      "id": "g1",
+      "type": "group",
+      "x": -40,
+      "y": 440,
+      "width": 2940,
+      "height": 720,
+      "label": "1 · EXPAND — expose the interpretations hidden in ordinary language"
+    },
+    {
+      "id": "ai-cues",
+      "type": "text",
+      "x": 20,
+      "y": 520,
+      "width": 560,
+      "height": 230,
+      "text": "## 🟪 AI marks load-bearing phrases\n\n**eggs** · **eat** · **good** · **moderation** · **for whom** · **how can we tell**\n\nShows the visible cue → hidden choice trace before generating categories.",
+      "color": "6"
+    },
+    {
+      "id": "ai-dimensions",
+      "type": "text",
+      "x": 660,
+      "y": 520,
+      "width": 620,
+      "height": 300,
+      "text": "## 🟪 AI offers dimensions + candidate branches\n\n- object: whole egg / whites / other birds\n- dose: 1/day / 2/day / occasional\n- role: added / substituted / replaces which food\n- outcome: weight / satiety / muscle / LDL / cost / welfare\n- population: age / sex / metabolic context / geography\n- evidence contract: what observation could distinguish branches?",
+      "color": "6"
+    },
+    {
+      "id": "h-prune",
+      "type": "text",
+      "x": 1360,
+      "y": 520,
+      "width": 620,
+      "height": 300,
+      "text": "## 🟦 Human shapes the decomposition\n\n**Keep · edit · park · restore · merge · split · add missing category**\n\nPrunes irrelevant directions without deleting them; adds finer distinctions such as *local-farm eggs*, *what breakfast is displaced*, or *LDL hyper-responder*.",
+      "color": "5"
+    },
+    {
+      "id": "interpretation-map",
+      "type": "text",
+      "x": 2060,
+      "y": 520,
+      "width": 760,
+      "height": 300,
+      "text": "## 🟩 Editable interpretation map ✅\n\nEach branch stores **origin, rationale, scope, status, relevance, evidence requirements, mismatch risks**.\n\nSimilar-but-not-identical branches remain linked—not silently deduplicated.",
+      "color": "4"
+    },
+    {
+      "id": "frame-audit",
+      "type": "text",
+      "x": 660,
+      "y": 860,
+      "width": 2160,
+      "height": 210,
+      "text": "## 🟥 Framing audit\n**What did the AI introduce? What did the human remove? What remains unseen?** Store the original wording, every proposal, every edit, and every parked branch. A personalized frame is useful only when its exclusions stay inspectable.",
+      "color": "1"
+    },
+
+    {
+      "id": "g2",
+      "type": "group",
+      "x": -40,
+      "y": 1200,
+      "width": 2940,
+      "height": 700,
+      "label": "2 · CONTEXTUALIZE — elicit the person and their feasible action space"
+    },
+    {
+      "id": "ai-context-questions",
+      "type": "text",
+      "x": 20,
+      "y": 1280,
+      "width": 600,
+      "height": 290,
+      "text": "## 🟪 AI asks VOI-ranked questions ✅\n\nQuestions are chosen for their ability to **prune**, **create a branch**, or **improve evidence matching**:\n\nWhat is the actual goal? What would eggs replace? Which alternatives are affordable? Any allergies, diagnoses, medications, lab concerns, ethical constraints, or time limits?",
+      "color": "6"
+    },
+    {
+      "id": "h-rant",
+      "type": "text",
+      "x": 700,
+      "y": 1280,
+      "width": 620,
+      "height": 290,
+      "text": "## 🟦 Human gives the natural-language rant\n\n> I am 31, male, live in Muttichur, Kerala, lift six days a week, and care about protein, body composition, energy, cost, convenience, and long-term health. These local eggs are available; my realistic dietary alternatives are limited…\n\nStructured answers and free text can coexist.",
+      "color": "5"
+    },
+    {
+      "id": "action-space",
+      "type": "text",
+      "x": 1400,
+      "y": 1280,
+      "width": 620,
+      "height": 290,
+      "text": "## 🟩 Action-space constraints\n\n- buy 12 local eggs / do not buy\n- 0 / 1 / 2 eggs per day\n- replace current breakfast / add food\n- available protein alternatives\n- budget, cooking time, storage, preferences\n- reversible trial versus high-stakes medical decision",
+      "color": "4"
+    },
+    {
+      "id": "ai-filtered-graph",
+      "type": "text",
+      "x": 2100,
+      "y": 1280,
+      "width": 720,
+      "height": 290,
+      "text": "## 🟪 AI recompiles the graph ✅\n\n**Pinned** — settled by the user\n**Open** — worth investigating\n**Dropped/parked** — ruled out but recoverable\n**New** — implied by personal context\n\nThe system shows the diff instead of producing a new opaque answer.",
+      "color": "6"
+    },
+    {
+      "id": "personalization-guardrail",
+      "type": "text",
+      "x": 20,
+      "y": 1610,
+      "width": 2800,
+      "height": 190,
+      "text": "## 🟥 Personalization guardrail\nRun a **broad recall search** and a separate **applicability ranking**. Do not let personalization erase surprising or disconfirming evidence. Show: *the broad literature says X; evidence closest to this person says Y; the difference is driven by Z.*",
+      "color": "1"
+    },
+
+    {
+      "id": "g3",
+      "type": "group",
+      "x": -40,
+      "y": 1940,
+      "width": 2940,
+      "height": 1160,
+      "label": "3 · RESEARCH DASHBOARD — the human watches, steers, contests, and reallocates effort"
+    },
+    {
+      "id": "dashboard-human",
+      "type": "text",
+      "x": 20,
+      "y": 2020,
+      "width": 620,
+      "height": 480,
+      "text": "## 🟦 Human steering console ◇\n\n**See:** every agent, brief, query, source opened, finding, elapsed time, cost, coverage, failure, and uncertainty.\n\n**Control:**\n- pause / kill / relaunch an agent\n- edit its brief or target claim\n- breadth ↔ depth and budget\n- source types, date, geography, language\n- confirmatory / adversarial / replication / retraction / mechanism / subgroup / local queries\n- exclude a bad source or restore a missed one\n- launch a critic or demand a passage check\n\nDirect controls are the intended interface; current implementations provide only part of this.",
+      "color": "5"
+    },
+    {
+      "id": "orchestrator",
+      "type": "text",
+      "x": 720,
+      "y": 2020,
+      "width": 560,
+      "height": 260,
+      "text": "## 🟪 Investigation orchestrator ◐\n\nReads the open claim graph and action context. Creates one bounded brief per axis, names the crux, allocates search effort, and records a coverage contract.\n\nIt coordinates work; it is not an epistemic authority.",
+      "color": "6"
+    },
+    {
+      "id": "research-agents",
+      "type": "text",
+      "x": 720,
+      "y": 2320,
+      "width": 560,
+      "height": 410,
+      "text": "## 🟪 Live research agents ◐\n\n- weight-loss trial scout\n- satiety/mechanism scout\n- cardiometabolic subgroup scout\n- local-farm / Kerala context scout\n- dissent and failed-replication scout\n- guidelines and consensus scout\n- primary-source deep diver\n- gap hunter\n\nFindings stream back with query, URL, retrieval time, passage pointer, and the claim they may bear on.",
+      "color": "6"
+    },
+    {
+      "id": "providers",
+      "type": "text",
+      "x": 1360,
+      "y": 2020,
+      "width": 660,
+      "height": 450,
+      "text": "## 🟨 Provider reality and proposed fan-out\n\n**Claude implementation today:** Claude subagents via `claude -p` + WebSearch/WebFetch.\n\n**Codex implementation today:** Claude Opus through OpenRouter for question decomposition; the demonstrated egg corpus is curated rather than collected by a live agent dashboard.\n\n**Proposed, not wired:**\n- **Exa** — semantic retrieval and related-source discovery\n- **Gemini** — long-context cross-checking\n- **Grok** — contrasting open-web retrieval\n- **Claude** — structured extraction, critique, synthesis\n\nProvider diversity reduces shared model failure; it does **not** make reused datasets independent evidence.",
+      "color": "3"
+    },
+    {
+      "id": "query-log",
+      "type": "text",
+      "x": 1360,
+      "y": 2510,
+      "width": 660,
+      "height": 360,
+      "text": "## 🟩 Reproducible search ledger\n\nFor every query: **actor/model · prompt/brief · provider · database/search surface · query text · filters · timestamp · result rank · opened/skipped · reason · snapshot/hash**.\n\nMissingness can only be claimed relative to this declared search boundary.",
+      "color": "4"
+    },
+    {
+      "id": "human-spot-check",
+      "type": "text",
+      "x": 2100,
+      "y": 2020,
+      "width": 720,
+      "height": 300,
+      "text": "## 🟦 Human spot-checks and contests\n\nOpen the exact abstract sentence, table, figure, dataset, or method. Correct extraction, scope, stance, or identity. Add a missing source. Mark a result irrelevant.\n\nAI judgments remain attributed proposals—not ground truth.",
+      "color": "5"
+    },
+    {
+      "id": "coverage-dashboard",
+      "type": "text",
+      "x": 2100,
+      "y": 2360,
+      "width": 720,
+      "height": 510,
+      "text": "## 🟩 Dashboard shows separate epistemic signals\n\n**Coverage** — how much of the declared search was completed?\n**Disagreement** — which credible results conflict?\n**Independence** — how many distinct evidence families?\n**Estimate uncertainty** — effect and interval\n**Applicability** — does it transport to this actor/action?\n**Model risk** — which assumptions remain untested?\n**Decision stability** — does the action survive plausible alternatives?\n\nNever turn the number of findings into a probability distribution over truth.",
+      "color": "4"
+    },
+    {
+      "id": "dashboard-guardrail",
+      "type": "text",
+      "x": 20,
+      "y": 2770,
+      "width": 1260,
+      "height": 210,
+      "text": "## 🟥 Adversarial search guardrail\nMore agents can create correlated confidence. Require query diversity, disconfirming searches, primary-source checks, explicit failure logs, and independent evidence-family detection before displaying convergence.",
+      "color": "1"
+    },
+
+    {
+      "id": "g4",
+      "type": "group",
+      "x": -40,
+      "y": 3140,
+      "width": 2940,
+      "height": 1300,
+      "label": "4 · STRUCTURE + ENRICH — turn retrieved documents into an inspectable epistemic artifact"
+    },
+    {
+      "id": "data-pipeline",
+      "type": "text",
+      "x": 20,
+      "y": 3220,
+      "width": 1320,
+      "height": 250,
+      "text": "## 🟩 Canonical data pipeline ✅\n\n**Source artifact** → **passage / table / dataset** → **study** → **analysis** → **atomic result** → **scoped claim frame** → **attributed relationship** → **dependence family** → **decision relevance**\n\nThe paper remains the context container. Reasoning happens at the result level.",
+      "color": "4"
+    },
+    {
+      "id": "result-example",
+      "type": "text",
+      "x": 1420,
+      "y": 3220,
+      "width": 1400,
+      "height": 250,
+      "text": "## 🥚 One paper can point several ways\n\n**Vander Wal 2008:** energy-restricted egg arm → *supports greater loss* · free-living egg arm → *contradicts automatic loss* · body-fat endpoint → *qualifies* · author conclusion → *narrower than “eggs cause weight loss.”*\n\nAll four results remain one dependence family—not four votes.",
+      "color": "4"
+    },
+    {
+      "id": "agent-method",
+      "type": "text",
+      "x": 20,
+      "y": 3520,
+      "width": 520,
+      "height": 360,
+      "text": "## 🟨 Method-quality agent ◐\n\nDesign · registration · primary/secondary/post-hoc · construct validity · causal identification · power/precision · missingness · multiplicity · comparison integrity · open data/code · replication.\n\nOutputs dimensions, not one prestige score.",
+      "color": "3"
+    },
+    {
+      "id": "agent-venue",
+      "type": "text",
+      "x": 590,
+      "y": 3520,
+      "width": 520,
+      "height": 360,
+      "text": "## 🟨 Venue and document agent ◐\n\nPeer reviewed? preprint? blog? guideline? dataset? version? correction? retraction? critique?\n\nJournal tier and impact are contextual metadata—not substitutes for inspecting the study.",
+      "color": "3"
+    },
+    {
+      "id": "agent-identity",
+      "type": "text",
+      "x": 1160,
+      "y": 3520,
+      "width": 520,
+      "height": 360,
+      "text": "## 🟨 Authorship and identity agent ◇\n\nNamed authors · ORCID · institutional affiliations over time · funders · declared conflicts · relevant expertise · public methodological record · integrity events.\n\nIdentity confidence is recorded; anonymity is not automatically disqualifying.",
+      "color": "3"
+    },
+    {
+      "id": "agent-ai-origin",
+      "type": "text",
+      "x": 1730,
+      "y": 3520,
+      "width": 520,
+      "height": 360,
+      "text": "## 🟨 Text-provenance agent ◇\n\nDeclared AI assistance · document history · signatures/hashes · source traceability · suspicious fabrication patterns.\n\n“AI-written” detection is probabilistic and unreliable; never present a detector score as proof of authorship.",
+      "color": "3"
+    },
+    {
+      "id": "agent-incentive",
+      "type": "text",
+      "x": 2300,
+      "y": 3520,
+      "width": 520,
+      "height": 360,
+      "text": "## 🟨 Incentive and integrity agent ◐\n\nFunding · sponsor role · conflicts · selective reporting risk · corrections · PubPeer/retraction signals · dataset or image concerns.\n\nAn actor-level event triggers review; it does not mechanically invalidate every paper.",
+      "color": "3"
+    },
+    {
+      "id": "agent-scope",
+      "type": "text",
+      "x": 20,
+      "y": 3920,
+      "width": 650,
+      "height": 370,
+      "text": "## 🟨 Scope + transport agent ◐\n\nCompiles **population · exposure · dose · comparator · outcome · time · estimand · causal modality**. Links claims as equal, narrower, broader, overlapping, or genuinely contradictory.\n\nAsks whether industrial-trial eggs transport to the Muttichur farm decision.",
+      "color": "3"
+    },
+    {
+      "id": "agent-dependence",
+      "type": "text",
+      "x": 720,
+      "y": 3920,
+      "width": 650,
+      "height": 370,
+      "text": "## 🟨 Dependence agent ✅ fixture / ◇ live\n\nGroups shared participants, cohorts, datasets, labs, instruments, methods, citations, funders, and meta-analyses that reuse primary trials.\n\nTen analyses of one cohort remain one family with ten analyses.",
+      "color": "3"
+    },
+    {
+      "id": "agent-rhetoric",
+      "type": "text",
+      "x": 1420,
+      "y": 3920,
+      "width": 650,
+      "height": 370,
+      "text": "## 🟨 Rhetoric-vs-evidence agent ◇\n\nFlags causal language over association, citation laundering, consensus-by-count, endpoint switching, precision theatre, scope inflation, mechanistic overreach, and *no evidence → evidence of no effect*.\n\nFlags are review prompts, not accusations.",
+      "color": "3"
+    },
+    {
+      "id": "artifact-views",
+      "type": "text",
+      "x": 2120,
+      "y": 3920,
+      "width": 700,
+      "height": 370,
+      "text": "## 🟩 Linked views over one graph ✅\n\n**Result ledger** — inspect atomic findings\n**Claim matrix** — cross-examine, never vote count\n**Argument map** — inference + assumptions\n**Evidence families** — correlated support\n**Provenance card** — exact source trail\n**History** — updates and reassessment\n**Decision view** — what changes the action",
+      "color": "4"
+    },
+
+    {
+      "id": "g5",
+      "type": "group",
+      "x": -40,
+      "y": 4480,
+      "width": 2940,
+      "height": 1050,
+      "label": "5 · ASSESS, DECIDE, AND LEARN — route the human toward the next consequential move"
+    },
+    {
+      "id": "ai-belief-packet",
+      "type": "text",
+      "x": 20,
+      "y": 4560,
+      "width": 620,
+      "height": 420,
+      "text": "## 🟪 AI assembles a belief packet ◐\n\nFor each scoped claim:\n- strongest support and undercutter\n- effect/interval where appropriate\n- dependence families\n- applicability bridge\n- load-bearing assumptions\n- rhetorical flags\n- missing perspectives\n- out-of-model risk\n- what result would change the assessment\n\nNo universal source score and no unexplained confidence number.",
+      "color": "6"
+    },
+    {
+      "id": "ai-crux",
+      "type": "text",
+      "x": 700,
+      "y": 4560,
+      "width": 620,
+      "height": 420,
+      "text": "## 🟪 AI ranks cruxes + next information ◐\n\nNot just the most contested claim:\n\n**decision sensitivity × chance of changing belief × applicability × feasibility ÷ cost**\n\nFor this decision: the real breakfast comparator, medical context, farm-specific facts, and what a six-day observation can actually reveal.",
+      "color": "6"
+    },
+    {
+      "id": "h-decision",
+      "type": "text",
+      "x": 1380,
+      "y": 4560,
+      "width": 620,
+      "height": 420,
+      "text": "## 🟦 Human decides and logs it ✅ view / ◇ durable log\n\nChooses an option with explicit tradeoffs, values, uncertainty, and graph version. May reject the AI recommendation. Records what would trigger reconsideration.\n\nThe action can be: buy / do not buy / gather one more fact / consult an expert / run a bounded trial.",
+      "color": "5"
+    },
+    {
+      "id": "protocol",
+      "type": "text",
+      "x": 2060,
+      "y": 4560,
+      "width": 760,
+      "height": 420,
+      "text": "## 🟩 Personal observation protocol ✅ draft\n\nSix breakfasts can observe **preference, satiety, adherence, later intake, digestive tolerance, preparation, cost**.\n\nThey cannot resolve **body-fat change, LDL/ApoB, long-term cardiovascular events, population effects, or ethics**. Clinical measurements require an appropriately supervised and longer design.",
+      "color": "4"
+    },
+    {
+      "id": "community-science",
+      "type": "text",
+      "x": 20,
+      "y": 5020,
+      "width": 1300,
+      "height": 380,
+      "text": "## 🟩 Outcome → community science ◇\n\nA contributed observation carries **protocol · context · intervention · comparator · adherence · measurement · missingness · deviations · privacy permission**. It remains an observation—not an automatic population claim. Compatible protocols may later be aggregated while preserving heterogeneity and selection effects.",
+      "color": "4"
+    },
+    {
+      "id": "update-loop",
+      "type": "text",
+      "x": 1380,
+      "y": 5020,
+      "width": 1440,
+      "height": 380,
+      "text": "## 🟥 Living update loop ◇\n\nNew result · correction · retraction · dataset change · integrity event · challenged assumption · personal outcome\n\n→ append an attributed update event\n→ find every dependent claim and decision\n→ mark the assessment **stale / requires reassessment**\n→ notify subscribed investigators\n\nUpdates reopen judgment; they do not mechanically reverse conclusions.",
+      "color": "1"
+    },
+
+    {
+      "id": "g6",
+      "type": "group",
+      "x": -40,
+      "y": 5570,
+      "width": 2940,
+      "height": 410,
+      "label": "THE EXOSKELETON PRINCIPLE"
+    },
+    {
+      "id": "principle",
+      "type": "text",
+      "x": 20,
+      "y": 5650,
+      "width": 2800,
+      "height": 230,
+      "text": "# The human is not a passenger\nAt every handoff the person can **inspect, edit, redirect, contest, fork, decide, measure, and contribute**. AI supplies scalable attention and structure; provenance makes that work challengeable. The product is successful when it helps someone make a better reversible decision today **and** leaves an artifact that makes the next investigation cheaper, sharper, and more trustworthy."
+    }
+  ],
+  "edges": [
+    { "id": "e01", "fromNode": "h-open", "fromSide": "right", "toNode": "ai-decision-reframe", "toSide": "left", "label": "ambiguous phrase" },
+    { "id": "e02", "fromNode": "ai-decision-reframe", "fromSide": "right", "toNode": "h-own-frame", "toSide": "left", "label": "proposed decision" },
+    { "id": "e03", "fromNode": "h-own-frame", "fromSide": "right", "toNode": "decision-episode", "toSide": "left", "label": "human-approved stakes" },
+    { "id": "e04", "fromNode": "decision-episode", "fromSide": "bottom", "toNode": "ai-cues", "toSide": "top", "label": "expand what must be specified" },
+    { "id": "e05", "fromNode": "ai-cues", "fromSide": "right", "toNode": "ai-dimensions", "toSide": "left", "label": "cues → hidden variables" },
+    { "id": "e06", "fromNode": "ai-dimensions", "fromSide": "right", "toNode": "h-prune", "toSide": "left", "label": "candidate map" },
+    { "id": "e07", "fromNode": "h-prune", "fromSide": "right", "toNode": "interpretation-map", "toSide": "left", "label": "keep · park · split · add" },
+    { "id": "e08", "fromNode": "ai-dimensions", "fromSide": "bottom", "toNode": "frame-audit", "toSide": "left", "label": "AI proposals" },
+    { "id": "e09", "fromNode": "h-prune", "fromSide": "bottom", "toNode": "frame-audit", "toSide": "right", "label": "human edits" },
+    { "id": "e10", "fromNode": "interpretation-map", "fromSide": "bottom", "toNode": "ai-context-questions", "toSide": "top", "label": "remaining high-VOI gaps" },
+    { "id": "e11", "fromNode": "ai-context-questions", "fromSide": "right", "toNode": "h-rant", "toSide": "left", "label": "specific prompts" },
+    { "id": "e12", "fromNode": "h-rant", "fromSide": "right", "toNode": "action-space", "toSide": "left", "label": "context + feasible options" },
+    { "id": "e13", "fromNode": "action-space", "fromSide": "right", "toNode": "ai-filtered-graph", "toSide": "left", "label": "constraints" },
+    { "id": "e14", "fromNode": "ai-filtered-graph", "fromSide": "bottom", "toNode": "personalization-guardrail", "toSide": "right", "label": "personalized lens" },
+    { "id": "e15", "fromNode": "personalization-guardrail", "fromSide": "bottom", "toNode": "dashboard-human", "toSide": "top", "label": "broad + applicable search" },
+    { "id": "e16", "fromNode": "dashboard-human", "fromSide": "right", "toNode": "orchestrator", "toSide": "left", "label": "steering + budgets" },
+    { "id": "e17", "fromNode": "orchestrator", "fromSide": "bottom", "toNode": "research-agents", "toSide": "top", "label": "bounded briefs" },
+    { "id": "e18", "fromNode": "orchestrator", "fromSide": "right", "toNode": "providers", "toSide": "left", "label": "provider assignment" },
+    { "id": "e19", "fromNode": "research-agents", "fromSide": "right", "toNode": "query-log", "toSide": "left", "label": "queries + retrieval trail" },
+    { "id": "e20", "fromNode": "research-agents", "fromSide": "right", "toNode": "human-spot-check", "toSide": "left", "label": "stream findings" },
+    { "id": "e21", "fromNode": "human-spot-check", "fromSide": "left", "toNode": "research-agents", "toSide": "right", "label": "correct · redirect · contest" },
+    { "id": "e22", "fromNode": "query-log", "fromSide": "right", "toNode": "coverage-dashboard", "toSide": "left", "label": "coverage + failures" },
+    { "id": "e23", "fromNode": "dashboard-human", "fromSide": "bottom", "toNode": "dashboard-guardrail", "toSide": "left", "label": "adversarial controls" },
+    { "id": "e24", "fromNode": "research-agents", "fromSide": "bottom", "toNode": "data-pipeline", "toSide": "top", "label": "retrieved artifacts" },
+    { "id": "e25", "fromNode": "human-spot-check", "fromSide": "bottom", "toNode": "result-example", "toSide": "top", "label": "verified passages" },
+    { "id": "e26", "fromNode": "data-pipeline", "fromSide": "right", "toNode": "result-example", "toSide": "left", "label": "atomic results" },
+    { "id": "e27", "fromNode": "data-pipeline", "fromSide": "bottom", "toNode": "agent-method", "toSide": "top", "label": "method enrichment" },
+    { "id": "e28", "fromNode": "data-pipeline", "fromSide": "bottom", "toNode": "agent-venue", "toSide": "top", "label": "document enrichment" },
+    { "id": "e29", "fromNode": "result-example", "fromSide": "bottom", "toNode": "agent-identity", "toSide": "top", "label": "actor attribution" },
+    { "id": "e30", "fromNode": "result-example", "fromSide": "bottom", "toNode": "agent-ai-origin", "toSide": "top", "label": "text provenance" },
+    { "id": "e31", "fromNode": "result-example", "fromSide": "bottom", "toNode": "agent-incentive", "toSide": "top", "label": "funding + integrity" },
+    { "id": "e32", "fromNode": "agent-method", "fromSide": "bottom", "toNode": "agent-scope", "toSide": "top", "label": "qualified result" },
+    { "id": "e33", "fromNode": "agent-venue", "fromSide": "bottom", "toNode": "agent-dependence", "toSide": "top", "label": "citations + shared data" },
+    { "id": "e34", "fromNode": "agent-identity", "fromSide": "bottom", "toNode": "agent-rhetoric", "toSide": "top", "label": "assertions + incentives" },
+    { "id": "e35", "fromNode": "agent-incentive", "fromSide": "bottom", "toNode": "artifact-views", "toSide": "top", "label": "enriched provenance" },
+    { "id": "e36", "fromNode": "agent-scope", "fromSide": "right", "toNode": "agent-dependence", "toSide": "left", "label": "claim alignment" },
+    { "id": "e37", "fromNode": "agent-dependence", "fromSide": "right", "toNode": "agent-rhetoric", "toSide": "left", "label": "independent convergence?" },
+    { "id": "e38", "fromNode": "agent-rhetoric", "fromSide": "right", "toNode": "artifact-views", "toSide": "left", "label": "review flags" },
+    { "id": "e39", "fromNode": "artifact-views", "fromSide": "bottom", "toNode": "ai-belief-packet", "toSide": "top", "label": "inspectable graph" },
+    { "id": "e40", "fromNode": "ai-belief-packet", "fromSide": "right", "toNode": "ai-crux", "toSide": "left", "label": "load-bearing uncertainty" },
+    { "id": "e41", "fromNode": "ai-crux", "fromSide": "right", "toNode": "h-decision", "toSide": "left", "label": "policy + what changes it" },
+    { "id": "e42", "fromNode": "h-decision", "fromSide": "right", "toNode": "protocol", "toSide": "left", "label": "chosen action + measurable crux" },
+    { "id": "e43", "fromNode": "protocol", "fromSide": "bottom", "toNode": "community-science", "toSide": "right", "label": "structured observation" },
+    { "id": "e44", "fromNode": "community-science", "fromSide": "right", "toNode": "update-loop", "toSide": "left", "label": "new evidence event" },
+    { "id": "e45", "fromNode": "update-loop", "fromSide": "bottom", "toNode": "principle", "toSide": "right", "label": "reopen + notify" },
+    { "id": "e46", "fromNode": "principle", "fromSide": "left", "toNode": "h-open", "toSide": "left", "label": "next decision starts richer" }
+  ]
+}

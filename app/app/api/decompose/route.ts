@@ -25,11 +25,14 @@ import {
   sanitizeAgentPromptOverrides,
   type AgentPromptOverrides,
 } from "../../../lib/agent-prompts";
+import {
+  decompositionCacheContract,
+  normalizeDecompositionText,
+} from "../../../lib/decomposition-cache";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
 const openRouterBaseURL = "https://openrouter.ai/api/v1";
-const decompositionCacheContract = "question-decomposition-orchestrator-v3";
 const decompositionCacheTtlMs = 30 * 24 * 60 * 60 * 1000;
 type CachedDecomposition = Omit<DecompositionResponse, "cache">;
 
@@ -62,8 +65,8 @@ export async function POST(request: Request) {
   let refresh = false;
   try {
     const body = (await request.json()) as DecompositionRequest;
-    prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
-    decisionContext = typeof body.decisionContext === "string" ? body.decisionContext.trim() : "";
+    prompt = typeof body.prompt === "string" ? normalizeDecompositionText(body.prompt) : "";
+    decisionContext = typeof body.decisionContext === "string" ? normalizeDecompositionText(body.decisionContext) : "";
     suppliedOpenRouterKey = typeof body.openRouterApiKey === "string" ? body.openRouterApiKey.trim() : "";
     suppliedOpenRouterModel = typeof body.openRouterModel === "string" ? body.openRouterModel.trim() : "";
     if (body.promptOverrides && JSON.stringify(body.promptOverrides).length > 120_000) {
@@ -193,8 +196,6 @@ export async function POST(request: Request) {
   const axisBrief = scout.dimensions.slice(0, 7).map((dimension) => ({
     id: dimension.id,
     label: dimension.label,
-    question: dimension.question,
-    resolutions: dimension.resolutions.slice(0, 5),
   }));
   const tracePromise = (async (): Promise<TraceAgentResult> => {
     const { output } = await generateText({

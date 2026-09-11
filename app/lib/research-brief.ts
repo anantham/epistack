@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { DecompositionCluster, InterpretationAxis } from "./decomposition";
+import type { DecompositionCluster } from "./decomposition";
 
 export const researchBriefStorageKey = "epistack:research-brief:v1";
 
@@ -112,7 +112,7 @@ export type ResearchBriefCompilerInput = {
   originalQuestion: string;
   compiledQuestion: string;
   decisionContext: string;
-  axes: InterpretationAxis[];
+  // axes removed
   clusters: DecompositionCluster[];
   knownUnknowns: string[];
   dimensionRoles: Record<string, DimensionRole>;
@@ -122,38 +122,34 @@ export type ResearchBriefCompilerInput = {
 const applicabilityPattern = /(population|people|person|who|where|setting|geograph|jurisdiction|demograph|age|sex|source|access|preference)/i;
 const monitoredPattern = /(unknown|uncertain|predict|modifier|heterogen|boundary|mechanism|production|provenance|certif|feed|housing)/i;
 
-export function defaultDimensionRole(axis: Pick<InterpretationAxis, "id" | "label" | "question" | "branches">): DimensionRole {
-  const selected = axis.branches.find((branch) => branch.status === "kept");
-  if (!selected) return axis.branches.every((branch) => branch.status === "parked") ? "parked" : "monitored-unknown";
-  const description = `${axis.id} ${axis.label} ${axis.question}`;
+export function defaultDimensionRole(cluster: Pick<DecompositionCluster, "id" | "label" | "latentVariable">): DimensionRole {
+  const description = `${cluster.id} ${cluster.label} ${cluster.latentVariable}`;
   if (applicabilityPattern.test(description)) return "applicability-only";
-  if (selected.relevance === "low" || monitoredPattern.test(description) && selected.relevance !== "high") return "monitored-unknown";
+  if (monitoredPattern.test(description)) return "monitored-unknown";
   return "decision-active";
 }
 
-export function completeDimensionRoles(axes: InterpretationAxis[], saved: Record<string, DimensionRole> = {}) {
-  return Object.fromEntries(axes.map((axis) => [
-    axis.id,
-    dimensionRoleSchema.safeParse(saved[axis.id]).success ? saved[axis.id] : defaultDimensionRole(axis),
+export function completeDimensionRoles(clusters: DecompositionCluster[], saved: Record<string, DimensionRole> = {}) {
+  return Object.fromEntries(clusters.map((cluster) => [
+    cluster.id,
+    dimensionRoleSchema.safeParse(saved[cluster.id]).success ? saved[cluster.id] : defaultDimensionRole(cluster),
   ])) as Record<string, DimensionRole>;
 }
 
-export function buildDimensionAssignments(input: Pick<ResearchBriefCompilerInput, "axes" | "clusters" | "dimensionRoles">) {
-  const roles = completeDimensionRoles(input.axes, input.dimensionRoles);
-  return input.axes.map((axis) => {
-    const selected = axis.branches.find((branch) => branch.status === "kept") ?? null;
-    const traces = input.clusters.filter((cluster) => cluster.axisId === axis.id);
+export function buildDimensionAssignments(input: Pick<ResearchBriefCompilerInput, "clusters" | "dimensionRoles">) {
+  const roles = completeDimensionRoles(input.clusters, input.dimensionRoles);
+  return input.clusters.map((cluster) => {
     const unique = (values: string[]) => Array.from(new Set(values));
     return dimensionAssignmentSchema.parse({
-      axisId: axis.id,
-      label: axis.label,
-      selectedBranchId: selected?.id ?? null,
-      selectedValue: selected?.value ?? null,
-      role: roles[axis.id],
-      rationale: roleRationale(roles[axis.id], selected?.label),
-      searchConcepts: unique(traces.flatMap((trace) => trace.ingestionRequirements.searchConcepts)).slice(0, 12),
-      requiredEvidenceFields: unique(traces.flatMap((trace) => trace.ingestionRequirements.requiredFields)).slice(0, 12),
-      mismatchRisks: unique(traces.flatMap((trace) => trace.ingestionRequirements.mismatchRisks)).slice(0, 10),
+      axisId: cluster.id,
+      label: cluster.label,
+      selectedBranchId: null,
+      selectedValue: null,
+      role: roles[cluster.id],
+      rationale: roleRationale(roles[cluster.id], cluster.label),
+      searchConcepts: unique(cluster.ingestionRequirements.searchConcepts).slice(0, 12),
+      requiredEvidenceFields: unique(cluster.ingestionRequirements.requiredFields).slice(0, 12),
+      mismatchRisks: unique(cluster.ingestionRequirements.mismatchRisks).slice(0, 10),
     });
   });
 }

@@ -1,0 +1,70 @@
+{
+  "before": {
+    "axes": 7,
+    "branches": 28,
+    "traces": 5
+  },
+  "after": {
+    "axes": 7,
+    "branches": 34,
+    "traces": 7
+  },
+  "droppedBefore": [
+    {
+      "axis": "Health outcome",
+      "options": [
+        "overall health across multiple outcomes"
+      ]
+    },
+    {
+      "axis": "Dose and frequency",
+      "options": [
+        "3+ eggs per day"
+      ]
+    },
+    {
+      "axis": "What eggs replace",
+      "options": [
+        "lower-egg version of the same overall diet"
+      ]
+    },
+    {
+      "axis": "Individual differences",
+      "options": [
+        "children, older adults, or other high-nutrient-need groups"
+      ]
+    },
+    {
+      "axis": "Egg and meal context",
+      "options": [
+        "eggs eaten in meals containing processed meat or other major confounders"
+      ]
+    },
+    {
+      "axis": "Time horizon",
+      "options": []
+    },
+    {
+      "axis": "Broader tradeoffs",
+      "options": [
+        "cost, convenience, and sustainability"
+      ]
+    }
+  ],
+  "deployment": {
+    "url": "https://epistack-evidence-lab.avalokai.chatgpt.site/",
+    "anonymousHTTPStatus": 401,
+    "browser": "Signed in successfully; site returned Access Denied",
+    "management": "Saved project ID not found; Sites connector list empty",
+    "deployedRun": "Not performed; signed-in account is not allowed"
+  },
+  "validation": {
+    "decompositionStages": "All three live Lyra stages completed; Zod schemas passed",
+    "regressions": "Three regression tests failed before the preservation fix; all 14 targeted tests passed after it"
+  },
+  "boundaries": {
+    "researchStarted": false,
+    "humanContextProvided": false,
+    "published": false
+  }
+}

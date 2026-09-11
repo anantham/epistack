@@ -36,12 +36,13 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.doesNotMatch(frame, /<i aria-hidden="true">\.<\/i>/);
   assert.match(frame, /brandCharacters/);
   assert.match(frame, /setIntroPhase\("holding"\), 1300/);
-  assert.match(frame, /setIntroPhase\("docking"\), 2600/);
-  assert.match(frame, /setIntroPhase\("ready"\), 4800/);
+  assert.match(frame, /setIntroPhase\("docking"\)/);
+  assert.match(frame, /dockingAnimation\.finished/);
+  assert.match(frame, /introWordmarkMotion/);
   assert.match(frame, /brandDocked \? "is-docked"/);
   assert.match(styles, /\.brand-intro\.is-docked/);
-  assert.match(styles, /font-size 1700ms/);
-  assert.match(styles, /left 1700ms/);
+  assert.doesNotMatch(styles, /font-size 1700ms/);
+  assert.doesNotMatch(styles, /left 1700ms/);
   assert.doesNotMatch(styles, /@keyframes brand-arrive/);
   assert.match(frame, /placeholder="what is your question\?"/);
   assert.match(frame, /settings-trigger/);
@@ -194,7 +195,7 @@ test("persistent schema separates documents, studies, analyses, results, and dec
   assert.match(schema, /export const updateEvents/);
 });
 
-test("arbitrary questions use a key-gated elicitation and refinement path", async () => {
+test("arbitrary questions use hosted elicitation while legacy provider access remains explicit", async () => {
   const [frame, server, api, envExample] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("lib/decomposition-server.ts", root), "utf8"),
@@ -229,23 +230,22 @@ test("arbitrary questions use a key-gated elicitation and refinement path", asyn
   assert.match(frame, /contextSelections/);
   assert.match(frame, /aria-pressed=/);
   assert.match(frame, /choose any that apply/);
-  assert.match(frame, /loadingSteps/);
-  assert.match(frame, /scouting substantive dimensions/);
-  assert.match(frame, /mapping exact language cues/);
-  assert.match(frame, /merging specialist contracts/);
-  assert.match(frame, /formatCountdown/);
-  assert.match(frame, /provisional benchmark/);
-  assert.match(frame, /step \+ 1\) % loadingSteps\.length/);
-  assert.match(frame, /analysisDurationsKey/);
+  assert.match(frame, /runHostedDecomposition/);
+  assert.match(frame, /Discovering dimensions/);
+  assert.match(frame, /Mapping exact language/);
+  assert.match(frame, /Preparing evidence requirements/);
+  assert.match(frame, /Your run is saved/);
+  assert.doesNotMatch(frame, /provisional benchmark/);
   assert.match(frame, /event\.metaKey \|\| event\.ctrlKey/);
   assert.match(frame, /composerInputRef/);
   assert.match(frame, /refineWithContext/);
   assert.match(frame, /decisionContext: contextForRequest/);
-  assert.match(frame, /No reusable decomposition is cached/);
+  assert.doesNotMatch(frame, /No reusable decomposition is cached/);
+  assert.match(api, /No reusable decomposition is cached/);
   assert.match(frame, /aria-label="Model settings"/);
   assert.match(frame, /aria-label="Key privacy"/);
   assert.match(frame, /openRouterApiKey: openRouterKey\.trim\(\)/);
-  assert.match(frame, /openRouterModel: normalizedModel/);
+  assert.match(frame, /lyra-chatgpt-pro:hosted-v2/);
   assert.doesNotMatch(frame, /sessionStorage\.setItem\([^\n]*openRouterKey/);
   assert.match(api, /OPENROUTER_API_KEY/);
   assert.match(api, /EPISTACK_OPENROUTER_MODEL/);

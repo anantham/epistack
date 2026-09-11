@@ -92,7 +92,7 @@ function locateHighlights(prompt: string, highlights: QuestionHighlight[]): Text
 }
 
 function wait(milliseconds: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function median(values: number[]) {
@@ -141,6 +141,8 @@ export default function Home() {
   const [contextAnswers, setContextAnswers] = useState<Record<string, string>>({});
   const [contextSelections, setContextSelections] = useState<Record<string, string[]>>({});
   const [error, setError] = useState("");
+  const [editingClusterId, setEditingClusterId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<any>(null);
   const [loadingStep, setLoadingStep] = useState(0);
   const [analysisElapsed, setAnalysisElapsed] = useState(0);
   const [analysisDurations, setAnalysisDurations] = useState<number[]>([]);
@@ -154,7 +156,7 @@ export default function Home() {
     () => locateHighlights(prompt, result?.decomposition.highlights ?? []),
     [prompt, result],
   );
-  const currentContextQuestion = result?.decomposition.contextQuestions[elicitationIndex] ?? null;
+  const currentContextQuestion = null;
   const busy = phase === "analyzing" || phase === "transitioning";
   const empiricalDuration = useMemo(() => median(analysisDurations), [analysisDurations]);
   const expectedDuration = empiricalDuration ?? provisionalEstimateMs;
@@ -167,13 +169,13 @@ export default function Home() {
   useEffect(() => {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) {
-      const reducedMotionTimer = window.setTimeout(() => setIntroPhase("ready"), 0);
+      const reducedMotionTimer = setTimeout(() => setIntroPhase("ready"), 0);
       return () => window.clearTimeout(reducedMotionTimer);
     }
 
-    const holdTimer = window.setTimeout(() => setIntroPhase("holding"), 1300);
-    const dockTimer = window.setTimeout(() => setIntroPhase("docking"), 2600);
-    const readyTimer = window.setTimeout(() => setIntroPhase("ready"), 4800);
+    const holdTimer = setTimeout(() => setIntroPhase("holding"), 1300);
+    const dockTimer = setTimeout(() => setIntroPhase("docking"), 2600);
+    const readyTimer = setTimeout(() => setIntroPhase("ready"), 4800);
     return () => {
       window.clearTimeout(holdTimer);
       window.clearTimeout(dockTimer);
@@ -182,7 +184,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    const timer = setTimeout(() => {
       try {
         const current = window.localStorage.getItem(analysisDurationsKey);
         const legacy = window.localStorage.getItem(legacyAnalysisDurationsKey);
@@ -198,7 +200,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    const timer = setTimeout(() => {
       if (new URLSearchParams(window.location.search).get("settings") === "1") {
         setSettingsOpen(true);
       }
@@ -244,7 +246,7 @@ export default function Home() {
           setResult(restoredWithCache);
           if (!savedWorkspace.prompt) setPrompt(restoredResult.prompt);
           if (!savedWorkspace.decisionContext) setDecisionContext(restoredResult.decisionContext ?? "");
-          const canResumeInterview = savedWorkspace.phase === "eliciting" && restoredResult.decomposition.contextQuestions.length > 0;
+          const canResumeInterview = savedWorkspace.phase === "eliciting" && restoredResult.decomposition.clusters.length > 0;
           setPhase(canResumeInterview ? "eliciting" : "review");
         }
       } catch {
@@ -257,7 +259,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!storageReady) return;
-    const timer = window.setTimeout(() => {
+    const timer = setTimeout(() => {
       try {
         const preferences = JSON.stringify({ apiKey: openRouterKey, model: openRouterModel });
         window.localStorage.setItem(preferencesStorageKey, preferences);
@@ -270,7 +272,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!storageReady || phase === "analyzing" || phase === "transitioning") return;
-    const timer = window.setTimeout(() => {
+    const timer = setTimeout(() => {
       try {
         const persistedPhase = phase === "eliciting" ? "eliciting" : result ? "review" : "idle";
         const workspace = JSON.stringify({
@@ -373,7 +375,7 @@ export default function Home() {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!("IntersectionObserver" in window)) {
       steps.forEach((step) => step.classList.add("is-visible"));
-      window.setTimeout(() => {
+      setTimeout(() => {
         setRevealedClusters(result.decomposition.clusters.map((_, index) => index));
       }, 0);
       return;
@@ -389,7 +391,7 @@ export default function Home() {
       if (revealedClustersRef.current.has(clusterIndex)) return;
       revealedClustersRef.current.add(clusterIndex);
       setRevealedClusters(Array.from(revealedClustersRef.current).sort((a, b) => a - b));
-      window.setTimeout(() => {
+      setTimeout(() => {
         void animateStoryClusterFlight(result, clusterIndex, reducedMotion);
       }, reducedMotion ? 0 : 180);
     }, { rootMargin: "-18% 0px -52% 0px", threshold: [0.08, 0.2, 0.45] });
@@ -411,6 +413,21 @@ export default function Home() {
       stepObserver.disconnect();
     };
   }, [phase, result]);
+
+  
+  function saveClusterEdit() {
+    if (!result || !editDraft) return;
+    const newClusters = result.decomposition.clusters.map(c => c.id === editDraft.id ? editDraft : c);
+    setResult({
+      ...result,
+      decomposition: {
+        ...result.decomposition,
+        clusters: newClusters
+      }
+    });
+    setEditingClusterId(null);
+    setEditDraft(null);
+  }
 
   async function analyze(contextOverride?: string, skipElicitation = false, refresh = false) {
     if (!prompt.trim() || busy) return;
@@ -450,7 +467,7 @@ export default function Home() {
           setResult(browserResult);
           window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(browserResult));
           setDecisionContext(contextForRequest);
-          setPhase(!skipElicitation && !contextForRequest && browserResult.decomposition.contextQuestions.length
+          setPhase(!skipElicitation && !contextForRequest && browserResult.decomposition.clusters.length
             ? "eliciting"
             : "review");
           return;
@@ -517,7 +534,7 @@ export default function Home() {
       setDecisionContext(contextForRequest);
       setActiveCluster(-1);
       setActiveTraceStep(0);
-      setPhase(!skipElicitation && !contextForRequest && payload.decomposition.contextQuestions.length
+      setPhase(!skipElicitation && !contextForRequest && payload.decomposition.clusters.length
         ? "eliciting"
         : "review");
     } catch (caught) {
@@ -578,7 +595,7 @@ export default function Home() {
 
   async function refineWithContext() {
     if (!result) return;
-    const additions = result.decomposition.contextQuestions
+    const additions = result.decomposition.clusters
       .map((question) => {
         const selected = contextSelections[question.id] ?? [];
         const typed = contextAnswers[question.id]?.trim();
@@ -599,7 +616,7 @@ export default function Home() {
 
   function advanceElicitation() {
     if (!result) return;
-    if (elicitationIndex < result.decomposition.contextQuestions.length - 1) {
+    if (elicitationIndex < result.decomposition.clusters.length - 1) {
       setElicitationIndex((index) => index + 1);
       return;
     }
@@ -774,65 +791,6 @@ export default function Home() {
             </section>
           )}
 
-          {phase === "eliciting" && result && currentContextQuestion && (
-            <section className="elicitation-screen" aria-label="Context interview">
-              <div className="elicitation-card" key={currentContextQuestion.id}>
-                <div className="elicitation-meta">
-                  <span>{elicitationIndex + 1} / {result.decomposition.contextQuestions.length}</span>
-                  <button
-                    type="button"
-                    className="icon-button context-info"
-                    aria-label={`Why this question matters: ${currentContextQuestion.whyItMatters}`}
-                    data-tooltip={`${currentContextQuestion.effect}: ${currentContextQuestion.whyItMatters}`}
-                  >?</button>
-                </div>
-                <h1>{currentContextQuestion.question}</h1>
-                <div className="context-options" aria-label="Suggested answers; choose any that apply">
-                  {currentContextQuestion.options.map((option) => (
-                    <button
-                      type="button"
-                      className={(contextSelections[currentContextQuestion.id] ?? []).includes(option) ? "selected" : ""}
-                      key={option}
-                      aria-pressed={(contextSelections[currentContextQuestion.id] ?? []).includes(option)}
-                      onClick={() => toggleContextOption(currentContextQuestion.id, option)}
-                    >{option}</button>
-                  ))}
-                </div>
-                <input
-                  type="text"
-                  value={contextAnswers[currentContextQuestion.id] ?? ""}
-                  onChange={(event) => setContextAnswers((current) => ({ ...current, [currentContextQuestion.id]: event.target.value }))}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") advanceElicitation();
-                  }}
-                  placeholder="type your answer…"
-                  aria-label={currentContextQuestion.question}
-                  autoFocus
-                />
-                <div className="elicitation-actions">
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Previous question"
-                    data-tooltip="Previous"
-                    disabled={elicitationIndex === 0}
-                    onClick={() => setElicitationIndex((index) => Math.max(0, index - 1))}
-                  >←</button>
-                  <div className="elicitation-dots" aria-hidden="true">
-                    {result.decomposition.contextQuestions.map((question, index) => <i className={index === elicitationIndex ? "active" : ""} key={question.id} />)}
-                  </div>
-                  <button
-                    type="button"
-                    className="icon-button elicitation-next"
-                    aria-label={elicitationIndex === result.decomposition.contextQuestions.length - 1 ? "Refine decomposition" : "Next question"}
-                    data-tooltip={elicitationIndex === result.decomposition.contextQuestions.length - 1 ? "Refine decomposition" : "Next"}
-                    onClick={advanceElicitation}
-                  >→</button>
-                </div>
-              </div>
-            </section>
-          )}
-
           {result && (phase === "review" || phase === "transitioning") && (
           <section className="story-board" aria-labelledby="trace-title">
             <button type="button" className="icon-button review-back" aria-label="Edit question" data-tooltip="Edit question" onClick={returnToEditor}>←</button>
@@ -898,8 +856,6 @@ export default function Home() {
 
               <div className="story-stream">
                 {result.decomposition.clusters.map((cluster, clusterIndex) => {
-                  const axis = result.decomposition.axes.find((item) => item.id === cluster.axisId);
-                  if (!axis) return null;
                   return (
                     <article
                       className={`story-chapter cluster-tone-${clusterIndex % 5} ${revealedClusters.includes(clusterIndex) ? "is-revealed" : ""} ${activeCluster === clusterIndex ? "is-active" : ""}`}
@@ -907,9 +863,12 @@ export default function Home() {
                       key={cluster.id}
                       data-cluster-index={clusterIndex}
                     >
-                      <header>
+                                            <header>
                         <span>Cluster {String(clusterIndex + 1).padStart(2, "0")}</span>
-                        <h3>{cluster.label}</h3>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <h3>{cluster.label}</h3>
+                          <button type="button" className="icon-button" onClick={() => { setEditingClusterId(cluster.id); setEditDraft(cluster); }}>Edit</button>
+                        </div>
                         <div className="chapter-cues">{cluster.highlightQuotes.map((quote) => {
                           const highlightIndex = result.decomposition.highlights.findIndex(
                             (highlight) => highlight.clusterId === cluster.id && highlight.quote === quote,
@@ -928,7 +887,25 @@ export default function Home() {
                         })}</div>
                       </header>
 
-                      <div className="story-flow" aria-label={`Inference chain for ${cluster.label}`}>
+                                            {editingClusterId === cluster.id ? (
+                        <div className="story-flow" style={{ padding: "1rem", background: "var(--background-soft)", borderRadius: "8px" }}>
+                          <label>Label</label>
+                          <input type="text" value={editDraft.label} onChange={(e) => setEditDraft({...editDraft, label: e.target.value})} style={{ width: "100%", marginBottom: "1rem" }} />
+                          <label>Latent Variable</label>
+                          <input type="text" value={editDraft.latentVariable} onChange={(e) => setEditDraft({...editDraft, latentVariable: e.target.value})} style={{ width: "100%", marginBottom: "1rem" }} />
+                          <label>Rationale</label>
+                          <input type="text" value={editDraft.rationale} onChange={(e) => setEditDraft({...editDraft, rationale: e.target.value})} style={{ width: "100%", marginBottom: "1rem" }} />
+                          <div style={{ display: "flex", gap: "1rem" }}>
+                            <button onClick={saveClusterEdit}>Save</button>
+                            <button onClick={() => setEditingClusterId(null)}>Cancel</button>
+                            <button onClick={() => {
+                               setResult({...result, decomposition: {...result.decomposition, clusters: result.decomposition.clusters.filter(c => c.id !== cluster.id)}});
+                               setEditingClusterId(null);
+                            }} style={{ color: "red" }}>Delete</button>
+                          </div>
+                        </div>
+                      ) : (
+<div className="story-flow" aria-label={`Inference chain for ${cluster.label}`}>
                         <section className="story-step" data-cluster-index={clusterIndex} data-step-index="0">
                           <span><b>01</b> Exact language</span>
                           <div className="cue-chips cluster-equation">
@@ -944,16 +921,10 @@ export default function Home() {
                           <h4>{cluster.latentVariable}</h4>
                           <p>{cluster.rationale}</p>
                         </section>
-                        <div className="story-connector"><span>made reviewable as</span><i>↓</i></div>
-                        <section className="story-step axis-story-step" data-cluster-index={clusterIndex} data-step-index="2">
-                          <span><b>03</b> Interpretation axis</span>
-                          <h4>{axis.label}</h4>
-                          <p>{axis.question}</p>
-                          <div className="branch-preview">{axis.branches.map((branch) => <em key={branch.id}>{branch.label}</em>)}</div>
-                        </section>
+                        
                         <div className="story-connector"><span>constrains what evidence may count</span><i>↓</i></div>
                         <section className="story-step evidence-story-step" data-cluster-index={clusterIndex} data-step-index="3">
-                          <span><b>04</b> Evidence contract</span>
+                          <span><b>03</b> Evidence contract</span>
                           <div className="ingestion-grid">
                             <div><strong>Required fields</strong><ul>{cluster.ingestionRequirements.requiredFields.map((item) => <li key={item}>{item}</li>)}</ul></div>
                             <div><strong>Search concepts</strong><ul>{cluster.ingestionRequirements.searchConcepts.map((item) => <li key={item}>{item}</li>)}</ul></div>
@@ -961,6 +932,7 @@ export default function Home() {
                           </div>
                         </section>
                       </div>
+                    )}
                     </article>
                   );
                 })}
@@ -970,7 +942,7 @@ export default function Home() {
             <div className="story-completion">
               <p>Accepting the map does not accept any branch as true. It accepts this decomposition as the scope for retrieval and review.</p>
               <button className="primary-button" onClick={openMap}>
-                Open interpretation map →
+                Proceed to Contextualize →
               </button>
             </div>
           </section>

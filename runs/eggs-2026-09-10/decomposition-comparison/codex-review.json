@@ -1,0 +1,14 @@
+{
+  "author": "Codex in this conversation",
+  "kind": "Methodological review of the actual Lyra output; not an independent blinded model benchmark",
+  "findings": [
+    {"title":"Keep the evidence question explicit","severity":"method gap","observation":"The model maps ‘How can we tell?’ mainly to time horizon. The final seven axes have no explicit evidence-standard dimension.","proposal":"Retain a cross-cutting evidence contract: causal versus observational evidence; biomarkers versus clinical events; absolute effect and uncertainty; confounding; funding; overlapping cohorts; replication. Do not pretend this evidence has already been collected."},
+    {"title":"Separate risk prediction from treatment-response prediction","severity":"method gap","observation":"The individual-differences axis lists clinical groups, but does not distinguish baseline risk from predictors of the effect of changing egg intake.","proposal":"Ask whether each candidate predicts baseline outcome risk, a reproducible within-person lipid response, or an externally validated difference in the effect of egg intake. Record interaction uncertainty; subgroup differences alone do not establish a predictor."},
+    {"title":"Do not let list order choose the research question","severity":"scope gap","observation":"The assembler automatically marks the first option kept. In this run that includes cardiovascular mortality, less than one egg per week, and replacing processed/red meat.","proposal":"Treat these as model defaults, not user-approved choices. This artifact starts every dimension unresolved. Ask whether the investigation is general or personal before asking for medical context."},
+    {"title":"Separate attributes that can coexist","severity":"scope gap","observation":"‘Whole eggs’ and ‘cooked with little added fat’ appear as alternative branches, although both can describe the same meal. Health outcomes and broader tradeoffs overlap too.","proposal":"Use independent exposure fields for yolk/white, cooking, accompanying foods, and addition versus substitution. Allow multiple outcome families in the research portfolio without merging them into one goodness score."},
+    {"title":"Preserve inferred versus explicit cues","severity":"trace gap","observation":"The comparator is grounded in ‘What else should we be paying attention to here?’ rather than an explicit comparator in the question.","proposal":"Label the comparator as a method-required inference. Exact substring matching verifies quotation integrity; it does not establish that the attached interpretation follows from the quote."}
+  ],
+  "next_context_question": "Is this a general evidence map to share with others, or a decision about what you personally should eat?",
+  "contextualization_conducted": false,
+  "research_started": false
+}

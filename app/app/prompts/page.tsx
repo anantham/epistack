@@ -4,11 +4,17 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   agentPromptDefinitions,
+  agentPromptPhases,
+  agentPromptRuntimeLabels,
   agentPromptStorageKey,
   sanitizeAgentPromptOverrides,
   type AgentPromptId,
   type AgentPromptOverrides,
 } from "../../lib/agent-prompts";
+import {
+  decompositionBrowserCacheStorageKey,
+  legacyDecompositionBrowserCacheStorageKey,
+} from "../../lib/decomposition-cache";
 
 type PromptDraft = {
   instructions: string;
@@ -113,7 +119,8 @@ export default function PromptLabPage() {
     try {
       window.localStorage.setItem(agentPromptStorageKey, JSON.stringify(overrides));
       window.localStorage.removeItem("epistack:decomposition-operation-cache:v2");
-      window.localStorage.removeItem("epistack:decomposition-operation-cache:v3");
+      window.localStorage.removeItem(legacyDecompositionBrowserCacheStorageKey);
+      window.localStorage.removeItem(decompositionBrowserCacheStorageKey);
       window.localStorage.removeItem("epistack:research-ui-cache:v1");
       window.localStorage.removeItem("epistack:research-ui-cache:v2");
       setSaveState("saved");
@@ -133,11 +140,11 @@ export default function PromptLabPage() {
         <div>
           <span className="eyebrow">Settings · Prompt transparency</span>
           <h1>Prompt Lab</h1>
-          <p>Inspect the actual instructions and runtime envelopes sent to each AI specialist. Edits are device-local and take effect on the next model call.</p>
+          <p>Inspect the actual instructions and runtime envelopes sent to each AI specialist, grouped in pipeline order. Edits are device-local and take effect on the next model call.</p>
         </div>
         <div className="prompt-lab-summary">
           <strong>{agentPromptDefinitions.length}</strong>
-          <span>live agent prompts</span>
+          <span>model prompts</span>
           <small>{changedIds.size ? `${changedIds.size} modified locally` : "defaults active"}</small>
         </div>
       </section>
@@ -145,25 +152,34 @@ export default function PromptLabPage() {
       <section className="prompt-lab-workspace">
         <nav className="prompt-agent-index" aria-label="AI agent prompts">
           <header>
-            <span>Orchestration order</span>
-            <small>Select an agent to inspect its contract.</small>
+            <span>Pipeline order</span>
+            <small>Grouped by phase. Select an agent to inspect its contract.</small>
           </header>
-          {agentPromptDefinitions.map((definition, index) => (
-            <button
-              type="button"
-              className={definition.id === activeId ? "active" : ""}
-              aria-current={definition.id === activeId ? "true" : undefined}
-              onClick={() => setActiveId(definition.id)}
-              key={definition.id}
-            >
-              <b>{String(index + 1).padStart(2, "0")}</b>
-              <span><strong>{definition.name}</strong><small>{definition.stage}</small></span>
-              <i className={changedIds.has(definition.id) ? "modified" : ""} aria-label={changedIds.has(definition.id) ? "Modified" : "Using default"} />
-            </button>
+          {agentPromptPhases.map((phase) => (
+            <section className="prompt-phase-group" key={phase.id} aria-label={`${phase.label} phase`}>
+              <div className="prompt-phase-heading">
+                <span>{phase.label}</span>
+                <small>{phase.blurb}</small>
+              </div>
+              {agentPromptDefinitions.filter((definition) => definition.phase === phase.id).map((definition) => (
+                <button
+                  type="button"
+                  className={definition.id === activeId ? "active" : ""}
+                  aria-current={definition.id === activeId ? "true" : undefined}
+                  onClick={() => setActiveId(definition.id)}
+                  key={definition.id}
+                >
+                  <b>{String(agentPromptDefinitions.indexOf(definition) + 1).padStart(2, "0")}</b>
+                  <span><strong>{definition.name}</strong><small>{agentPromptRuntimeLabels[definition.runtime]}</small></span>
+                  <i className={changedIds.has(definition.id) ? "modified" : ""} aria-label={changedIds.has(definition.id) ? "Modified" : "Using default"} />
+                </button>
+              ))}
+            </section>
           ))}
           <div className="prompt-index-note">
             <strong>What is not here?</strong>
             <p>PubMed/PMC retrieval, hashing, literal passage checks, schema validation, and promotion adjudication are deterministic code rather than model instructions.</p>
+            <p><strong>Hosted</strong> prompts run through this site&rsquo;s server routes. <strong>Local companion</strong> prompts run only when you start the Claude Code companion (<code>npm run agents</code>).</p>
           </div>
         </nav>
 
@@ -180,6 +196,7 @@ export default function PromptLabPage() {
           <dl className="prompt-agent-contract">
             <div><dt>Role</dt><dd>{activeDefinition.role}</dd></div>
             <div><dt>Structured output</dt><dd>{activeDefinition.outputContract}</dd></div>
+            <div><dt>Runtime</dt><dd>{agentPromptRuntimeLabels[activeDefinition.runtime]}</dd></div>
             <div><dt>Temperature</dt><dd>{activeDefinition.temperature}</dd></div>
             <div><dt>Token ceiling</dt><dd>{activeDefinition.maxOutputTokens.toLocaleString()}</dd></div>
           </dl>

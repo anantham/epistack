@@ -1,0 +1,17 @@
+{
+  "hostname": "epistack.adityaarpitha.com",
+  "projectId": "appgprj_6aa2ec5bde04819192c0a607114618fa",
+  "customDomainId": "appgdom_6aa3a63f5a848191bb69657fb5a9c0bf",
+  "dnsProvider": "Vercel",
+  "recordIds": [
+    "rec_ab5f279a5d2fe4cdf720a0b7",
+    "rec_8564fb45ceec032ce04abcc2",
+    "rec_3d0dc40839c3e9929d53ba7e"
+  ],
+  "dnsVerified": true,
+  "status": "active",
+  "sslStatus": "active",
+  "homepageHTTP": 200,
+  "decompositionHTTP": 200,
+  "tlsVerified": true
+}

@@ -1,0 +1,4 @@
+{
+  "prompt": "Are eggs good to eat? Bad to eat? Great in moderation? How can we tell? Does it vary across people, and what predicts this? What else should we be paying attention to here?",
+  "decisionContext": "General evidence investigation; no personal medical profile supplied. Examine dose, substitution, cardiometabolic outcomes, nutritional benefits, person-level effect modifiers and how reliably they predict response, food safety, and other relevant tradeoffs. Keep causal evidence separate from associations and biomarkers separate from clinical outcomes."
+}

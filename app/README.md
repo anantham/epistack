@@ -1,5 +1,7 @@
 # Epistack Question Compiler
 
+The deployed homepage now runs decomposition through the server-side Lyra Responses adapter. Configure `LYRA_PUBLIC_GATEWAY_URL` and `LYRA_API_KEY` as hosted secrets. Browser requests contain the question, context, and prompt overrides; the Lyra key never enters the browser. Jobs retain three independent specialist stages in D1 and can resume from the browser receipt. `/decompose-live` remains an alternate inspector. Legacy OpenRouter endpoints and the local research companion remain separate.
+
 A browser prototype of an Epistack investigation loop: collaboratively decompose a vague question, ground it in a real stakeholder and action space, compile a typed research brief, direct live evidence agents, and turn only accepted result records into a versioned, reversible decision.
 
 The included evidence case uses the competition prompt about whether eggs are good to eat, while the framing operator can now decompose arbitrary submitted questions.
@@ -23,7 +25,7 @@ Open the local URL printed by the development server.
 
 `npm run agents` starts a loopback companion on `127.0.0.1:4317`. It requires an installed and authenticated Claude Code CLI. Opus first compiles the edited interpretation map into a durable research brief. Its `/recall` stream runs separate broad-recall and applicability searches, records observable WebSearch/WebFetch invocation metadata, and returns lead-only candidates that cannot bypass evidence ingestion. During ingestion, a fresh Opus process extracts result-level records from preserved PMC full text and a fresh Sonnet process adversarially reviews them. A hosted UI can reach this companion only when its exact origin is explicitly allow-listed with `EPISTACK_ALLOWED_BROWSER_ORIGINS`; arbitrary web origins remain blocked. Override aliases or cost ceilings with `EPISTACK_PRIMARY_CLAUDE_MODEL`, `EPISTACK_ADVERSARY_CLAUDE_MODEL`, `EPISTACK_COMPILER_MAX_USD`, `EPISTACK_RECALL_MAX_USD`, `EPISTACK_PRIMARY_MAX_USD`, and `EPISTACK_ADVERSARY_MAX_USD`.
 
-For decomposition, open the settings icon and paste an OpenRouter API key. The bring-your-own key is cached only in that browser so reloads do not require retyping; it is excluded from case artifacts and the database. You can instead copy `.env.example` to `.env.local` and set `OPENROUTER_API_KEY` for a server-configured connection. Without a key or an exact reusable cache hit, decomposition stops with an explicit settings error.
+For decomposition, open the settings icon and paste an OpenRouter API key. The bring-your-own key is cached only in that browser so reloads do not require retyping; it is excluded from case artifacts and the database. You can instead copy `.env.example` to `.env.local` and set `OPENROUTER_API_KEY` for a server-configured connection. Normalized question/context/model/prompt combinations are retained in a bounded multi-entry browser cache and a 30-day shared D1 operation cache. The app checks both caches before it asks for a key; without a key or a reusable hit, decomposition stops with an explicit settings error.
 
 ## What to try
 

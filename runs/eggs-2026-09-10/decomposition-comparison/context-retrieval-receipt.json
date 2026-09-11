@@ -1,0 +1,27 @@
+{
+  "id": "job_46ceefd146883a0e90c32088",
+  "requestHash": "9b5b3bdbb986e2935730f2c1b7dc50ca8d16bd81572c6afadde34ad40aaa20e1",
+  "submittedAt": "2026-09-10T17:36:49.454Z",
+  "completedAt": "2026-09-10T17:37:52.591Z",
+  "status": "completed",
+  "controls": {
+    "tool": {
+      "mode": "chat",
+      "label": "Chat",
+      "verified": true
+    },
+    "picker": "combined",
+    "verified": true,
+    "model": {
+      "id": "latest",
+      "label": "Latest",
+      "aria_checked": "true"
+    },
+    "effort": {
+      "id": "instant",
+      "label": "Instant",
+      "aria_valuenow": "0",
+      "aria_valuemax": "4"
+    }
+  }
+}

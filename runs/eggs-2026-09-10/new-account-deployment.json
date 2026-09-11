@@ -1,0 +1,19 @@
+{
+  "projectId": "appgprj_6aa2ec5bde04819192c0a607114618fa",
+  "previousProjectId": "appgprj_6a5c7ff3fce08191bbf25f44fa95ca6e",
+  "checkout": "/private/tmp/epistack-current-account",
+  "commit": "56344d70b06749a9a8fd78da35d902576b094702",
+  "versionId": "appgprj_6aa2ec5bde04819192c0a607114618fa~appgver_962914b50b8c8191b8fbc94e9de41cc8",
+  "deploymentId": "appgdep_6aa2ee5e595c81918dfab7158b2ebb37",
+  "status": "succeeded",
+  "access": "public; verified through Sites access configuration",
+  "validation": {
+    "build": "passed",
+    "tests": "79 of 80 passed initially; missing .env.example restored, all 9 tests in affected file then passed",
+    "typecheck": "not clean; existing Cloudflare ambient types and pre-existing type errors remain"
+  },
+  "scope": "Hosted decomposition only; context interview and research remain unrun",
+  "url": "https://epistack-question-lab.aditya297292.chatgpt.site",
+  "hostedVerification": "Blocked by automatic browser approval review; live decomposition has not been verified",
+  "customDomain": "https://epistack.adityaarpitha.com"
+}

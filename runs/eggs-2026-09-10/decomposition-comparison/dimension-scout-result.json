@@ -1,0 +1,89 @@
+{
+  "caseTitle": "Whether eating eggs is beneficial, harmful, or context-dependent",
+  "summary": "Clarify which health outcomes matter, what egg intake means in practice, what foods eggs replace, which people are being considered, and over what time horizon and preparation context.",
+  "dimensions": [
+    {
+      "id": "outcome-of-interest",
+      "label": "Health outcome",
+      "question": "What does “good” or “bad” mean here?",
+      "resolutions": [
+        "cardiovascular disease and mortality",
+        "blood lipids and metabolic markers",
+        "weight, satiety, and body composition",
+        "nutrient adequacy and deficiency risk",
+        "overall health across multiple outcomes"
+      ]
+    },
+    {
+      "id": "egg-dose-frequency",
+      "label": "Dose and frequency",
+      "question": "How much egg consumption should be evaluated?",
+      "resolutions": [
+        "less than 1 egg per week",
+        "2–4 eggs per week",
+        "about 1 egg per day",
+        "2 eggs per day",
+        "3+ eggs per day"
+      ]
+    },
+    {
+      "id": "dietary-counterfactual",
+      "label": "What eggs replace",
+      "question": "Compared with what realistic alternative should eating eggs be evaluated?",
+      "resolutions": [
+        "eggs instead of processed/red meat breakfast",
+        "eggs instead of refined-carbohydrate breakfast",
+        "eggs instead of plant-protein foods",
+        "eggs added without replacing other calories",
+        "lower-egg version of the same overall diet"
+      ]
+    },
+    {
+      "id": "population-response",
+      "label": "Individual differences",
+      "question": "Which populations might have meaningfully different benefits or harms, and what predicts response?",
+      "resolutions": [
+        "generally healthy adults",
+        "people with high LDL or cardiovascular risk",
+        "people with diabetes or insulin resistance",
+        "people with familial/genetic lipid disorders",
+        "children, older adults, or other high-nutrient-need groups"
+      ]
+    },
+    {
+      "id": "egg-form-context",
+      "label": "Egg and meal context",
+      "question": "What exactly counts as the egg exposure being compared?",
+      "resolutions": [
+        "whole eggs",
+        "egg whites",
+        "eggs cooked with little added fat",
+        "eggs fried or cooked with substantial butter/oil",
+        "eggs eaten in meals containing processed meat or other major confounders"
+      ]
+    },
+    {
+      "id": "time-horizon-evidence",
+      "label": "Time horizon",
+      "question": "Over what period should benefits and harms be judged?",
+      "resolutions": [
+        "hours to days: satiety and acute metabolic response",
+        "weeks to months: LDL and other biomarkers",
+        "years: disease incidence",
+        "decades: cardiovascular events and mortality"
+      ]
+    },
+    {
+      "id": "tradeoffs-downsides",
+      "label": "Broader tradeoffs",
+      "question": "What important considerations beyond the headline health outcome should affect the decision?",
+      "resolutions": [
+        "protein and micronutrient value",
+        "diet quality and displacement of other foods",
+        "food safety and preparation",
+        "allergy or intolerance",
+        "cost, convenience, and sustainability"
+      ]
+    }
+  ]
+}

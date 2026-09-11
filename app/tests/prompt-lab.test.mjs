@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   agentPromptDefinitions,
+  agentPromptPhases,
   promptOverridesSignature,
   renderAgentPrompt,
   resolveAgentPrompt,
@@ -25,7 +26,32 @@ test("the prompt registry enumerates every live model specialist", () => {
     assert.ok(prompt.instructions.length > 100);
     assert.ok(prompt.taskTemplate.includes("{{"));
     assert.ok(prompt.outputContract.length > 10);
+    assert.ok(agentPromptPhases.some((phase) => phase.id === prompt.phase));
+    assert.ok(prompt.runtime === "hosted" || prompt.runtime === "companion");
   }
+});
+
+test("the prompt registry groups every specialist by pipeline phase and runtime", () => {
+  assert.deepEqual(
+    agentPromptDefinitions.filter((prompt) => prompt.phase === "Decompose").map((prompt) => prompt.id),
+    ["dimension-scout", "trace-specialist"],
+  );
+  assert.deepEqual(
+    agentPromptDefinitions.filter((prompt) => prompt.phase === "Contextualize").map((prompt) => prompt.id),
+    ["context-retrieval"],
+  );
+  assert.deepEqual(
+    agentPromptDefinitions.filter((prompt) => prompt.phase === "Orchestrate").map((prompt) => prompt.id),
+    ["research-brief-compiler"],
+  );
+  assert.deepEqual(
+    agentPromptDefinitions.filter((prompt) => prompt.runtime === "hosted").map((prompt) => prompt.id),
+    ["dimension-scout", "trace-specialist", "context-retrieval", "abstract-extractor", "decision-synthesizer"],
+  );
+  assert.deepEqual(
+    agentPromptDefinitions.filter((prompt) => prompt.runtime === "companion").map((prompt) => prompt.id),
+    ["research-brief-compiler", "broad-recall-specialist", "full-paper-extractor", "adversarial-reviewer"],
+  );
 });
 
 test("prompt overrides resolve into runtime text and cache identity", () => {
@@ -53,6 +79,10 @@ test("the settings link opens an editable Prompt Lab wired into model requests",
   assert.match(lab, /Runtime task template/);
   assert.match(lab, /Save prompt configuration/);
   assert.match(lab, /agentPromptStorageKey/);
+  assert.match(lab, /agentPromptPhases/);
+  assert.match(lab, /agentPromptRuntimeLabels/);
+  assert.match(lab, /prompt-phase-group/);
+  assert.match(lab, /Pipeline order/);
   for (const source of [decompositionApi, deepDiveApi]) {
     assert.match(source, /resolveAgentPrompt/);
     assert.match(source, /promptOverridesSignature/);

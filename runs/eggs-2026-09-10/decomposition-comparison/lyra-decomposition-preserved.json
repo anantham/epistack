@@ -1,0 +1,770 @@
+{
+  "provider": "Lyra scoped public Responses",
+  "question": "Are eggs good to eat? Bad to eat? Great in moderation? How can we tell? Does it vary across people, and what predicts this? What else should we be paying attention to here?",
+  "decisionContext": "",
+  "status": "proposal-awaiting-human-review",
+  "decomposition": {
+    "caseTitle": "Whether eating eggs is beneficial, harmful, or context-dependent",
+    "summary": "Clarify which health outcomes matter, what egg intake means in practice, what foods eggs replace, which people are being considered, and over what time horizon and preparation context.",
+    "highlights": [
+      {
+        "quote": "good to eat?",
+        "label": "Health outcome",
+        "why": "The evaluative terms “good” and “Bad” require specifying which health outcomes determine benefit or harm.",
+        "axisId": "outcome-of-interest",
+        "clusterId": "outcome-of-interest-cues"
+      },
+      {
+        "quote": "Bad to eat?",
+        "label": "Health outcome",
+        "why": "The evaluative terms “good” and “Bad” require specifying which health outcomes determine benefit or harm.",
+        "axisId": "outcome-of-interest",
+        "clusterId": "outcome-of-interest-cues"
+      },
+      {
+        "quote": "Great in moderation?",
+        "label": "Dose and frequency",
+        "why": "“moderation” makes the quantity and frequency of consumption relevant but leaves them unspecified.",
+        "axisId": "egg-dose-frequency",
+        "clusterId": "egg-dose-frequency-cues"
+      },
+      {
+        "quote": "What else should we be paying attention to here?",
+        "label": "What eggs replace",
+        "why": "The broad request for other relevant considerations leaves room for the dietary comparison needed to interpret whether eating eggs is beneficial or harmful.",
+        "axisId": "dietary-counterfactual",
+        "clusterId": "dietary-counterfactual-cues"
+      },
+      {
+        "quote": "Does it vary across people,",
+        "label": "Individual differences",
+        "why": "The question explicitly asks whether effects differ between people and which characteristics predict those differences.",
+        "axisId": "population-response",
+        "clusterId": "population-response-cues"
+      },
+      {
+        "quote": "eggs",
+        "label": "Egg and meal context",
+        "why": "The question identifies eggs as the exposure and eating as the context but does not specify egg form, preparation, or accompanying foods.",
+        "axisId": "egg-form-context",
+        "clusterId": "egg-form-context-cues"
+      },
+      {
+        "quote": "How can we tell?",
+        "label": "Time horizon",
+        "why": "Determining whether eggs are beneficial or harmful depends in part on whether assessment concerns acute responses, intermediate biomarkers, or long-term outcomes.",
+        "axisId": "time-horizon-evidence",
+        "clusterId": "time-horizon-evidence-cues"
+      },
+      {
+        "quote": "What else should we be paying attention to here?",
+        "label": "Broader tradeoffs",
+        "why": "The question explicitly requests additional considerations that may matter beyond a simple good-versus-bad assessment.",
+        "axisId": "tradeoffs-downsides",
+        "clusterId": "tradeoffs-downsides-cues"
+      }
+    ],
+    "clusters": [
+      {
+        "id": "outcome-of-interest-cues",
+        "label": "Health outcome",
+        "axisId": "outcome-of-interest",
+        "highlightQuotes": [
+          "good to eat?",
+          "Bad to eat?"
+        ],
+        "latentVariable": "meaning of health benefit or harm",
+        "rationale": "The evaluative terms “good” and “Bad” require specifying which health outcomes determine benefit or harm.",
+        "ingestionRequirements": {
+          "requiredFields": [
+            "outcome definition and diagnostic/measurement criteria",
+            "effect measure and absolute as well as relative effect",
+            "baseline risk",
+            "confounder adjustment set",
+            "study design",
+            "event count or sample size"
+          ],
+          "searchConcepts": [
+            "egg consumption cardiovascular disease mortality",
+            "eggs LDL cholesterol ApoB",
+            "eggs satiety body composition",
+            "eggs nutrient adequacy choline vitamin B12",
+            "egg consumption all-cause health outcomes"
+          ],
+          "mismatchRisks": [
+            "treating biomarker changes as equivalent to clinical events",
+            "combining cardiovascular, metabolic, nutritional, and weight outcomes into a single good/bad judgment",
+            "using relative risk without baseline absolute risk",
+            "inferring causality from observational associations"
+          ]
+        }
+      },
+      {
+        "id": "egg-dose-frequency-cues",
+        "label": "Dose and frequency",
+        "axisId": "egg-dose-frequency",
+        "highlightQuotes": [
+          "Great in moderation?"
+        ],
+        "latentVariable": "amount and frequency of egg consumption",
+        "rationale": "“moderation” makes the quantity and frequency of consumption relevant but leaves them unspecified.",
+        "ingestionRequirements": {
+          "requiredFields": [
+            "eggs per day or week",
+            "serving definition and egg size",
+            "dose categories and reference category",
+            "duration of exposure",
+            "dose-response shape",
+            "whether intake was measured once or repeatedly"
+          ],
+          "searchConcepts": [
+            "egg consumption dose response",
+            "eggs per day cardiovascular risk",
+            "high egg intake cholesterol",
+            "egg intake nonlinear dose response"
+          ],
+          "mismatchRisks": [
+            "pooling one egg daily with substantially higher intakes",
+            "assuming linear effects across doses",
+            "converting dietary-frequency categories into egg counts inaccurately",
+            "ignoring changes in consumption over long follow-up"
+          ]
+        }
+      },
+      {
+        "id": "dietary-counterfactual-cues",
+        "label": "What eggs replace",
+        "axisId": "dietary-counterfactual",
+        "highlightQuotes": [
+          "What else should we be paying attention to here?"
+        ],
+        "latentVariable": "dietary alternative or displaced food",
+        "rationale": "The broad request for other relevant considerations leaves room for the dietary comparison needed to interpret whether eating eggs is beneficial or harmful.",
+        "ingestionRequirements": {
+          "requiredFields": [
+            "explicit comparator food or dietary pattern",
+            "whether eggs replace another food or add calories",
+            "energy matching or adjustment",
+            "macronutrient differences between arms",
+            "substitution model specification"
+          ],
+          "searchConcepts": [
+            "egg substitution red meat cardiovascular",
+            "eggs versus refined carbohydrate breakfast",
+            "eggs versus plant protein",
+            "isocaloric egg substitution",
+            "dietary substitution analysis eggs"
+          ],
+          "mismatchRisks": [
+            "interpreting an association with egg intake without identifying what lower egg intake implies eating instead",
+            "confusing food addition with food substitution",
+            "comparing interventions with materially different calorie intake",
+            "attributing effects of displaced foods to eggs"
+          ]
+        }
+      },
+      {
+        "id": "population-response-cues",
+        "label": "Individual differences",
+        "axisId": "population-response",
+        "highlightQuotes": [
+          "Does it vary across people,"
+        ],
+        "latentVariable": "heterogeneity of individual response",
+        "rationale": "The question explicitly asks whether effects differ between people and which characteristics predict those differences.",
+        "ingestionRequirements": {
+          "requiredFields": [
+            "age and sex distribution",
+            "baseline LDL ApoB and cardiovascular risk",
+            "diabetes or insulin-resistance status",
+            "familial hypercholesterolemia or relevant genetic status",
+            "baseline diet and egg intake",
+            "subgroup interaction estimate rather than within-subgroup significance alone"
+          ],
+          "searchConcepts": [
+            "egg consumption diabetes cardiovascular risk",
+            "egg cholesterol hyper-responder",
+            "dietary cholesterol LDL response genetics",
+            "eggs familial hypercholesterolemia",
+            "egg intake subgroup interaction"
+          ],
+          "mismatchRisks": [
+            "generalizing healthy-population estimates to high-risk groups",
+            "calling subgroup effects different without a formal interaction test",
+            "confusing individual biomarker response variability with differences in hard-outcome risk",
+            "treating broad labels such as diabetes as biologically homogeneous"
+          ]
+        }
+      },
+      {
+        "id": "egg-form-context-cues",
+        "label": "Egg and meal context",
+        "axisId": "egg-form-context",
+        "highlightQuotes": [
+          "eggs"
+        ],
+        "latentVariable": "form, preparation, and meal context of egg exposure",
+        "rationale": "The question identifies eggs as the exposure and eating as the context but does not specify egg form, preparation, or accompanying foods.",
+        "ingestionRequirements": {
+          "requiredFields": [
+            "whole egg versus white",
+            "cooking method",
+            "added fat type and quantity",
+            "co-consumed foods",
+            "processed-meat co-consumption",
+            "whether exposure definition distinguishes eggs from egg-containing dishes"
+          ],
+          "searchConcepts": [
+            "whole eggs versus egg whites lipids",
+            "egg preparation cardiovascular risk",
+            "fried eggs butter dietary pattern",
+            "eggs processed meat confounding",
+            "egg meal composition"
+          ],
+          "mismatchRisks": [
+            "attributing effects of butter oil or processed meat to eggs",
+            "combining egg whites with whole eggs despite different nutrient and cholesterol exposure",
+            "treating eggs in mixed dishes as equivalent to minimally prepared eggs",
+            "residual confounding by breakfast or dietary pattern"
+          ]
+        }
+      },
+      {
+        "id": "time-horizon-evidence-cues",
+        "label": "Time horizon",
+        "axisId": "time-horizon-evidence",
+        "highlightQuotes": [
+          "How can we tell?"
+        ],
+        "latentVariable": "period over which effects are assessed",
+        "rationale": "Determining whether eggs are beneficial or harmful depends in part on whether assessment concerns acute responses, intermediate biomarkers, or long-term outcomes.",
+        "ingestionRequirements": {
+          "requiredFields": [
+            "follow-up duration",
+            "timing of outcome measurement",
+            "latency appropriate to outcome",
+            "trial duration for biomarkers",
+            "person-years and loss to follow-up for clinical outcomes"
+          ],
+          "searchConcepts": [
+            "acute egg meal metabolic response",
+            "egg randomized trial LDL weeks months",
+            "egg consumption prospective cohort cardiovascular years",
+            "egg consumption long-term mortality"
+          ],
+          "mismatchRisks": [
+            "using short biomarker trials to directly infer decades-long clinical outcomes",
+            "using long-term observational studies to answer acute satiety questions",
+            "ignoring latency between exposure and disease",
+            "extrapolating effects beyond observed follow-up"
+          ]
+        }
+      },
+      {
+        "id": "tradeoffs-downsides-cues",
+        "label": "Broader tradeoffs",
+        "axisId": "tradeoffs-downsides",
+        "highlightQuotes": [
+          "What else should we be paying attention to here?"
+        ],
+        "latentVariable": "considerations beyond the headline health judgment",
+        "rationale": "The question explicitly requests additional considerations that may matter beyond a simple good-versus-bad assessment.",
+        "ingestionRequirements": {
+          "requiredFields": [
+            "protein and micronutrient contribution",
+            "foods or nutrients displaced",
+            "foodborne illness conditions and preparation",
+            "allergy or intolerance applicability",
+            "cost and convenience where measured",
+            "environmental metric and system boundary for sustainability claims"
+          ],
+          "searchConcepts": [
+            "eggs protein choline micronutrients",
+            "eggs nutrient density diet quality",
+            "egg food safety Salmonella cooking",
+            "egg allergy prevalence",
+            "egg environmental footprint sustainability"
+          ],
+          "mismatchRisks": [
+            "letting a single nutrient benefit stand in for net health benefit",
+            "ignoring opportunity cost of foods displaced by eggs",
+            "mixing food-safety risk with chronic-disease risk",
+            "generalizing environmental estimates across production systems or regions"
+          ]
+        }
+      }
+    ],
+    "axes": [
+      {
+        "id": "outcome-of-interest",
+        "label": "Health outcome",
+        "question": "What does “good” or “bad” mean here?",
+        "branches": [
+          {
+            "id": "outcome-of-interest-cardiovascular-disease-a",
+            "label": "cardiovascular disease and mortality",
+            "value": "cardiovascular disease and mortality",
+            "detail": "Treat “cardiovascular disease and mortality” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "kept",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "outcome-of-interest-blood-lipids-and-metabol",
+            "label": "blood lipids and metabolic markers",
+            "value": "blood lipids and metabolic markers",
+            "detail": "Treat “blood lipids and metabolic markers” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "outcome-of-interest-weight-satiety-and-body-",
+            "label": "weight, satiety, and body composition",
+            "value": "weight, satiety, and body composition",
+            "detail": "Treat “weight, satiety, and body composition” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "outcome-of-interest-nutrient-adequacy-and-de",
+            "label": "nutrient adequacy and deficiency risk",
+            "value": "nutrient adequacy and deficiency risk",
+            "detail": "Treat “nutrient adequacy and deficiency risk” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "outcome-of-interest-overall-health-across-mu",
+            "label": "overall health across multiple outcomes",
+            "value": "overall health across multiple outcomes",
+            "detail": "Treat “overall health across multiple outcomes” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "parked",
+            "relevance": "medium",
+            "origin": "ai"
+          }
+        ]
+      },
+      {
+        "id": "egg-dose-frequency",
+        "label": "Dose and frequency",
+        "question": "How much egg consumption should be evaluated?",
+        "branches": [
+          {
+            "id": "egg-dose-frequency-less-than-1-egg-per-week",
+            "label": "less than 1 egg per week",
+            "value": "less than 1 egg per week",
+            "detail": "Treat “less than 1 egg per week” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "kept",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "egg-dose-frequency-2-4-eggs-per-week",
+            "label": "2–4 eggs per week",
+            "value": "2–4 eggs per week",
+            "detail": "Treat “2–4 eggs per week” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "egg-dose-frequency-about-1-egg-per-day",
+            "label": "about 1 egg per day",
+            "value": "about 1 egg per day",
+            "detail": "Treat “about 1 egg per day” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "egg-dose-frequency-2-eggs-per-day",
+            "label": "2 eggs per day",
+            "value": "2 eggs per day",
+            "detail": "Treat “2 eggs per day” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "egg-dose-frequency-3-eggs-per-day",
+            "label": "3+ eggs per day",
+            "value": "3+ eggs per day",
+            "detail": "Treat “3+ eggs per day” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "parked",
+            "relevance": "medium",
+            "origin": "ai"
+          }
+        ]
+      },
+      {
+        "id": "dietary-counterfactual",
+        "label": "What eggs replace",
+        "question": "Compared with what realistic alternative should eating eggs be evaluated?",
+        "branches": [
+          {
+            "id": "dietary-counterfactual-eggs-instead-of-processe",
+            "label": "eggs instead of processed/red meat breakfast",
+            "value": "eggs instead of processed/red meat breakfast",
+            "detail": "Treat “eggs instead of processed/red meat breakfast” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "kept",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "dietary-counterfactual-eggs-instead-of-refined-",
+            "label": "eggs instead of refined-carbohydrate breakfast",
+            "value": "eggs instead of refined-carbohydrate breakfast",
+            "detail": "Treat “eggs instead of refined-carbohydrate breakfast” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "dietary-counterfactual-eggs-instead-of-plant-pr",
+            "label": "eggs instead of plant-protein foods",
+            "value": "eggs instead of plant-protein foods",
+            "detail": "Treat “eggs instead of plant-protein foods” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "dietary-counterfactual-eggs-added-without-repla",
+            "label": "eggs added without replacing other calories",
+            "value": "eggs added without replacing other calories",
+            "detail": "Treat “eggs added without replacing other calories” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "dietary-counterfactual-lower-egg-version-of-the",
+            "label": "lower-egg version of the same overall diet",
+            "value": "lower-egg version of the same overall diet",
+            "detail": "Treat “lower-egg version of the same overall diet” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "parked",
+            "relevance": "medium",
+            "origin": "ai"
+          }
+        ]
+      },
+      {
+        "id": "population-response",
+        "label": "Individual differences",
+        "question": "Which populations might have meaningfully different benefits or harms, and what predicts response?",
+        "branches": [
+          {
+            "id": "population-response-generally-healthy-adults",
+            "label": "generally healthy adults",
+            "value": "generally healthy adults",
+            "detail": "Treat “generally healthy adults” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "kept",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "population-response-people-with-high-ldl-or-",
+            "label": "people with high LDL or cardiovascular risk",
+            "value": "people with high LDL or cardiovascular risk",
+            "detail": "Treat “people with high LDL or cardiovascular risk” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "population-response-people-with-diabetes-or-",
+            "label": "people with diabetes or insulin resistance",
+            "value": "people with diabetes or insulin resistance",
+            "detail": "Treat “people with diabetes or insulin resistance” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "population-response-people-with-familial-gen",
+            "label": "people with familial/genetic lipid disorders",
+            "value": "people with familial/genetic lipid disorders",
+            "detail": "Treat “people with familial/genetic lipid disorders” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "population-response-children-older-adults-or",
+            "label": "children, older adults, or other high-nutrient-need groups",
+            "value": "children, older adults, or other high-nutrient-need groups",
+            "detail": "Treat “children, older adults, or other high-nutrient-need groups” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "parked",
+            "relevance": "medium",
+            "origin": "ai"
+          }
+        ]
+      },
+      {
+        "id": "egg-form-context",
+        "label": "Egg and meal context",
+        "question": "What exactly counts as the egg exposure being compared?",
+        "branches": [
+          {
+            "id": "egg-form-context-whole-eggs",
+            "label": "whole eggs",
+            "value": "whole eggs",
+            "detail": "Treat “whole eggs” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "kept",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "egg-form-context-egg-whites",
+            "label": "egg whites",
+            "value": "egg whites",
+            "detail": "Treat “egg whites” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "egg-form-context-eggs-cooked-with-little-",
+            "label": "eggs cooked with little added fat",
+            "value": "eggs cooked with little added fat",
+            "detail": "Treat “eggs cooked with little added fat” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "egg-form-context-eggs-fried-or-cooked-wit",
+            "label": "eggs fried or cooked with substantial butter/oil",
+            "value": "eggs fried or cooked with substantial butter/oil",
+            "detail": "Treat “eggs fried or cooked with substantial butter/oil” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "egg-form-context-eggs-eaten-in-meals-cont",
+            "label": "eggs eaten in meals containing processed meat or other major confounders",
+            "value": "eggs eaten in meals containing processed meat or other major confounders",
+            "detail": "Treat “eggs eaten in meals containing processed meat or other major confounders” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "parked",
+            "relevance": "medium",
+            "origin": "ai"
+          }
+        ]
+      },
+      {
+        "id": "time-horizon-evidence",
+        "label": "Time horizon",
+        "question": "Over what period should benefits and harms be judged?",
+        "branches": [
+          {
+            "id": "time-horizon-evidence-hours-to-days-satiety-an",
+            "label": "hours to days: satiety and acute metabolic response",
+            "value": "hours to days: satiety and acute metabolic response",
+            "detail": "Treat “hours to days: satiety and acute metabolic response” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "kept",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "time-horizon-evidence-weeks-to-months-ldl-and-",
+            "label": "weeks to months: LDL and other biomarkers",
+            "value": "weeks to months: LDL and other biomarkers",
+            "detail": "Treat “weeks to months: LDL and other biomarkers” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "time-horizon-evidence-years-disease-incidence",
+            "label": "years: disease incidence",
+            "value": "years: disease incidence",
+            "detail": "Treat “years: disease incidence” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "time-horizon-evidence-decades-cardiovascular-e",
+            "label": "decades: cardiovascular events and mortality",
+            "value": "decades: cardiovascular events and mortality",
+            "detail": "Treat “decades: cardiovascular events and mortality” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "parked",
+            "relevance": "medium",
+            "origin": "ai"
+          }
+        ]
+      },
+      {
+        "id": "tradeoffs-downsides",
+        "label": "Broader tradeoffs",
+        "question": "What important considerations beyond the headline health outcome should affect the decision?",
+        "branches": [
+          {
+            "id": "tradeoffs-downsides-protein-and-micronutrien",
+            "label": "protein and micronutrient value",
+            "value": "protein and micronutrient value",
+            "detail": "Treat “protein and micronutrient value” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "kept",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "tradeoffs-downsides-diet-quality-and-displac",
+            "label": "diet quality and displacement of other foods",
+            "value": "diet quality and displacement of other foods",
+            "detail": "Treat “diet quality and displacement of other foods” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "high",
+            "origin": "ai"
+          },
+          {
+            "id": "tradeoffs-downsides-food-safety-and-preparat",
+            "label": "food safety and preparation",
+            "value": "food safety and preparation",
+            "detail": "Treat “food safety and preparation” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "tradeoffs-downsides-allergy-or-intolerance",
+            "label": "allergy or intolerance",
+            "value": "allergy or intolerance",
+            "detail": "Treat “allergy or intolerance” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "candidate",
+            "relevance": "medium",
+            "origin": "ai"
+          },
+          {
+            "id": "tradeoffs-downsides-cost-convenience-and-sus",
+            "label": "cost, convenience, and sustainability",
+            "value": "cost, convenience, and sustainability",
+            "detail": "Treat “cost, convenience, and sustainability” as one concrete reading of this dimension.",
+            "why": "Changing this reading changes the scoped claim or the evidence that can bear on it.",
+            "status": "parked",
+            "relevance": "medium",
+            "origin": "ai"
+          }
+        ]
+      }
+    ],
+    "claimTemplate": "For {{population-response}}, consuming {{egg-dose-frequency}} as {{egg-form-context}}, compared with {{dietary-counterfactual}}, has what benefits or harms for {{outcome-of-interest}} over {{time-horizon-evidence}}, accounting for {{tradeoffs-downsides}}?",
+    "knownUnknowns": [
+      "The asker’s primary health objective is unknown.",
+      "The asker’s intended egg intake and current intake are unknown.",
+      "The realistic food or meal that eggs would replace is unknown.",
+      "The asker’s relevant baseline cardiovascular, lipid, metabolic, genetic, allergy, and life-stage context is unknown.",
+      "The intended preparation and foods commonly eaten with the eggs are unknown."
+    ],
+    "contextQuestions": [
+      {
+        "id": "personal-risk-context",
+        "label": "Risk context",
+        "question": "Which description best matches the person this decision is for?",
+        "whyItMatters": "Baseline cardiovascular, lipid, metabolic, genetic, allergy, and life-stage factors can change evidence applicability and make different response branches relevant.",
+        "effect": "match",
+        "options": [
+          "healthy adult, no known major risk factors",
+          "high LDL or cardiovascular risk",
+          "diabetes or insulin resistance",
+          "familial/genetic lipid disorder",
+          "child or older adult"
+        ]
+      },
+      {
+        "id": "decision-outcome",
+        "label": "Main goal",
+        "question": "What outcome matters most for this decision?",
+        "whyItMatters": "This determines whether the evidence search should prioritize clinical events, lipid/metabolic biomarkers, weight and satiety, nutrient adequacy, or an overall tradeoff.",
+        "effect": "prune",
+        "options": [
+          "heart disease and longevity",
+          "LDL/ApoB and metabolic markers",
+          "weight and satiety",
+          "protein and micronutrients",
+          "overall health tradeoff"
+        ]
+      },
+      {
+        "id": "intended-intake",
+        "label": "Egg intake",
+        "question": "What intake are you actually considering?",
+        "whyItMatters": "Dose-response evidence may differ substantially between occasional, daily, and multiple-eggs-per-day consumption.",
+        "effect": "prune",
+        "options": [
+          "<1/week",
+          "2–4/week",
+          "~1/day",
+          "2/day",
+          "3+/day"
+        ]
+      },
+      {
+        "id": "replacement-food",
+        "label": "What changes",
+        "question": "If you eat more eggs, what would they usually replace?",
+        "whyItMatters": "The relevant causal comparison depends on the displaced food; adding eggs without replacing calories is a materially different intervention.",
+        "effect": "branch",
+        "options": [
+          "processed/red meat",
+          "refined-carb breakfast",
+          "plant protein",
+          "nothing; added calories",
+          "same diet with fewer eggs"
+        ]
+      },
+      {
+        "id": "usual-preparation",
+        "label": "Preparation",
+        "question": "How would you usually eat the eggs?",
+        "whyItMatters": "Whole eggs versus whites, added fats, and processed-meat accompaniments change the exposure and can alter or confound the comparison.",
+        "effect": "match",
+        "options": [
+          "whole eggs, little added fat",
+          "whole eggs fried in substantial fat",
+          "egg whites",
+          "with processed meat",
+          "varies / free text"
+        ]
+      }
+    ]
+  },
+  "assembly": "Local preservation fix; original model outputs reused; no new provider calls"
+}

@@ -1,0 +1,18 @@
+{
+  "status": "blocked",
+  "completed": [
+    "Saved exact user question",
+    "Started local application and companion",
+    "Verified Claude authentication",
+    "Submitted question to /api/decompose"
+  ],
+  "blocker": {
+    "stage": "decomposition",
+    "httpStatus": 401,
+    "message": "No reusable decomposition is cached for this question and model. Add an OpenRouter key in Settings to create one."
+  },
+  "evidenceDiscoveryStarted": false,
+  "acceptedEvidenceAdded": false,
+  "synthesisProduced": false,
+  "nextStep": "Configure OPENROUTER_API_KEY in app/.env.local or use an authenticated browser Settings submission, then resume."
+}

@@ -1,0 +1,253 @@
+{
+  "enrichments": [
+    {
+      "axisId": "outcome-of-interest",
+      "requiredFields": [
+        "outcome definition and diagnostic/measurement criteria",
+        "effect measure and absolute as well as relative effect",
+        "baseline risk",
+        "confounder adjustment set",
+        "study design",
+        "event count or sample size"
+      ],
+      "searchConcepts": [
+        "egg consumption cardiovascular disease mortality",
+        "eggs LDL cholesterol ApoB",
+        "eggs satiety body composition",
+        "eggs nutrient adequacy choline vitamin B12",
+        "egg consumption all-cause health outcomes"
+      ],
+      "mismatchRisks": [
+        "treating biomarker changes as equivalent to clinical events",
+        "combining cardiovascular, metabolic, nutritional, and weight outcomes into a single good/bad judgment",
+        "using relative risk without baseline absolute risk",
+        "inferring causality from observational associations"
+      ]
+    },
+    {
+      "axisId": "egg-dose-frequency",
+      "requiredFields": [
+        "eggs per day or week",
+        "serving definition and egg size",
+        "dose categories and reference category",
+        "duration of exposure",
+        "dose-response shape",
+        "whether intake was measured once or repeatedly"
+      ],
+      "searchConcepts": [
+        "egg consumption dose response",
+        "eggs per day cardiovascular risk",
+        "high egg intake cholesterol",
+        "egg intake nonlinear dose response"
+      ],
+      "mismatchRisks": [
+        "pooling one egg daily with substantially higher intakes",
+        "assuming linear effects across doses",
+        "converting dietary-frequency categories into egg counts inaccurately",
+        "ignoring changes in consumption over long follow-up"
+      ]
+    },
+    {
+      "axisId": "dietary-counterfactual",
+      "requiredFields": [
+        "explicit comparator food or dietary pattern",
+        "whether eggs replace another food or add calories",
+        "energy matching or adjustment",
+        "macronutrient differences between arms",
+        "substitution model specification"
+      ],
+      "searchConcepts": [
+        "egg substitution red meat cardiovascular",
+        "eggs versus refined carbohydrate breakfast",
+        "eggs versus plant protein",
+        "isocaloric egg substitution",
+        "dietary substitution analysis eggs"
+      ],
+      "mismatchRisks": [
+        "interpreting an association with egg intake without identifying what lower egg intake implies eating instead",
+        "confusing food addition with food substitution",
+        "comparing interventions with materially different calorie intake",
+        "attributing effects of displaced foods to eggs"
+      ]
+    },
+    {
+      "axisId": "population-response",
+      "requiredFields": [
+        "age and sex distribution",
+        "baseline LDL ApoB and cardiovascular risk",
+        "diabetes or insulin-resistance status",
+        "familial hypercholesterolemia or relevant genetic status",
+        "baseline diet and egg intake",
+        "subgroup interaction estimate rather than within-subgroup significance alone"
+      ],
+      "searchConcepts": [
+        "egg consumption diabetes cardiovascular risk",
+        "egg cholesterol hyper-responder",
+        "dietary cholesterol LDL response genetics",
+        "eggs familial hypercholesterolemia",
+        "egg intake subgroup interaction"
+      ],
+      "mismatchRisks": [
+        "generalizing healthy-population estimates to high-risk groups",
+        "calling subgroup effects different without a formal interaction test",
+        "confusing individual biomarker response variability with differences in hard-outcome risk",
+        "treating broad labels such as diabetes as biologically homogeneous"
+      ]
+    },
+    {
+      "axisId": "egg-form-context",
+      "requiredFields": [
+        "whole egg versus white",
+        "cooking method",
+        "added fat type and quantity",
+        "co-consumed foods",
+        "processed-meat co-consumption",
+        "whether exposure definition distinguishes eggs from egg-containing dishes"
+      ],
+      "searchConcepts": [
+        "whole eggs versus egg whites lipids",
+        "egg preparation cardiovascular risk",
+        "fried eggs butter dietary pattern",
+        "eggs processed meat confounding",
+        "egg meal composition"
+      ],
+      "mismatchRisks": [
+        "attributing effects of butter oil or processed meat to eggs",
+        "combining egg whites with whole eggs despite different nutrient and cholesterol exposure",
+        "treating eggs in mixed dishes as equivalent to minimally prepared eggs",
+        "residual confounding by breakfast or dietary pattern"
+      ]
+    },
+    {
+      "axisId": "time-horizon-evidence",
+      "requiredFields": [
+        "follow-up duration",
+        "timing of outcome measurement",
+        "latency appropriate to outcome",
+        "trial duration for biomarkers",
+        "person-years and loss to follow-up for clinical outcomes"
+      ],
+      "searchConcepts": [
+        "acute egg meal metabolic response",
+        "egg randomized trial LDL weeks months",
+        "egg consumption prospective cohort cardiovascular years",
+        "egg consumption long-term mortality"
+      ],
+      "mismatchRisks": [
+        "using short biomarker trials to directly infer decades-long clinical outcomes",
+        "using long-term observational studies to answer acute satiety questions",
+        "ignoring latency between exposure and disease",
+        "extrapolating effects beyond observed follow-up"
+      ]
+    },
+    {
+      "axisId": "tradeoffs-downsides",
+      "requiredFields": [
+        "protein and micronutrient contribution",
+        "foods or nutrients displaced",
+        "foodborne illness conditions and preparation",
+        "allergy or intolerance applicability",
+        "cost and convenience where measured",
+        "environmental metric and system boundary for sustainability claims"
+      ],
+      "searchConcepts": [
+        "eggs protein choline micronutrients",
+        "eggs nutrient density diet quality",
+        "egg food safety Salmonella cooking",
+        "egg allergy prevalence",
+        "egg environmental footprint sustainability"
+      ],
+      "mismatchRisks": [
+        "letting a single nutrient benefit stand in for net health benefit",
+        "ignoring opportunity cost of foods displaced by eggs",
+        "mixing food-safety risk with chronic-disease risk",
+        "generalizing environmental estimates across production systems or regions"
+      ]
+    }
+  ],
+  "claimTemplate": "For {{population-response}}, consuming {{egg-dose-frequency}} as {{egg-form-context}}, compared with {{dietary-counterfactual}}, has what benefits or harms for {{outcome-of-interest}} over {{time-horizon-evidence}}, accounting for {{tradeoffs-downsides}}?",
+  "knownUnknowns": [
+    "The asker’s primary health objective is unknown.",
+    "The asker’s intended egg intake and current intake are unknown.",
+    "The realistic food or meal that eggs would replace is unknown.",
+    "The asker’s relevant baseline cardiovascular, lipid, metabolic, genetic, allergy, and life-stage context is unknown.",
+    "The intended preparation and foods commonly eaten with the eggs are unknown."
+  ],
+  "contextQuestions": [
+    {
+      "id": "personal-risk-context",
+      "label": "Risk context",
+      "question": "Which description best matches the person this decision is for?",
+      "whyItMatters": "Baseline cardiovascular, lipid, metabolic, genetic, allergy, and life-stage factors can change evidence applicability and make different response branches relevant.",
+      "effect": "match",
+      "options": [
+        "healthy adult, no known major risk factors",
+        "high LDL or cardiovascular risk",
+        "diabetes or insulin resistance",
+        "familial/genetic lipid disorder",
+        "child or older adult",
+        "egg allergy/intolerance",
+        "other / free text"
+      ]
+    },
+    {
+      "id": "decision-outcome",
+      "label": "Main goal",
+      "question": "What outcome matters most for this decision?",
+      "whyItMatters": "This determines whether the evidence search should prioritize clinical events, lipid/metabolic biomarkers, weight and satiety, nutrient adequacy, or an overall tradeoff.",
+      "effect": "prune",
+      "options": [
+        "heart disease and longevity",
+        "LDL/ApoB and metabolic markers",
+        "weight and satiety",
+        "protein and micronutrients",
+        "overall health tradeoff",
+        "other / free text"
+      ]
+    },
+    {
+      "id": "intended-intake",
+      "label": "Egg intake",
+      "question": "What intake are you actually considering?",
+      "whyItMatters": "Dose-response evidence may differ substantially between occasional, daily, and multiple-eggs-per-day consumption.",
+      "effect": "prune",
+      "options": [
+        "<1/week",
+        "2–4/week",
+        "~1/day",
+        "2/day",
+        "3+/day",
+        "other / free text"
+      ]
+    },
+    {
+      "id": "replacement-food",
+      "label": "What changes",
+      "question": "If you eat more eggs, what would they usually replace?",
+      "whyItMatters": "The relevant causal comparison depends on the displaced food; adding eggs without replacing calories is a materially different intervention.",
+      "effect": "branch",
+      "options": [
+        "processed/red meat",
+        "refined-carb breakfast",
+        "plant protein",
+        "nothing; added calories",
+        "same diet with fewer eggs",
+        "other / free text"
+      ]
+    },
+    {
+      "id": "usual-preparation",
+      "label": "Preparation",
+      "question": "How would you usually eat the eggs?",
+      "whyItMatters": "Whole eggs versus whites, added fats, and processed-meat accompaniments change the exposure and can alter or confound the comparison.",
+      "effect": "match",
+      "options": [
+        "whole eggs, little added fat",
+        "whole eggs fried in substantial fat",
+        "egg whites",
+        "with processed meat",
+        "varies / free text"
+      ]
+    }
+  ]
+}

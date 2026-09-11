@@ -13,9 +13,27 @@ export type AgentPromptId =
   | "adversarial-reviewer"
   | "decision-synthesizer";
 
+export type AgentPromptPhase = "Decompose" | "Contextualize" | "Orchestrate" | "Investigate" | "Synthesize";
+export type AgentPromptRuntime = "hosted" | "companion";
+
+export const agentPromptPhases: Array<{ id: AgentPromptPhase; label: string; blurb: string }> = [
+  { id: "Decompose", label: "Decompose", blurb: "Turn the raw question into inspectable dimensions." },
+  { id: "Contextualize", label: "Contextualize", blurb: "Specify retrieval, evidence requirements, and the context interview." },
+  { id: "Orchestrate", label: "Orchestrate", blurb: "Assign dimension roles and compile the agent research brief." },
+  { id: "Investigate", label: "Investigate", blurb: "Discover sources, extract atomic results, and adversarially review them." },
+  { id: "Synthesize", label: "Synthesize", blurb: "Turn accepted evidence into a reversible action policy." },
+];
+
+export const agentPromptRuntimeLabels: Record<AgentPromptRuntime, string> = {
+  hosted: "Runs on this site",
+  companion: "Local companion only",
+};
+
 export type AgentPromptDefinition = {
   id: AgentPromptId;
   name: string;
+  phase: AgentPromptPhase;
+  runtime: AgentPromptRuntime;
   stage: string;
   role: string;
   description: string;
@@ -32,29 +50,24 @@ export type AgentPromptOverrides = Partial<Record<AgentPromptId, AgentPromptOver
 
 export const defaultDimensionScoutInstructions = `You are the DIMENSION SCOUT in a question-compilation team.
 
-Do one job only: turn a vague paragraph into 4–7 substantive dimensions that would change the answer or the evidence search. Do not answer the question, retrieve evidence, write provenance metadata, or design the context interview.
+Do one job only: turn a vague paragraph into 4–7 substantive dimensions that would change the answer or the evidence search. Do not answer the question, retrieve evidence, or write metadata.
 
-Ground dimensions in the submitted language, then check the useful recurring lenses: outcome/value, exact object, dose/frequency, feasible counterfactual, population, setting, time horizon, implementation, downside, and personal fit. Always include a real comparator for causal or decision questions. Options are bundles, not isolated word senses. Trace constraint cascades. Prefer concrete or quantitative resolutions over labels such as “moderation.”
+Ground dimensions in the submitted language, then check the useful recurring lenses: outcome/value, exact object, dose/frequency, feasible counterfactual, population, setting, time horizon, implementation, downside, and personal fit. Always include a real comparator for causal or decision questions. 
 
-Each dimension needs 2–5 short, mutually distinct resolutions. Use stable lowercase kebab-case ids. Keep the output compact.
-
-Worked calibration:
-“Are eggs good to eat?” can separate: good for which outcome; what kind/preparation of egg; how many and how often; replacing what; and for which population. “Is it better to rent or buy?” must compare two different home-location-rights-cost bundles, not the same house with a payment-method swap.`;
+Each dimension just needs a short 'label' (e.g. "Feasible Counterfactual", "Decision Horizon", "Target Population"). Use stable lowercase kebab-case ids. Keep the output compact.`;
 
 export const defaultTraceSpecialistInstructions = `You are the TRACE SPECIALIST in a question-compilation team.
 
-Given a submitted paragraph and a fixed list of dimensions, map only the exact words that make each dimension relevant. Every quote must be an exact, case-sensitive substring of the paragraph. Use short non-overlapping quotes where possible. Do not invent new dimensions, branches, evidence, or context questions.
+Given a submitted paragraph and a fixed list of dimensions, map only the exact words that make each dimension relevant. Every quote must be an exact, case-sensitive substring of the paragraph. Use short non-overlapping quotes where possible. Do not invent new dimensions.
 
-For each trace, name the observable latent variable and give a concise audit rationale. This is an inspectable derivation trace, not private chain-of-thought. Return traces only for supplied axis ids.`;
+For each trace, name the observable latent variable (e.g. "The specific alternative being considered") and give a concise audit rationale explaining why it matters. Return traces only for supplied dimension ids.`;
 
 export const defaultContextRetrievalInstructions = `You are the CONTEXT AND RETRIEVAL SPECIALIST in a question-compilation team.
 
 Given a submitted paragraph, fixed dimensions, and any known decision context, do three jobs only:
-1. Specify the metadata an evidence collector must capture for each dimension, useful search concepts, and construct-mismatch risks.
-2. Write a readable scoped claim template using placeholders exactly as {{axis-id}}.
-3. Ask 3–5 high-value questions about the asker, ordered by how much they prune the search, create a materially different claim, or change evidence applicability.
-
-Do not answer the substantive question. Do not re-ask facts already present in known context. Keep answer options short and concrete while allowing free text. Treat context as an applicability constraint, never as evidence. Preserve both pruning and newly relevant branches.`;
+1. Define the rigorous evidence ingestion requirements for each dimension (required fields, search concepts, and mismatch risks).
+2. Generate exactly ONE context interview question for EACH dimension. The goal of this question is to ground the dimension in the user's actual life (demographics, budget, local reality, routine). Make the question concrete and provide 2-5 realistic answer options to act as quick handles.
+3. Provide a grammatically correct claimTemplate and list any known unknowns.`;
 
 export const defaultResearchBriefCompilerInstructions = `You are the RESEARCH BRIEF COMPILER between a human-edited interpretation map and an evidence-investigation team.
 
@@ -147,6 +160,8 @@ export const agentPromptDefinitions: AgentPromptDefinition[] = [
   {
     id: "dimension-scout",
     name: "Dimension scout",
+    phase: "Decompose",
+    runtime: "hosted",
     stage: "1 · Decompose",
     role: "Expands the interpretation space",
     description: "Finds the few substantive dimensions whose resolution would change the answer or the evidence search.",
@@ -166,6 +181,8 @@ REPAIR: Return every required field. Keep 4–7 dimensions and at least two conc
   {
     id: "trace-specialist",
     name: "Trace specialist",
+    phase: "Decompose",
+    runtime: "hosted",
     stage: "1 · Decompose",
     role: "Makes the derivation inspectable",
     description: "Maps exact submitted-language cues to the fixed dimensions without inventing new branches.",
@@ -182,6 +199,8 @@ FIXED DIMENSIONS
   {
     id: "context-retrieval",
     name: "Context & retrieval specialist",
+    phase: "Contextualize",
+    runtime: "hosted",
     stage: "1–2 · Decompose / Contextualize",
     role: "Prunes scope and specifies ingestion",
     description: "Builds the claim template, evidence metadata contract, mismatch risks, and high-value context interview.",
@@ -201,6 +220,8 @@ KNOWN DECISION CONTEXT
   {
     id: "research-brief-compiler",
     name: "Research brief compiler",
+    phase: "Orchestrate",
+    runtime: "companion",
     stage: "2–3 · Contextualize / Investigate",
     role: "Turns human-edited scope into an agent contract",
     description: "Builds a non-combinatorial claim portfolio, action space, privacy-safe retrieval briefs, applicability fields, and budget allocation.",
@@ -234,6 +255,8 @@ REPAIR: Return the complete structured research brief draft. Produce 3–7 uniqu
   {
     id: "broad-recall-specialist",
     name: "Lead discovery specialist",
+    phase: "Investigate",
+    runtime: "companion",
     stage: "3 · Investigate",
     role: "Finds broad and applicability-specific candidate sources",
     description: "Runs separate recall and transportability searches while keeping every discovery outside the accepted evidence graph.",
@@ -261,6 +284,8 @@ Search only this lane. Open promising sources when access permits. Return 3–8 
   {
     id: "abstract-extractor",
     name: "Abstract result extractor",
+    phase: "Investigate",
+    runtime: "hosted",
     stage: "3 · Investigate",
     role: "Proposes atomic evidence records",
     description: "Decomposes one PubMed abstract into study, analysis, result, relation, and dependence-family proposals for human review.",
@@ -286,6 +311,8 @@ ABSTRACT
   {
     id: "full-paper-extractor",
     name: "Full-paper extractor",
+    phase: "Investigate",
+    runtime: "companion",
     stage: "3 · Investigate",
     role: "Builds atomic result proposals from preserved full text",
     description: "Reads a hashed local paper artifact and decomposes methods, analyses, results, interpretations, and claim relations.",
@@ -318,6 +345,8 @@ Read the preserved artifact before producing the structured extraction. Copy exa
   {
     id: "adversarial-reviewer",
     name: "Adversarial reviewer",
+    phase: "Investigate",
+    runtime: "companion",
     stage: "3 · Investigate",
     role: "Attempts to falsify every proposed result",
     description: "A fresh process using a different model independently checks quotations, locators, scope, polarity, and result boundaries.",
@@ -353,6 +382,8 @@ Independently read the source, review every resultIndex exactly once, and repeat
   {
     id: "decision-synthesizer",
     name: "Decision synthesizer",
+    phase: "Synthesize",
+    runtime: "hosted",
     stage: "4 · Artifact",
     role: "Turns accepted evidence into a reversible action policy",
     description: "Reads only the accepted result graph, keeps applicability and human values separate, and exposes cruxes and flip conditions.",

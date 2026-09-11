@@ -1,0 +1,11 @@
+{
+  "status": "completed",
+  "completedAt": "2026-09-10T17:37:52.600Z",
+  "stages": [
+    "dimension-scout",
+    "trace-specialist",
+    "context-retrieval"
+  ],
+  "contextualizationConducted": false,
+  "researchStarted": false
+}
