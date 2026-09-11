@@ -9462,3 +9462,123 @@ button.primary-link:disabled {
     flex-direction: column;
   }
 }
+
+/* Inline dimension editor (homepage review) */
+.cluster-edit-flow .story-step {
+  gap: 12px;
+}
+
+.inline-edit-title,
+.inline-edit-h4 {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  padding: 10px 14px;
+  resize: vertical;
+  width: 100%;
+}
+
+.inline-edit-title {
+  font-size: clamp(24px, 3vw, 40px);
+}
+
+.inline-edit-h4 {
+  font-size: clamp(20px, 2.6vw, 34px);
+}
+
+.inline-edit-p {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.65;
+  padding: 12px 14px;
+  resize: vertical;
+  width: 100%;
+}
+
+.inline-edit-title:focus,
+.inline-edit-h4:focus,
+.inline-edit-p:focus,
+.inline-edit-input:focus {
+  border-color: var(--green);
+  outline: none;
+}
+
+.inline-edit-list {
+  display: grid;
+  gap: 7px;
+}
+
+.inline-edit-list > strong {
+  color: var(--ink-soft);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inline-edit-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.inline-edit-input {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  flex: 1;
+  font-size: 13px;
+  min-width: 0;
+  padding: 9px 11px;
+}
+
+.inline-edit-remove {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
+  padding: 8px 10px;
+}
+
+.inline-edit-remove:hover {
+  color: #b4342a;
+}
+
+.inline-edit-add {
+  background: transparent;
+  border: 1px dashed var(--line-dark);
+  border-radius: 8px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 11px;
+  justify-self: start;
+  padding: 7px 11px;
+}
+
+.inline-edit-add:hover {
+  color: var(--ink);
+}
+
+.cluster-edit-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.quiet-button.danger {
+  color: #b4342a;
+}

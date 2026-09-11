@@ -122,6 +122,26 @@ function storedAgentPromptOverrides(): AgentPromptOverrides {
   }
 }
 
+function EditableStringList({ title, items, onChange }: { title: string; items: string[]; onChange: (items: string[]) => void }) {
+  return (
+    <div className="inline-edit-list">
+      <strong>{title}</strong>
+      {items.map((item, index) => (
+        <div className="inline-edit-row" key={index}>
+          <input
+            className="inline-edit-input"
+            value={item}
+            spellCheck={false}
+            onChange={(event) => onChange(items.map((value, i) => (i === index ? event.target.value : value)))}
+          />
+          <button type="button" className="inline-edit-remove" aria-label={`Remove ${title} item`} onClick={() => onChange(items.filter((_, i) => i !== index))}>×</button>
+        </div>
+      ))}
+      <button type="button" className="inline-edit-add" onClick={() => onChange([...items, ""])}>+ Add</button>
+    </div>
+  );
+}
+
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [decisionContext, setDecisionContext] = useState("");
@@ -930,7 +950,9 @@ export default function Home() {
                         <span>Cluster {String(clusterIndex + 1).padStart(2, "0")}</span>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <h3>{cluster.label}</h3>
-                          <button type="button" className="icon-button" onClick={() => { setEditingClusterId(cluster.id); setEditDraft(cluster); }}>Edit</button>
+                          {editingClusterId !== cluster.id && (
+                            <button type="button" className="icon-button" onClick={() => { setEditingClusterId(cluster.id); setEditDraft(cluster); }}>Edit</button>
+                          )}
                         </div>
                         <div className="chapter-cues">{cluster.highlightQuotes.map((quote) => {
                           const highlightIndex = result.decomposition.highlights.findIndex(
@@ -951,20 +973,39 @@ export default function Home() {
                       </header>
 
                                             {editingClusterId === cluster.id ? (
-                        <div className="story-flow" style={{ padding: "1rem", background: "var(--background-soft)", borderRadius: "8px" }}>
-                          <label>Label</label>
-                          <input type="text" value={editDraft.label} onChange={(e) => setEditDraft({...editDraft, label: e.target.value})} style={{ width: "100%", marginBottom: "1rem" }} />
-                          <label>Latent Variable</label>
-                          <input type="text" value={editDraft.latentVariable} onChange={(e) => setEditDraft({...editDraft, latentVariable: e.target.value})} style={{ width: "100%", marginBottom: "1rem" }} />
-                          <label>Rationale</label>
-                          <input type="text" value={editDraft.rationale} onChange={(e) => setEditDraft({...editDraft, rationale: e.target.value})} style={{ width: "100%", marginBottom: "1rem" }} />
-                          <div style={{ display: "flex", gap: "1rem" }}>
-                            <button onClick={saveClusterEdit}>Save</button>
-                            <button onClick={() => setEditingClusterId(null)}>Cancel</button>
-                            <button onClick={() => {
-                               setResult({...result, decomposition: {...result.decomposition, clusters: result.decomposition.clusters.filter(c => c.id !== cluster.id)}});
-                               setEditingClusterId(null);
-                            }} style={{ color: "red" }}>Delete</button>
+                        <div className="story-flow cluster-edit-flow" aria-label={`Edit ${cluster.label}`}>
+                          <section className="story-step" data-step-index="0">
+                            <span><b>01</b> Dimension label</span>
+                            <textarea className="inline-edit-title" rows={2} value={editDraft.label} onChange={(e) => setEditDraft({ ...editDraft, label: e.target.value })} />
+                          </section>
+                          <div className="story-connector"><span>licensed by these literal cues</span><i>↓</i></div>
+                          <section className="story-step" data-step-index="1">
+                            <span><b>02</b> Exact language</span>
+                            <EditableStringList title="Cues (must be exact substrings of the question)" items={editDraft.highlightQuotes} onChange={(highlightQuotes) => setEditDraft({ ...editDraft, highlightQuotes })} />
+                          </section>
+                          <div className="story-connector"><span>grouped because they imply</span><i>↓</i></div>
+                          <section className="story-step" data-step-index="2">
+                            <span><b>03</b> Hidden variable</span>
+                            <textarea className="inline-edit-h4" rows={2} value={editDraft.latentVariable} onChange={(e) => setEditDraft({ ...editDraft, latentVariable: e.target.value })} />
+                            <textarea className="inline-edit-p" rows={4} value={editDraft.rationale} onChange={(e) => setEditDraft({ ...editDraft, rationale: e.target.value })} />
+                          </section>
+                          <div className="story-connector"><span>constrains what evidence may count</span><i>↓</i></div>
+                          <section className="story-step evidence-story-step" data-step-index="3">
+                            <span><b>04</b> Evidence contract</span>
+                            <div className="ingestion-grid">
+                              <EditableStringList title="Required fields" items={editDraft.ingestionRequirements.requiredFields} onChange={(requiredFields) => setEditDraft({ ...editDraft, ingestionRequirements: { ...editDraft.ingestionRequirements, requiredFields } })} />
+                              <EditableStringList title="Search concepts" items={editDraft.ingestionRequirements.searchConcepts} onChange={(searchConcepts) => setEditDraft({ ...editDraft, ingestionRequirements: { ...editDraft.ingestionRequirements, searchConcepts } })} />
+                              <EditableStringList title="Mismatch risk" items={editDraft.ingestionRequirements.mismatchRisks} onChange={(mismatchRisks) => setEditDraft({ ...editDraft, ingestionRequirements: { ...editDraft.ingestionRequirements, mismatchRisks } })} />
+                            </div>
+                          </section>
+                          <div className="cluster-edit-actions">
+                            <button type="button" className="primary-button" onClick={saveClusterEdit}>Save dimension</button>
+                            <button type="button" className="quiet-button" onClick={() => { setEditingClusterId(null); setEditDraft(null); }}>Cancel</button>
+                            <button type="button" className="quiet-button danger" onClick={() => {
+                              setResult({ ...result, decomposition: { ...result.decomposition, clusters: result.decomposition.clusters.filter((c) => c.id !== cluster.id) } });
+                              setEditingClusterId(null);
+                              setEditDraft(null);
+                            }}>Delete dimension</button>
                           </div>
                         </div>
                       ) : (
