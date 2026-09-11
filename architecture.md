@@ -9,8 +9,10 @@ The first screen should not resemble a chat transcript or a generic database das
 ```text
 Vague paragraph
     ↓ AI proposes a decomposition
-Visible interpretation map
-    ↓ human keeps, edits, adds, or parks branches
+Editable dimensions list
+    ↓ human edits, adds, or parks dimensions
+Linear context interview
+    ↓ human answers targeted questions to ground the context
 One active path through the map
     ↓ compile
 Concrete claim with explicit scope
@@ -18,14 +20,14 @@ Concrete claim with explicit scope
 Versioned evidence and belief state
 ```
 
-The entry screen is a staged reading surface: the AI SDK returns schema-validated highlights, axes, branches, unknowns, and a claim template. Exact phrases in the submitted paragraph light up one by one with a short explanation before the interface transitions to the decomposition map. The map is the primary editing surface. A side inspector shows why the model proposed a branch, how it will affect the compiled question, who last edited it, and whether it is active or parked.
+The entry screen is a staged reading surface: the AI SDK returns schema-validated highlights, clusters, targeted interview questions, unknowns, and a claim template. Exact phrases in the submitted paragraph light up one by one with a short explanation before the interface transitions to the decomposition and interview views. The dimension list is the primary editing surface. A side inspector shows why the model proposed a cluster, how it will affect the compiled question, who last edited it, and whether it is active or parked.
 
 ## Route architecture
 
 The eggs case is split by epistemic task rather than rendered as one scrolling document:
 
 - Frame (`/`) owns question submission, phrase-level annotation, and the paced handoff.
-- Interpretation Map (`/map`) owns branch review, editing, and claim compilation.
+- Interpretation Map (`/map`) owns dimension review, context elicitation interview, and claim compilation.
 - Evidence (`/evidence`) owns claim-matched source extraction and provenance inspection.
 - Assess (`/inventory`) owns the systematic-review trial inventory.
 - Discovery Queue (`/discoveries`) owns unassessed search results.
@@ -37,16 +39,16 @@ Persistent stage navigation connects the workflow, while evidence-specific subna
 
 Every AI operation should appear as a reviewable proposal rather than an invisible mutation.
 
-- **Proposed** branches use a visibly provisional state.
-- **Kept** branches form the current active question.
-- **Parked** branches remain recoverable and searchable.
-- **Human-added or edited** branches retain authorship.
+- **Proposed** dimensions use a visibly provisional state.
+- **Kept** dimensions form the current active question.
+- **Parked** dimensions remain recoverable and searchable.
+- **Human-added or edited** dimensions retain authorship.
 - The AI's rationale is available on demand.
 - The compiled question updates immediately as the active path changes.
 - Creating a probability is disabled until a concrete claim exists.
 - Source or assessment changes produce a diff and a new revision, never an overwrite.
 
-This makes model errors local. A user can spot-check a single branch, edge, evidence excerpt, or assessment without rereading an entire report.
+This makes model errors local. A user can spot-check a single dimension, edge, evidence excerpt, or assessment without rereading an entire report.
 
 ## Probability semantics
 
@@ -54,9 +56,9 @@ Epistack must distinguish three different objects that are easily conflated.
 
 ### Interpretation priority
 
-Which reading of the vague question is useful or intended? These branches are not generally mutually exclusive hypotheses, so they should not receive a uniform probability distribution. The model proposes them; the human ranks, selects, or parks them.
+Which reading of the vague question is useful or intended? These dimensions are not generally mutually exclusive hypotheses. The model proposes them; the human edits, selects, or parks them.
 
-A uniform distribution is unstable because changing the granularity changes the mass. If one branch is divided into ten sub-branches, it should not become ten times as important.
+A uniform distribution is unstable because changing the granularity changes the mass. If one cluster is divided into ten sub-clusters, it should not become ten times as important.
 
 ### Claim belief
 
@@ -140,10 +142,10 @@ The prototype stores complete JSON snapshots for simple replay while exposing no
 The interaction loop should feel immediate even when research is slow.
 
 - Apply human edits optimistically in the browser.
-- Stream AI branches as provisional nodes instead of waiting for a complete graph.
+- Stream AI dimensions as provisional nodes instead of waiting for a complete graph.
 - Separate foreground operations (select, edit, park, compile) from background work (retrieval, extraction, verification, ablation).
 - Cache source extraction and content hashes so the same paper is not repeatedly processed.
-- Collapse and virtualize large branches; never render thousands of nodes simultaneously.
+- Collapse and virtualize large clusters; never render thousands of nodes simultaneously.
 - Prioritize crux-relevant expansion rather than exhaustive enumeration.
 - Precompute current summaries and dependency counts from immutable snapshots.
 - Make every long task cancellable and preserve partial results.
@@ -157,9 +159,9 @@ The current browser prototype implements an AI-assisted framing operator and a c
 - enter an arbitrary vague question or paragraph;
 - generate typed highlights and an interpretation map through the AI SDK, with a transparent local fallback;
 - watch exact submitted phrases receive staged explanations before navigation;
-- inspect seven proposed axes and their candidate branches;
-- edit, add, keep, or park interpretations;
-- preserve the model's rationale and branch origin;
+- inspect up to seven proposed dimensions and answer targeted context questions;
+- edit, add, keep, or park dimensions inline;
+- preserve the model's rationale and origin;
 - compile the selected path into one concrete weight-loss question;
 - create an explicitly labeled neutral probability placeholder; and
 - save or export the resulting artifact;

@@ -23,7 +23,7 @@ npm run dev
 
 Open the local URL printed by the development server.
 
-`npm run agents` starts a loopback companion on `127.0.0.1:4317`. It requires an installed and authenticated Claude Code CLI. Opus first compiles the edited interpretation map into a durable research brief. Its `/recall` stream runs separate broad-recall and applicability searches, records observable WebSearch/WebFetch invocation metadata, and returns lead-only candidates that cannot bypass evidence ingestion. During ingestion, a fresh Opus process extracts result-level records from preserved PMC full text and a fresh Sonnet process adversarially reviews them. A hosted UI can reach this companion only when its exact origin is explicitly allow-listed with `EPISTACK_ALLOWED_BROWSER_ORIGINS`; arbitrary web origins remain blocked. Override aliases or cost ceilings with `EPISTACK_PRIMARY_CLAUDE_MODEL`, `EPISTACK_ADVERSARY_CLAUDE_MODEL`, `EPISTACK_COMPILER_MAX_USD`, `EPISTACK_RECALL_MAX_USD`, `EPISTACK_PRIMARY_MAX_USD`, and `EPISTACK_ADVERSARY_MAX_USD`.
+`npm run agents` starts a loopback companion on `127.0.0.1:4317`. It requires an installed and authenticated Claude Code CLI. Opus first compiles the edited dimension clusters and context into a durable research brief. Its `/recall` stream runs separate broad-recall and applicability searches, records observable WebSearch/WebFetch invocation metadata, and returns lead-only candidates that cannot bypass evidence ingestion. During ingestion, a fresh Opus process extracts result-level records from preserved PMC full text and a fresh Sonnet process adversarially reviews them. A hosted UI can reach this companion only when its exact origin is explicitly allow-listed with `EPISTACK_ALLOWED_BROWSER_ORIGINS`; arbitrary web origins remain blocked. Override aliases or cost ceilings with `EPISTACK_PRIMARY_CLAUDE_MODEL`, `EPISTACK_ADVERSARY_CLAUDE_MODEL`, `EPISTACK_COMPILER_MAX_USD`, `EPISTACK_RECALL_MAX_USD`, `EPISTACK_PRIMARY_MAX_USD`, and `EPISTACK_ADVERSARY_MAX_USD`.
 
 For decomposition, open the settings icon and paste an OpenRouter API key. The bring-your-own key is cached only in that browser so reloads do not require retyping; it is excluded from case artifacts and the database. You can instead copy `.env.example` to `.env.local` and set `OPENROUTER_API_KEY` for a server-configured connection. Normalized question/context/model/prompt combinations are retained in a bounded multi-entry browser cache and a 30-day shared D1 operation cache. The app checks both caches before it asks for a key; without a key or a reusable hit, decomposition stops with an explicit settings error.
 
@@ -32,11 +32,11 @@ For decomposition, open the settings icon and paste an OpenRouter API key. The b
 1. Watch `epistack` type one character at a time, settle into the top-left corner, and reveal the question composer half a second later.
 2. Open the settings icon, add the key, and enter any vague question or paragraph.
 3. Answer the AI's one-question-at-a-time context interview. Hover the `?` to see whether an answer prunes scope, creates a branch, or changes evidence matching.
-4. The AI recompiles the question using those constraints, visibly parking ruled-out branches and introducing distinctions implied by the real case.
+4. The AI recompiles the question using those constraints, visibly parking ruled-out dimensions and introducing distinctions implied by the real case.
 5. Scroll into each cluster. Its related words activate together in the pinned question and fly into the current evidence-contract card while later clusters remain dim.
-6. Approve the scope and follow the paced transition to the separate Interpretation Map page.
-7. Select any interpretation branch to inspect the model's rationale.
-8. Keep a different branch, park one, or edit its meaning.
+6. Approve the scope and follow the paced transition to the separate Context Elicitation page.
+7. Select any dimension cluster to inspect the model's rationale.
+8. Keep a different dimension, park one, or edit its meaning.
 9. Add an interpretation the model missed and watch the claim template recompile.
 10. Route each dimension: claim-driving, applicability-only, monitored unknown, or parked/no-budget.
 11. Create an explicitly labeled probability placeholder, then compile the research brief with the local companion.
@@ -53,7 +53,7 @@ This is a working vertical slice with schema-validated decomposition, context co
 
 It currently implements:
 
-- visible AI-proposed branches;
+- visible AI-proposed dimension clusters;
 - a timed center-to-corner brand intro before the question input;
 - a clean composer with settings and methodological help hidden behind icons and hover tooltips;
 - a paced decision-context interview kept distinct from evidence about the claim;
@@ -62,7 +62,7 @@ It currently implements:
 - semantic clustering of non-adjacent cues such as `eat` and `moderation`;
 - physical cue-to-cluster motion from a pinned question with a reduced-motion fallback;
 - a scroll-led derivation that progressively reveals each inference step;
-- a reviewable cues → latent variable → axis → branch trace;
+- a reviewable cues → latent variable → cluster trace;
 - evidence-ingestion fields, search concepts, and mismatch risks derived from that trace;
 - arbitrary-question decomposition through OpenRouter;
 - request-scoped OpenRouter credentials that are excluded from saved and exported artifacts;
@@ -98,7 +98,7 @@ It currently implements:
 The interface is organized as a case workspace rather than one long report:
 
 - `/` — submit the question and inspect its ambiguous wording;
-- `/map` — edit the generated interpretation map and compile the claim;
+- `/map` — edit the generated dimension clusters and context interview and compile the claim;
 - `/research` — direct the generated claim portfolio, retrieval queries, full-text agents, applicability checks, and promotion gate;
 - `/artifact` — navigate the live accepted result graph, claim coverage, provenance, dependence, integrity, and staleness;
 - `/evidence` — inspect result-level relationships, locators, scope, and dependence inside each source;
@@ -125,7 +125,7 @@ npm run evidence:discover
 ## Main files
 
 - `app/page.tsx` — animated phrase-highlighting and transition flow
-- `app/map/page.tsx` — editable interpretation map and claim compilation
+- `app/map/page.tsx` — editable dimension clusters and context interview and claim compilation
 - `lib/research-brief.ts` — Stage 2→3 contract, role routing, claim portfolio schema, budget normalization, and dynamic lanes
 - `app/research/research-dashboard.tsx` — generated investigation cockpit and local-agent control surface
 - `lib/broad-recall.ts` — lead-only recall, applicability, and observable tool-trace contracts

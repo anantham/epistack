@@ -16,13 +16,13 @@ The operator is collaborative. AI supplies breadth and clerical structure; the h
 ## Output
 
 - Exact source-language cues linked to stable semantic clusters
-- A reviewable trace from each cluster to its latent variable and interpretation axis
+- A reviewable trace from each cluster to its latent variable and dimension
 - An evidence-ingestion contract for every cluster
-- A bounded set of interpretation axes
-- Candidate branches for each axis
-- Rationale and origin for every branch
-- One human-approved active path
-- Parked and omitted branches retained separately
+- A bounded set of interpretation dimensions
+- Targeted context interview questions for each dimension
+- Rationale and origin for every dimension cluster
+- One human-approved active context profile
+- Parked and omitted dimensions retained separately
 - A compiled, probabilistically assessable claim
 - A list of relevant unknown attributes
 
@@ -46,8 +46,8 @@ Preserve the exact words that prompted each interpretation, including non-adjace
 For each cluster, emit a concise, inspectable trace:
 
 ```text
-exact quote(s) → semantic cluster → latent variable → interpretation axis
-               → candidate branches → evidence-ingestion requirements
+exact quote(s) → semantic cluster → latent variable → dimension
+               → context interview questions → evidence-ingestion requirements
 ```
 
 The evidence-ingestion requirements must name:
@@ -60,7 +60,7 @@ For example, the `eat` + `moderation` cluster should cause the system to extract
 
 ### 3. Propose a bounded divisibility space
 
-Generate candidate axes such as:
+Generate candidate dimensions such as:
 
 - object or construct;
 - dose and frequency;
@@ -72,29 +72,29 @@ Generate candidate axes such as:
 - outcome and threshold; and
 - time horizon.
 
-The model should propose two to six branches per axis. This is a usability bound, not a claim of completeness.
+The model should propose targeted context questions for each dimension. This is a usability bound, not a claim of completeness.
 
 ### 4. Explain decision relevance
 
-For each branch, state:
+For each context question option, state:
 
 - what it means;
 - why it could change the answer;
 - whether it is likely to match ordinary usage;
 - whether it is a separate question or a possible modifier; and
-- what would cause a parked branch to be reopened.
+- what would cause a parked dimension to be reopened.
 
 ### 5. Human review
 
-For every axis, the investigator may:
+For every dimension, the investigator may:
 
-- keep one branch as active;
+- keep one dimension as active;
 - edit its meaning;
-- add a missing branch;
-- park an irrelevant branch; or
-- mark the axis unresolved.
+- add a missing dimension;
+- park an irrelevant dimension; or
+- mark the dimension unresolved.
 
-Parking is reversible and does not delete the branch.
+Parking is reversible and does not delete the dimension.
 
 ### 6. Compile the active path
 
@@ -129,11 +129,11 @@ Only now create a probability. Record:
 - who set it; and
 - the rationale.
 
-Do not distribute probability mass across interpretation branches unless they have been explicitly defined as mutually exclusive and collectively exhaustive hypotheses.
+Do not distribute probability mass across interpretation dimensions unless they have been explicitly defined as mutually exclusive and collectively exhaustive hypotheses.
 
 ### 9. Record—not necessarily expand—unknown attributes
 
-Unknown details such as egg size, preparation, feed, housing, certification, and geography should be preserved. They become active branches only when at least one of these holds:
+Unknown details such as egg size, preparation, feed, housing, certification, and geography should be preserved. They become active dimensions only when at least one of these holds:
 
 - there is a plausible mechanism connecting the attribute to the outcome;
 - evidence shows meaningful heterogeneity;
@@ -148,14 +148,14 @@ Stop the initial decomposition when:
 
 - every required component of the concrete claim is filled;
 - the human agrees the active path represents a useful question;
-- at least one alternative is preserved for each materially ambiguous axis; and
-- a breadth check does not identify a missing branch likely to reverse the decision.
+- at least one alternative is preserved for each materially ambiguous dimension; and
+- a breadth check does not identify a missing dimension likely to reverse the decision.
 
-Deeper decomposition is lazy. Reopen an axis when new evidence, disagreement, or sensitivity analysis shows it may be load-bearing.
+Deeper decomposition is lazy. Reopen a dimension when new evidence, disagreement, or sensitivity analysis shows it may be load-bearing.
 
 ## Failure modes
 
-- **Granularity gaming:** splitting one interpretation into many branches makes it appear important.
+- **Granularity gaming:** splitting one interpretation into many sub-dimensions makes it appear important.
 - **Early tunnel vision:** the model's initial decomposition omits an entire outcome or causal pathway.
 - **Decorative metadata:** collecting attributes that cannot change the decision.
 - **Comparator erasure:** discussing a food or intervention without saying what it replaces.
@@ -166,9 +166,9 @@ Deeper decomposition is lazy. Reopen an axis when new evidence, disagreement, or
 ## Audit questions
 
 1. What important interpretation did the model omit?
-2. Did branch granularity affect its apparent priority?
-3. Which branch choice most changes the evidence that will be considered relevant?
+2. Did cluster granularity affect its apparent priority?
+3. Which context choice most changes the evidence that will be considered relevant?
 4. Is the comparator explicit?
 5. Could a reasonable person tell what observation would count against the compiled claim?
-6. Which unknown attributes are being recorded, and why are they not active branches?
+6. Which unknown attributes are being recorded, and why are they not active dimensions?
 7. Which decisions were made by the model, and which by the human?
