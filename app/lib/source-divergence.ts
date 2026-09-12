@@ -98,3 +98,24 @@ export function assembleDivergences(items: DivergenceItem[], model: z.infer<type
     return [{ aId: entry.aId, bId: entry.bId, scopeMatch: match, verdict, rationale: entry.rationale }];
   });
 }
+
+// Context-only comparison; these verdicts are never causal evidence.
+export async function computeDivergence(items: DivergenceItem[]): Promise<Divergence[]> {
+  if (items.length < 2) return [];
+
+  // Load the Workers runtime only when a hosted comparison is requested.
+  const { runLyraStage } = await import("./lyra-stage.ts");
+  const text = await runLyraStage({
+    model: "lyra-chatgpt-pro",
+    effort: "medium",
+    input: buildDivergencePrompt(items),
+  });
+  let parsed: z.infer<typeof divergenceResponseSchema>;
+  try {
+    const json = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    parsed = divergenceResponseSchema.parse(JSON.parse(json));
+  } catch {
+    throw new Error("The divergence model returned invalid JSON or a response that does not match the divergence schema.");
+  }
+  return assembleDivergences(items, parsed);
+}
