@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { renderAgentPrompt, resolveAgentPrompt, sanitizeAgentPromptOverrides } from "../../../lib/agent-prompts";
+import { renderAgentPrompt, resolveAgentPrompt, sanitizeAgentPromptOverrides, type AgentPromptOverrides } from "../../../lib/agent-prompts";
 import {
   adversarialReviewSchema,
   adjudicateDualReview,
@@ -10,6 +10,8 @@ import {
 import type { DeepDiveSource } from "../../../lib/deep-dive";
 import { lyraConfigured, runLyraStage } from "../../../lib/lyra-stage";
 import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
+import { acquireSource, extractSource, type SourceReviewResponse } from "../../../lib/source-adapters";
+import { isPreliminarySourceClass, sourceClassSchema } from "../../../lib/source-class";
 
 const primaryModel = "Astra · GPT 6";
 // A distinct role label: the adversarial pass is an independent full-text read
@@ -25,6 +27,15 @@ class FullTextUnavailableError extends Error {
   readonly code = "NO_OPEN_FULL_TEXT";
 }
 
+type SourceRequest = {
+  sourceClass?: unknown;
+  url?: unknown;
+  title?: unknown;
+  pmid?: unknown;
+  pmcid?: unknown;
+  citedText?: unknown;
+};
+
 type InvestigateRequest = {
   record?: {
     pmid?: unknown;
@@ -36,6 +47,7 @@ type InvestigateRequest = {
     doi?: unknown;
     url?: unknown;
   } | null;
+  source?: SourceRequest | null;
   question?: unknown;
   decisionContext?: unknown;
   claimFrames?: unknown;
@@ -187,6 +199,64 @@ function claimFramesText(claimFrames: ResearchClaimFrame[]) {
   ].join("\n")).join("\n\n");
 }
 
+// The typed non-PubMed path: acquire an arbitrary source, then run the adapter
+// that matches its declared class. Only causal + fetched-verified reaches the
+// adversarial dual review; the rest stays extracted and non-promotable.
+async function investigateSource(input: {
+  source: SourceRequest;
+  question: string;
+  decisionContext: string;
+  claimFrames: ResearchClaimFrame[];
+  applicabilityProfile: string;
+  promptOverrides: AgentPromptOverrides;
+}): Promise<Response> {
+  const parsedClass = sourceClassSchema.safeParse(input.source.sourceClass);
+  const url = typeof input.source.url === "string" ? input.source.url.trim() : "";
+  if (!parsedClass.success || !/^https?:\/\//i.test(url) || url.length > 2_000) {
+    return json({ error: "A valid sourceClass and http(s) URL are required." }, 400);
+  }
+  const sourceClass = parsedClass.data;
+  try {
+    const acquired = await acquireSource({
+      sourceClass,
+      url,
+      title: typeof input.source.title === "string" ? input.source.title.trim() : undefined,
+      pmid: typeof input.source.pmid === "string" ? input.source.pmid.trim() : undefined,
+      pmcid: typeof input.source.pmcid === "string" ? input.source.pmcid.trim() : undefined,
+      citedText: typeof input.source.citedText === "string" ? input.source.citedText.slice(0, 60_000) : undefined,
+    });
+    const extracted = await extractSource({
+      sourceClass,
+      acquisition: acquired.acquisition,
+      acquired,
+      question: input.question,
+      decisionContext: input.decisionContext,
+      claimFrames: input.claimFrames,
+      applicabilityProfile: input.applicabilityProfile,
+      promptOverrides: input.promptOverrides,
+    });
+    const response: SourceReviewResponse = {
+      source: {
+        sourceClass,
+        url: acquired.url,
+        title: acquired.title,
+        publisher: acquired.publisher,
+        acquisition: acquired.acquisition,
+        contentHash: acquired.contentHash,
+      },
+      role: extracted.role,
+      evidenceStatus: extracted.evidenceStatus,
+      preliminary: isPreliminarySourceClass(sourceClass),
+      payload: extracted.payload,
+    };
+    return json(response);
+  } catch (error) {
+    return json({
+      error: error instanceof Error ? error.message : "The hosted source review failed.",
+    }, 502);
+  }
+}
+
 export async function POST(request: Request) {
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) {
@@ -204,10 +274,6 @@ export async function POST(request: Request) {
   }
 
   const record = body.record;
-  const pmid = typeof record?.pmid === "string" ? record.pmid.trim() : "";
-  if (!/^\d{5,12}$/.test(pmid)) {
-    return json({ error: "A valid PubMed identifier is required." }, 400);
-  }
   const parsedClaimFrames = researchClaimFrameSchema.array().min(1).max(7).safeParse(body.claimFrames);
   if (!parsedClaimFrames.success) {
     return json({
@@ -219,15 +285,6 @@ export async function POST(request: Request) {
   }
 
   const claimFrames = parsedClaimFrames.data;
-  const normalizedRecord: NormalizedRecord = {
-    pmid,
-    title: typeof record?.title === "string" && record.title.trim() ? record.title.trim() : "Untitled PubMed record",
-    authors: typeof record?.authors === "string" && record.authors.trim() ? record.authors.trim() : "Authors not returned",
-    journal: typeof record?.journal === "string" && record.journal.trim() ? record.journal.trim() : "Journal not returned",
-    published: typeof record?.published === "string" && record.published.trim() ? record.published.trim() : "Date not returned",
-    doi: typeof record?.doi === "string" && record.doi.trim() ? record.doi.trim() : null,
-    url: typeof record?.url === "string" && record.url.trim() ? record.url.trim() : `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
-  };
   const question = typeof body.question === "string" && body.question.trim()
     ? body.question.trim().slice(0, 4_000)
     : "What does this source establish about the supplied claim frames?";
@@ -239,6 +296,31 @@ export async function POST(request: Request) {
     : "No structured applicability profile supplied.";
   const promptOverrides = sanitizeAgentPromptOverrides(body.promptOverrides);
   const refresh = body.refresh === true;
+
+  if (body.source && typeof body.source === "object") {
+    return await investigateSource({
+      source: body.source,
+      question,
+      decisionContext,
+      claimFrames,
+      applicabilityProfile,
+      promptOverrides,
+    });
+  }
+
+  const pmid = typeof record?.pmid === "string" ? record.pmid.trim() : "";
+  if (!/^\d{5,12}$/.test(pmid)) {
+    return json({ error: "A valid PubMed identifier is required." }, 400);
+  }
+  const normalizedRecord: NormalizedRecord = {
+    pmid,
+    title: typeof record?.title === "string" && record.title.trim() ? record.title.trim() : "Untitled PubMed record",
+    authors: typeof record?.authors === "string" && record.authors.trim() ? record.authors.trim() : "Authors not returned",
+    journal: typeof record?.journal === "string" && record.journal.trim() ? record.journal.trim() : "Journal not returned",
+    published: typeof record?.published === "string" && record.published.trim() ? record.published.trim() : "Date not returned",
+    doi: typeof record?.doi === "string" && record.doi.trim() ? record.doi.trim() : null,
+    url: typeof record?.url === "string" && record.url.trim() ? record.url.trim() : `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+  };
 
   try {
     const { artifact, plainText } = await acquirePmcArtifact(pmid);

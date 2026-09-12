@@ -8,6 +8,14 @@ import {
   type SourceArtifact,
 } from "../../../lib/dual-review";
 import { researchClaimFrameSchema } from "../../../lib/research-brief";
+import {
+  acquisitionSchema,
+  canExtractAsStudyResult,
+  canReachAcceptedEvidence,
+  epistemicRoleForSourceClass,
+  isPreliminarySourceClass,
+  sourceClassSchema,
+} from "../../../lib/source-class";
 import { promotedResultSemanticKey, stableSemanticId } from "../../../lib/stable-record-id";
 
 type PromoteRequest = {
@@ -23,6 +31,9 @@ type PromoteRequest = {
   artifact?: unknown;
   adversarialReview?: unknown;
   claimFrames?: unknown;
+  sourceClass?: unknown;
+  acquisition?: unknown;
+  preliminary?: unknown;
 };
 
 function safeId(value: string) {
@@ -304,6 +315,51 @@ export async function POST(request: Request) {
     && body.model.trim() === primaryModel
     && reviewSupportsDecisions
     && candidateMatchesAccepted;
+
+  // Hard three-axis guard. Legacy PubMed records neither declare a source class
+  // nor an acquisition, so they keep their existing causal behavior. Any record
+  // that declares the new source model must be a non-preliminary causal artifact
+  // acquired as fetched-verified, and the accepted path must clear the adversarial
+  // review gate. Non-causal or preliminary records are refused outright.
+  const declaredSourceClass = sourceClassSchema.safeParse(body.sourceClass);
+  const declaredAcquisition = acquisitionSchema.safeParse(body.acquisition);
+  const declaresSourceModel = body.sourceClass !== undefined
+    || body.acquisition !== undefined
+    || body.preliminary !== undefined;
+  const promotionRole = declaredSourceClass.success
+    ? epistemicRoleForSourceClass(declaredSourceClass.data)
+    : "causal";
+  const promotionPreliminary = body.preliminary === true
+    || (declaredSourceClass.success ? isPreliminarySourceClass(declaredSourceClass.data) : false);
+  const promotionAcquisition = declaredAcquisition.success
+    ? declaredAcquisition.data
+    : autoGatePasses ? "fetched-verified" : "cited-unverified";
+
+  if (promotionRole !== "causal" || promotionPreliminary) {
+    return Response.json({
+      error: `Only non-preliminary causal sources can be promoted as study results; this record is ${promotionRole}${promotionPreliminary ? " and preliminary" : ""}.`,
+      code: "PROMOTION_ROLE_NOT_CAUSAL",
+    }, { status: 422 });
+  }
+  if (declaresSourceModel || autoRequested) {
+    if (!canExtractAsStudyResult({ role: promotionRole, acquisition: promotionAcquisition })) {
+      return Response.json({
+        error: "Full-text study-result extraction requires a causal, fetched-verified acquisition.",
+        code: "PROMOTION_NOT_FETCHED_VERIFIED",
+      }, { status: 422 });
+    }
+    if (!canReachAcceptedEvidence({
+      role: promotionRole,
+      acquisition: promotionAcquisition,
+      adversarialPassed: autoGatePasses,
+      preliminary: promotionPreliminary,
+    })) {
+      return Response.json({
+        error: "This record does not satisfy the accepted-evidence rule (causal, fetched-verified, adversarially reviewed, and not preliminary).",
+        code: "PROMOTION_NOT_ELIGIBLE",
+      }, { status: 422 });
+    }
+  }
 
   if (body.humanChecked !== true && !autoGatePasses) {
     return Response.json({
