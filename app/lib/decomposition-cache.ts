@@ -1,9 +1,9 @@
 import type { DecompositionResponse } from "./decomposition";
 import { operationCacheKey } from "./operation-cache.ts";
 
-export const decompositionCacheContract = "question-decomposition-orchestrator-v4";
-export const decompositionBrowserCacheStorageKey = "epistack:decomposition-operation-cache:v4";
-export const legacyDecompositionBrowserCacheStorageKey = "epistack:decomposition-operation-cache:v3";
+export const decompositionCacheContract = "question-decomposition-orchestrator-v5";
+export const decompositionBrowserCacheStorageKey = "epistack:decomposition-operation-cache:v5";
+export const legacyDecompositionBrowserCacheStorageKey = "epistack:decomposition-operation-cache:v4";
 export const browserDecompositionCacheLimit = 24;
 export const browserDecompositionCacheTtlMs = 30 * 24 * 60 * 60 * 1000;
 

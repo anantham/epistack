@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { stageRequest, parseStage } from '../lib/hosted-decomposition.ts';
-const scout = { caseTitle: 'Eggs and their alternatives', summary: 'Identify material choices before reviewing evidence.', dimensions: [0,1,2].map(i => ({id:`axis-${i}`,label:`Axis ${i}`})) };
+const scout = { caseTitle: 'Eggs and their alternatives', summary: 'Identify material choices before reviewing evidence.', dimensions: [0,1,2,3].map(i => ({id:`axis-${i}`,label:`Axis ${i}`})) };
 test('hosted transport preserves fixed dimensions between independent stages',()=>{
  const first=stageRequest(0,'Are eggs good to eat?',[]);
  assert.equal(first.model,'lyra-chatgpt-pro'); assert.equal(first.background,true);
