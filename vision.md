@@ -16,7 +16,72 @@ It is not a machine that declares truth. It is a system for making the basis of 
 
 ## The vision
 
-Given a broad or ambiguous question, Epistack decomposes it into concrete claims, definitions, assumptions, and subclaims that can be investigated. Each claim is connected to the evidence that supports, challenges, or qualifies it; the context in which that evidence should be interpreted; and the other claims on which it depends.
+Given a broad or ambiguous question, Epistack helps a person discover what the question depends on, explain their actual circumstances, and commission investigations that can change their understanding or choice. The person should not need to know the right scientific vocabulary, source database, or research design before starting.
+
+The practical ambition is to move from “Are eggs good to eat?” to an inspectable basis for deciding how many eggs to eat, what they would replace, and where to purchase them if sourcing matters to this person. Eggs are a test case for a general workflow, not the boundary of the product. Questions of understanding may end in an explanation of disagreement rather than an action recommendation.
+
+### Three stages, followed by an artifact
+
+These are the user-facing stages. Specialist calls inside a stage and engineering delivery phases are separate concepts.
+
+| Stage | Purpose | Output handed to the next stage |
+|---|---|---|
+| **1. Decompose** | Expose the dimensions hidden inside a vague question: meanings, outcomes, choices, comparisons, populations, and uncertainties. | An editable dimension map, with rationale, candidate interpretations, missing details, and evidence requirements. |
+| **2. Contextualize** | Interview the person to learn which dimensions matter here, their actual circumstances, feasible alternatives, constraints, and preferences. | A human-reviewed research brief: explicit context, action options, scoped claims, applicability requirements, and unresolved questions. |
+| **3. Investigate** | Assign scoped agents to seek relevant, conflicting, and contextual information; acquire and examine sources using methods appropriate to their class. | Claim-linked findings with typed payloads, provenance, verification state, applicability, disagreements, and remaining gaps. |
+
+The **Artifact** is the fourth workspace destination. It brings these outputs together into an inspectable, revisable account of what the person can conclude or do, why, and what would change that conclusion.
+
+### 1. Decompose: discover what could matter
+
+“Good” might mean nutritional adequacy, cardiovascular outcomes, convenience, affordability, animal welfare, or environmental effects. “Eat” leaves quantity, frequency, preparation, and replacement foods unspecified. These dimensions are possibilities to review, not facts about the person or conclusions about eggs.
+
+Exact wording is useful evidence for an interpretation, but it must not be the admission rule for a dimension. Missing concepts can be precisely what a vague question needs help uncovering. Preserve both **explicitly cued** and **inferred missing** dimensions, label their origins, and let the person edit or park them. Never invent a quote to justify an inferred dimension.
+
+Decomposition should produce enough breadth to avoid early tunnel vision without expanding every possible combination. A dimension deserves attention when it could change the meaning, evidence match, feasible choices, or eventual decision.
+
+### 2. Contextualize: learn what matters for this person
+
+The interview turns candidate dimensions into specific context. Ask questions because the answers change the investigation: current intake, preparation, realistic substitutes, relevant health circumstances, priorities, time horizon, budget, and location when local purchasing is part of the decision. Explain that relevance in ordinary language.
+
+Do not ask for a full personal dossier. Reuse supplied answers, allow free text and “I don't know,” and distinguish observed facts, preferences, hard constraints, and model assumptions. A suggested answer becomes personal context only when the person supplies or confirms it.
+
+The output is a research contract, not just a longer paraphrase. Every material answer should be traceable to a claim, an applicability check, a feasible option, a monitored unknown, or an explicitly parked dimension. No selected dose, comparator, or constraint should silently disappear at compilation. Unknown details remain unknown, with a reason to ask later if they become decisive.
+
+Personalization should guide both retrieval and interpretation. Some details define the research question; others help assess broader evidence after retrieval. Putting every personal detail into every search query can exclude useful evidence. Outbound context should be minimized and its destinations made explicit; a browser-stored profile is not device-only if it is sent to a hosted compiler or agent.
+
+### 3. Investigate: commission work from the brief
+
+Agent assignments should be derived from the scoped claims and the person's context. Each task should carry its claim and brief version, population/exposure/comparator/outcome and horizon where applicable, permitted applicability context, retrieval and exclusion rules, lane purpose, expected output, and budget or stopping condition. Other domains should use suitable scope fields rather than being forced into a clinical-trial template.
+
+The intended discovery unit is **claim × useful lane**: broad/disconfirming search, applicability search, or context search. Allocate enough agents to cover consequential questions, while allowing inapplicable lanes to be skipped with a reason. Agent count is a means; useful coverage and decision relevance are the outcome.
+
+Keep independent concepts independent:
+
+- **Discovery lane:** why and where we looked.
+- **Source class:** what we found—a study, review, guideline, standard, registry, statistic, preprint, report, or first-person account.
+- **Acquisition and verification state:** what was actually obtained and checked.
+- **Epistemic role:** what this particular finding can establish about the scoped claim.
+
+A guideline may inform recommended practice; a registry may expose an unpublished study; a statistic may describe a population; a first-person account may reveal a practical obstacle or a hypothesis to investigate. None automatically establishes a causal health effect. Similarly, a primary study or systematic review is not automatically causal: its design, result, and relation to the claim determine that judgment.
+
+Use a common provenance and claim-link envelope with class-specific payloads. A recommendation, measured effect, registry status, statistic, and context signal should retain their different meanings and limitations. Cited material that could not be acquired stays visibly unverified. Context-only signals cannot promote into accepted outcome evidence.
+
+Progress should show actual work: queued, searching, acquiring, extracting, checking, complete, failed, or deliberately skipped, with saved outputs and reasons. A failed search must not look like “no evidence,” and several links to one source must not look like independent corroboration. Research may reopen a dimension or trigger a targeted follow-up interview when it uncovers something decision-relevant.
+
+### The artifact: an inspectable basis for a choice
+
+For an eggs investigation, the desired decision view would connect:
+
+- **The person's situation:** confirmed intake, preparation, alternatives, constraints, priorities, and unknowns.
+- **Concrete options:** specified quantities or substitutions, with the assumptions needed to compare them.
+- **Evidence and guidance:** what bears on each option, its scope, provenance, limitations, and confidence.
+- **Purchasing considerations, when requested:** actual location, cost, availability, safety, certification, welfare, or environmental criteria, each backed by the appropriate source and date.
+- **Decision sensitivity:** what would change the preferred option, which gaps matter, and when to reconsider.
+
+This is an output specification, not a recommendation about egg consumption. The system must be able to say that it cannot yet justify a quantity or compare vendors. A sourcing preference should not be converted into a health benefit without evidence, and a general health review should not imply that it has researched local purchasing options.
+
+Every claim is connected to the evidence that supports, challenges, or qualifies it; the context in which that evidence should be interpreted; and the other claims on which it depends.
 
 The result is not merely a report with citations. It is a living evidence graph:
 

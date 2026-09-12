@@ -1,207 +1,123 @@
 # Epistack
 
-**Can we build a reliable supply chain for truth?**
+**Turn a vague question into a contextualized investigation and an inspectable basis for a decision.**
 
-Epistack is an early-stage project exploring the best workflows and methodologies for using AI to produce reliable, trustworthy knowledge bases grounded in real-world cases.
+Epistack helps someone start with “Are eggs good to eat?”, discover what that depends on, supply the details of their own situation, and direct agents to gather and examine relevant information. The eventual artifact should help them decide what to do, see why, and understand what would change the answer.
 
-The central idea is simple:
+The broader ambition is a reliable supply chain for knowledge: conclusions connected to sources, methods, assumptions, disagreements, and revisions. The practical starting point is a person with an imperfectly specified question. They should not have to write a research protocol before asking it.
 
-> Ask a difficult question, and Epistack turns it into a structured, sourceable map of what must be true, what the evidence shows, where uncertainty remains, and what would change the answer.
+Read the [vision](./vision.md) for the product intent and methodological principles. This README describes the user journey and the current implementation boundary.
 
-The project is currently a runnable vertical slice: the methodology is encoded as typed contracts, promotion policies, a persistent accepted-evidence graph, and human control surfaces that can be exercised on arbitrary questions.
-
-The workspace has four explicit stages rather than one long report: Decompose, Contextualize, Investigate, and Artifact. A submitted paragraph is annotated phrase by phrase; the human edits the interpretation map and action space; specialized agents search, acquire, extract, challenge, and promote atomic results; then a live artifact and decision workbench read only what crossed the evidence gate. Curated evidence views remain available as an inspectable eggs reference case.
-
-## The problem
-
-Off-the-shelf deep-research systems are increasingly good at finding sources and producing fluent, cited reports. But a well-cited report can still be wrong in important ways:
-
-- the cited source may not establish the attached claim;
-- the study may measure a poor proxy for the construct being discussed;
-- similarly named interventions may be too different to aggregate;
-- complex analyses may conceal a simpler null result;
-- sources may share data or assumptions and therefore not be independent;
-- contradictory evidence or stakeholder perspectives may be missing;
-- the conclusion may depend heavily on one weak source; or
-- a retraction or correction may never reach downstream reports.
-
-Epistack treats these as structural problems, not prose-quality problems.
-
-## The product thesis
-
-Epistack is an **epistemic compiler**, not an answer engine.
+## The three stages
 
 ```text
 Vague question
-    ↓
-Scoped interpretations and definitions
-    ↓
-Claims, subclaims, assumptions, and dependencies
-    ↓
-Evidence supporting, challenging, or qualifying each claim
-    ↓
-Provenance, measurement, methodology, and entailment checks
-    ↓
-Cruxes, gaps, competing hypotheses, and sensitivity tests
-    ↓
-A versioned, interrogable knowledge base
+  → 1. Decompose: what could matter?
+  → 2. Contextualize: what matters for this person?
+  → Research brief: scoped claims, feasible choices, constraints, and gaps
+  → 3. Investigate: agents gather and examine relevant information
+  → Artifact: options, evidence, uncertainty, and reasons to reconsider
 ```
 
-The final narrative answer is one view over that underlying artifact.
+The navigation has four destinations: Decompose, Contextualize, Investigate, and Artifact. The first three perform the investigation; the fourth presents its accumulated outputs. Engineering phases inside Investigate are not additional user-facing stages.
 
-## Proposed workflow
+### 1. Decompose — expose the dimensions
 
-### 1. Frame the investigation
+The model proposes an editable map of what an ambiguous question could mean. For eggs, that might include health outcomes, quantity, preparation, replacement foods, personal circumstances, cost, or sourcing priorities.
 
-Specify the decision or understanding being sought, plausible interpretations, relevant populations, time periods, jurisdictions, definitions, and scope boundaries.
+Each dimension should explain why it could matter, what is unspecified, and what evidence would be needed. Phrase highlighting makes interpretations inspectable. Important missing dimensions must also be retained even when there is no explicit phrase to highlight; label these as inferred questions rather than inventing language or personal facts.
 
-### 2. Construct the claim graph
+**Output:** reviewed dimensions, alternatives, evidence requirements, and unknowns. This stage does not answer the substantive question.
 
-Break the question into claims precise enough to investigate. Record relationships such as:
+### 2. Contextualize — interview the person
 
-- `depends on`
-- `supports`
-- `challenges`
-- `qualifies`
-- `assumes`
-- `generalizes`
-- `provides mechanism for`
+Ask targeted questions that turn those dimensions into an actual situation: what the person currently does, their objective, constraints, feasible alternatives, and relevant context. Allow selected answers, free text, and unresolved details. Ask only for information that could change scope, evidence matching, or a decision.
 
-Keep empirical claims, predictions, causal claims, definitions, and normative judgments distinct.
+For example, current weekly intake, cooking method, replacement breakfast, and the outcome the person cares about produce a much more useful investigation than “eggs and health.” If they want purchasing advice, geography, budget, and purchasing priorities become relevant too.
 
-### 3. Construct the evidence graph
+**Output:** a human-reviewed `ResearchBrief` containing the stakeholder profile, feasible action options, scoped claims, applicability fields, retrieval rules, priorities, and gaps. Each material answer should survive into this contract or have an explicit reason for being parked. These are product requirements; the preservation gaps below still need work.
 
-For every relevant source, retain the exact passage, table, figure, dataset, or result; its provenance; the claim it bears on; and whether it supports, challenges, qualifies, or merely contextualizes that claim.
+### 3. Investigate — assign scoped work
 
-Assess, where applicable:
+Agents receive tasks derived from the brief. Broad/disconfirming searches look for relevant and conflicting sources; applicability searches examine how findings transfer to the person's situation; context searches surface practical concerns and hypotheses.
 
-- artifact integrity;
-- claim-evidence entailment;
-- construct and measurement validity;
-- study design and statistical analysis;
-- effect magnitude and practical importance;
-- population and scope match;
-- source independence;
-- conflicts of interest; and
-- transportability to the present question.
+Discovery, acquisition, extraction, review, and acceptance remain distinct. A search hit is a lead. A fetched page is an acquired artifact. An extracted statement still needs the checks appropriate to the claim and source class.
 
-### 4. Run structured adversarial checks
+| Concept | Meaning | Examples |
+|---|---|---|
+| Discovery lane | Purpose of the search | Broad, applicability, context |
+| Source class | Kind of source | Study, guideline, registry, statistics, anecdote |
+| Acquisition / evidence status | What was retrieved and checked | Cited-unverified, acquired, extracted, reviewed, accepted |
+| Epistemic role | What the finding can establish | Causal, descriptive, normative, status, context |
 
-Use named procedures rather than a generic “critic” prompt:
+These concepts are independent. A guideline found through broad search remains guidance; a first-person account can prompt investigation without becoming proof of an outcome. A study's design and result determine whether it supports a causal claim.
 
-- competing-hypothesis analysis;
-- key-assumptions checks;
-- disconfirming-evidence search;
-- source-quality and provenance audits;
-- measurement and construct review;
-- missing-perspective search;
-- claim-citation entailment verification; and
-- dependency and double-counting detection.
+**Output:** claim-linked findings with class-specific payloads, source provenance, scope, limitations, verification state, and remaining gaps. The intended task unit is claim × useful lane, with explicit progress, failure, and stopping conditions.
 
-### 5. Synthesize explicitly
+## What the final artifact is for
 
-Distinguish what is well supported, weakly evidenced, genuinely contested, dependent on definitions or values, and currently unknown. Preserve disagreements among defensible assessment policies.
+The artifact connects the person's question and constraints to the options they can actually consider. For an eggs case, it should eventually show which quantity or substitution options the evidence can support, how guidance and personal priorities bear on them, and which uncertainties could change the decision.
 
-### 6. Test sensitivity
+Purchasing is a separate subdecision when requested: compare actual cost, access, safety, welfare, or other criteria using relevant sources. A general health review cannot establish where someone should shop. Insufficient evidence should remain an explicit outcome.
 
-Remove or alter important sources, assumptions, or weighting decisions and observe whether the conclusion remains stable, weakens, or reverses. Use this to identify load-bearing evidence and high-value research gaps.
+The underlying package preserves claims, exact source material, assessments, dependencies, and revisions. Reports and decision views are projections of that package. Repeated publications of one study should not count as independent votes, and changing a load-bearing source should make affected conclusions reviewable.
 
-### 7. Publish a reusable artifact
+## Current code and remaining gaps
 
-Produce a versioned package that another investigator can inspect, challenge, extend, or recompute. Narrative reports and visualizations should be generated from this structured package.
+Source inspection baseline: `357b0a2` (2026-09-12). This describes the local implementation, not a claim that these commits are deployed or that live provider calls pass.
 
-## Candidate artifact model
+| Area | Present in this checkout | Still needed to meet the vision |
+|---|---|---|
+| Decompose | Three hosted specialists for dimensions, phrase traces, and interview/evidence requirements; editable review | Preserve inferred dimensions without an exact phrase trace; replace generic fallback interview options |
+| Contextualize | Persisted interview selections and text, hosted brief compilation, scoped claim review | Validate answer retention and unresolved fields; `compiledQuestion` is currently copied from the original prompt |
+| Recall | One broad agent per selected claim, plus one shared applicability agent and one shared context agent; best-effort source classification | Full scoped fields in agent prompts; per-task progress and failure reporting; claim/lane provenance preserved during deduplication; fair result limits |
+| Source examination | PMC acquisition, public URL acquisition, a ClinicalTrials.gov adapter, typed recommendation/statistic/registry/context payloads, study extraction and adversarial review | Source-class labels and a successful fetch are not validation of completeness or causal validity; generalized artifact identity still needs work |
+| Research display | Classified leads and typed source-review cards | Persist and connect non-study findings to the Artifact and decision view under their own roles |
+| Artifact and synthesis | Accepted-result graph, provenance and dependence views, graph-grounded decision infrastructure | Demonstrate the complete flow on current code, including empty/failed runs and useful multi-source decisions |
 
-The implemented schema includes:
+The newer multi-source work is visible in `6c8983c`, `a80f84c`, `0fcd9c9`, and `357b0a2`. It extends the previous PubMed-centered workflow; it does not establish end-to-end completion by itself.
 
-| Object | Purpose |
-|---|---|
-| Question | Original prompt, scope, decision context, and alternative interpretations |
-| Construct | Defined concept and possible operationalizations |
-| Claim | Atomic proposition with type, scope, and status |
-| Relationship | Logical, causal, evidential, or contextual connection between objects |
-| Evidence item | Exact source fragment or data object bearing on a claim |
-| Source | Provenance, authorship, publication, funding, and revision metadata |
-| Assessment | Attributed judgment made under an explicit evaluation policy |
-| Challenge | Rebuttal, counterexample, competing hypothesis, or methodological concern |
-| Gap | Missing information and its expected decision relevance |
-| Synthesis | Conditional conclusion with uncertainty and decision implications |
-| Revision | History of changes and affected downstream objects |
+## Highest-value next improvements
 
-The schema remains provisional and should evolve through real investigations rather than be designed entirely in the abstract. The current implementation already separates sources, studies, analyses, results, evidence relations, dependence groups, assessments, snapshots, decisions, options, outcomes, protocols, observations, and update events.
+1. **Keep important missing dimensions.** Assembly currently builds clusters from valid phrase traces. A vague question can therefore lose a dimension it most needs the interview to uncover.
+2. **Make the brief preserve context.** Retain structured answers and check their disposition before launch. Show the person a compact “this is what we are investigating” summary with assumptions and unknowns.
+3. **Use the full scoped contract.** The browser sends population, exposure, comparator, outcome, and horizon, but recall's prompt builder currently renders only claim ID, statement, decision relevance, and query. Include the explicit fields and relevant permitted context.
+4. **Keep discovery accounting truthful.** Deduplicate source identity while retaining every claim/lane link. A failed or empty lane should stay failed or empty; it should not inherit another lane's sources. Allocate result limits across tasks so early broad results cannot crowd out context and applicability.
+5. **Measure useful coverage.** Show which claims have usable findings, contradictions, missing context, and failed checks. Source totals and agent totals alone do not measure research quality.
 
-## What should make Epistack better than deep research?
+## How we judge progress
 
-A strong baseline can retrieve and summarize. Epistack must additionally answer:
+Compare repeated runs and strong research baselines on the same question. Evaluate:
 
-- Which claims are doing the most work?
-- Which evidence actually supports those claims?
-- Does the cited material entail the claim, or is it merely related?
-- What conflicting evidence was found?
-- What assumptions connect the evidence to the conclusion?
-- How were sources weighted, and under which policy?
-- What remains unknown?
-- What evidence would most likely change the answer?
-- If a source were removed or discredited, what downstream conclusions would weaken?
+- retention of important dimensions and person-supplied details;
+- relevance and diversity of sources to the actual decision;
+- exact claim-to-source support and appropriate use of each source class;
+- preservation of uncertainty, disagreement, and source dependence;
+- whether the artifact changes or clarifies a feasible choice;
+- whether another investigator can inspect, extend, or revise it.
 
-The aim is not a longer report. It is a more inspectable and resilient reasoning process.
+Use the eggs case, a contested debate, and questions outside clinical research. A polished interface, passing schema, or large source list is insufficient evidence of success.
 
-## Evaluation
+## Run and contribute
 
-Every substantive workflow should be compared against strong baselines on the same real-world sub-question, including off-the-shelf deep research and a careful AI-assisted investigation.
+The application lives in [`app/`](./app/README.md). It uses TypeScript, React, Vinext, Cloudflare Workers/D1, and a server-side gateway for hosted agent work.
 
-Evaluation should include:
+```bash
+cd app
+npm install
+# Configure server-side gateway bindings as described in app/README.md.
+npm run dev
+```
 
-1. **Epistemic uplift** — better reasoning, calibrated uncertainty, visible cruxes, and load-bearing evidence.
-2. **Generalizability** — performance across curated debates, confident answers with complex evidence, and mundane-but-contested questions.
-3. **Compounding and shareability** — structured artifacts that other investigators can extend or combine.
-4. **Scalability** — gains from better models, more compute, more sources, and more contributors.
-5. **Methodological transparency** — a workflow specific enough to replicate and criticize.
-6. **Adversarial robustness** — resistance to motivated sources, strategic framing, and differing user priorities.
-7. **Insight contribution** — discovery of new failure modes, framings, or tradeoffs.
-
-Useful evaluation methods may include blinded expert comparison, claim-level citation audits, planted-adversary tests, evidence-ablation tests, cross-investigator extension exercises, and update-propagation drills.
-
-## Design principles
-
-- **Evidence before eloquence.** Fluency is not evidence quality.
-- **Preserve the chain.** Do not collapse observations, interpretations, and conclusions into one object.
-- **Expose judgment.** Assessments must be attributable and governed by explicit policies.
-- **Represent uncertainty structurally.** Do not hide it in prose disclaimers.
-- **Prefer precise disagreement to superficial consensus.**
-- **Do not confuse replication with meaning.** A replicable result may still be trivial or misframed.
-- **Do not aggregate before checking comparability.**
-- **Make artifacts reusable by humans and machines.**
-- **Design for revision.** Corrections must propagate through dependencies.
-- **Evaluate against strong baselines.** The bar is meaningful improvement, not novelty alone.
-
-## Non-goals
-
-Epistack is not intended to be:
-
-- an oracle that assigns universal truth scores;
-- a generic search or citation product;
-- a fully automated replacement for expert judgment;
-- a single evidence hierarchy imposed across every domain; or
-- a mechanism for resolving empirical, interpretive, and moral disagreement into one number.
+Use the [app README](./app/README.md) for configuration, commands, route ownership, and code pointers. Keep provider credentials server-side. Document local, tested, committed, pushed, and deployed state separately.
 
 ## Documents
 
-- [Vision](./vision.md) — the long-term purpose, principles, and theory of change.
-- [Reference case studies](./case-studies.md) — why the motivating examples matter and what they require from the system.
-- [Product and data architecture](./architecture.md) — the proposed web-app shape, provenance model, persistence, and latency strategy.
-- [Question-compilation methodology](./methodology/question-compilation.md) — the first specified human–AI operator.
-- [Evidence-ingestion methodology](./methodology/evidence-ingestion.md) — discovery, screening, extraction, verification, and assessment states.
-- [Runnable question compiler](./app/README.md) — the first eggs-case interaction prototype.
-- [Evidence corpus](./app/data/eggs-weight-corpus.ts) — claim-matched extractions and the 32-publication trial inventory.
-- [PubMed discovery artifact](./app/data/pubmed-discovery.json) — 164 machine-discovered records kept separate from assessed evidence.
-
-## Near-term direction
-
-The next phase should harden the live slice on several differently shaped cases:
-
-1. a curated debate containing explicit opposing positions;
-2. a confident public answer resting on complex scientific evidence; and
-3. a mundane but contested practical question.
-
-For each case, we should produce a baseline report, an Epistack artifact, an adversarial audit, and an evaluation showing where the structured workflow materially changed the reasoning. The largest remaining engineering gaps are lawful acquisition for non-PMC and paywalled sources, retraction/correction subscriptions with dependency propagation, adjudicating unresolved cross-publication dependence, multi-investigator merge semantics, and contributed-observation governance. The current PMC path independently refetches and hashes the public artifact at promotion time; this verifies provenance and quoted passages, not the correctness of the models’ methodological judgment.
+- [Vision](./vision.md) — product intent, the three-stage contract, and long-term knowledge infrastructure.
+- [Question compilation](./methodology/question-compilation.md) — dimensions, context, assessability, and scope discipline across stages 1–2.
+- [Evidence ingestion](./methodology/evidence-ingestion.md) — detailed study-evidence workflow; broader source classes require their own methods.
+- [Architecture](./architecture.md) — foundational design for provenance, persistence, collaboration, and latency; its prototype inventory is historical.
+- [Reference case studies](./case-studies.md) — motivating methods and the failure modes they expose.
+- [App README](./app/README.md) — current source structure and development entry point.
+- [Engineering issues](./issues.md) — backlog; verify historical entries against current code before picking up work.
+- [Curated eggs corpus](./app/data/eggs-weight-corpus.ts) — reference material, distinct from newly investigated live evidence.
