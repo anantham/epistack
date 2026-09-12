@@ -191,12 +191,27 @@ function buildLeads(lane: RecallLane, links: Array<{ url: string; title: string 
   })) as Lead[];
 }
 
-const classificationSchema = z.object({
-  classifications: z.array(z.object({
-    url: z.string().min(8).max(2_000),
-    sourceClass: sourceClassSchema,
-  })).max(120),
+const classificationItemSchema = z.object({
+  url: z.string().min(8).max(2_000),
+  sourceClass: sourceClassSchema,
 });
+// Strict schema for the prompt (guides the model); loose schema for parsing so a
+// single malformed entry cannot discard the whole batch.
+const classificationPromptSchema = z.object({
+  classifications: z.array(classificationItemSchema).max(120),
+});
+const classificationEnvelopeSchema = z.object({
+  classifications: z.array(z.unknown()).max(400),
+});
+
+function canonicalUrl(raw: string) {
+  try {
+    const url = new URL(normalizeUrl(raw));
+    return `${url.host.toLowerCase()}${url.pathname.replace(/\/$/, "")}`.toLowerCase();
+  } catch {
+    return normalizeUrl(raw).toLowerCase();
+  }
+}
 
 async function classifyLeads(leads: Lead[]) {
   const unique = new Map<string, string>();
@@ -209,14 +224,25 @@ async function classifyLeads(leads: Lead[]) {
     sourceClassPromptList,
     "Rules: a peer-reviewed randomized or observational human study is primary-study; a meta-analysis or systematic review is systematic-review; a professional-society or public-health recommendation is guideline; a formal spec (ISO, NIST, etc.) is standard; a trials registry entry is trial-registry; a government or international dataset/report is official-statistics; an unreviewed manuscript server is preprint; news and expert commentary is reporting; a forum post or first-person account is anecdote.",
     "Return only JSON matching this schema. No markdown fences.",
-    JSON.stringify(z.toJSONSchema(classificationSchema)),
+    JSON.stringify(z.toJSONSchema(classificationPromptSchema)),
   ].join("\n");
   const raw = await runLyraStage({ model: "lyra-chatgpt-pro", effort: "instant", instructions, input: JSON.stringify(list) });
-  const parsed = classificationSchema.parse(JSON.parse(stripFences(raw)));
-  const map = new Map(parsed.classifications.map((entry) => [normalizeUrl(entry.url), entry.sourceClass]));
+  const envelope = classificationEnvelopeSchema.parse(JSON.parse(stripFences(raw)));
+  const classifications = envelope.classifications.flatMap((candidate) => {
+    const parsed = classificationItemSchema.safeParse(candidate);
+    return parsed.success ? [parsed.data] : [];
+  });
+  const byCanonical = new Map<string, SourceClass>();
+  const byTitle = new Map<string, SourceClass>();
+  for (const entry of classifications) {
+    byCanonical.set(canonicalUrl(entry.url), entry.sourceClass);
+    byTitle.set(entry.url.trim().toLowerCase(), entry.sourceClass);
+  }
+  const byLeadTitle = new Map(list.map((item) => [item.title.trim().toLowerCase(), item.url]));
   for (const lead of leads) {
-    const classified = map.get(lead.source.url);
-    if (classified) lead.sourceClass = classified;
+    lead.sourceClass = byCanonical.get(canonicalUrl(lead.source.url))
+      ?? byCanonical.get(canonicalUrl(byLeadTitle.get(lead.source.title.trim().toLowerCase()) ?? ""))
+      ?? byTitle.get(lead.source.title.trim().toLowerCase());
   }
 }
 
@@ -281,8 +307,10 @@ export async function POST(request: Request) {
 
     try {
       await classifyLeads(leads);
-    } catch {
-      // Classification is an enhancement; unclassified leads stay valid.
+    } catch (error) {
+      // Classification is an enhancement; unclassified leads stay valid — but
+      // never hide the failure: a silent miss leaves every lead "other".
+      console.error("[recall] classification failed:", error instanceof Error ? error.message : error);
     }
 
     const laneOrder: RecallLane[] = ["broad-recall", "applicability", "context"];
