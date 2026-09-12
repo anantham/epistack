@@ -27,7 +27,7 @@ const stageModel = "lyra-chatgpt-pro";
 const stageEffort = "medium";
 const fetchTimeoutMs = 20_000;
 const minimumVerifiedChars = 800;
-const hostedTextCap = 55_000;
+const hostedTextCap = 12_000;
 const userAgent = "Epistack Evidence Lab/0.1 (hosted source adapter)";
 
 // The three-axis model treats a comparison as scoped only when topic,
