@@ -99,3 +99,26 @@ and tests pass; `tsc` is not a usable gate yet.
 
 Lyra/OpenRouter secrets live in `.dev.vars` locally (gitignored) and as hosted
 secrets. No secret-manager story, rotation policy, or per-user key isolation.
+
+---
+
+## Stage 3: multi-source investigation model
+
+The hosted investigation path now classifies sources as `primary-study`,
+`systematic-review`, `guideline`, `standard`, `trial-registry`,
+`official-statistics`, `preprint`, `reporting`, or `anecdote`. Source class is
+kept separate from three axes: `evidenceStatus` (lead through accepted or
+rejected), `epistemicRole` (causal, normative, descriptive, status, or context),
+and acquisition (`fetched-verified` or `cited-unverified`).
+
+Promotion is deliberately narrow: only a non-preliminary causal source whose
+artifact was fetched and verified and whose result passed adversarial review can
+be accepted. The adapters acquire PMC JATS for eligible research records,
+ClinicalTrials.gov v2 records for trial registries, or best-effort HTML; a failed
+acquisition remains a cited-unverified fallback rather than verified evidence.
+
+Recall now fans out one broad agent per claim, plus separate applicability and
+context lanes. These returns remain lead-only; the context lane cannot promote
+evidence. Remaining work is Phase-4 lane display in the artifact, wiring the
+planned `computeDivergence` step into that artifact (the current divergence
+helpers are not connected there), and live lane-progress reporting.

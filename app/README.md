@@ -6,6 +6,15 @@ A browser prototype of an Epistack investigation loop: collaboratively decompose
 
 The included evidence case uses the competition prompt about whether eggs are good to eat, while the framing operator can now decompose arbitrary submitted questions.
 
+## Research pipeline
+
+Research now runs through the Astra-hosted pipeline across heterogeneous source
+classes, with extraction chosen for the declared source class rather than a
+single generic evidence path. Only first-hand causal sources that are fetched
+and verified, non-preliminary, and pass adversarial review can become accepted
+evidence; normative, descriptive, status, and context sources retain their
+separate roles.
+
 ## Run locally
 
 Requires Node.js 22.13 or newer.
