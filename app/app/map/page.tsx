@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   decompositionSessionKey,
   type DecompositionResponse,
@@ -17,6 +18,7 @@ import {
   agentPromptStorageKey,
   sanitizeAgentPromptOverrides
 } from "../../lib/agent-prompts";
+import { runHostedDecomposition } from "../../lib/hosted-decomposition-client";
 import { CaseHeader } from "../components/case-navigation";
 
 const editableClaimFields = [
@@ -82,6 +84,7 @@ export default function ContextualizeMap() {
   const [compileError, setCompileError] = useState("");
   const [compiledBrief, setCompiledBrief] = useState<ResearchBrief | null>(null);
   const [editedClaims, setEditedClaims] = useState<ResearchClaimFrame[]>([]);
+  const [recomputing, setRecomputing] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(decompositionSessionKey) || window.sessionStorage.getItem(decompositionSessionKey);
@@ -101,6 +104,47 @@ export default function ContextualizeMap() {
     }
     setReady(true);
   }, []);
+
+  async function recomputeQuestions() {
+    if (recomputing) return;
+    if (!window.confirm("Recompute the decomposition and regenerate the interview questions on Lyra?")) return;
+    setRecomputing(true);
+    setCompileError("");
+    try {
+      const promptOverrides = sanitizeAgentPromptOverrides(
+        JSON.parse(window.localStorage.getItem(agentPromptStorageKey) || "{}"),
+      );
+      let effort: string | undefined;
+      try {
+        const prefs = JSON.parse(window.localStorage.getItem("epistack:preferences:v1") || "{}") as { effort?: unknown };
+        if (typeof prefs?.effort === "string") effort = prefs.effort;
+      } catch {
+        // Preference read is best-effort; the server defaults the effort.
+      }
+      const result = await runHostedDecomposition(
+        { question: prompt, decisionContext, promptOverrides, effort },
+        `contextualize-recompute:${Date.now()}`,
+        true,
+        () => {},
+      );
+      setClusters(result.decomposition.clusters);
+      setCaseSummary(result.decomposition.summary);
+      setKnownUnknowns(result.decomposition.knownUnknowns);
+      setClaimTemplate(result.decomposition.claimTemplate);
+      setElicitationIndex(0);
+      setContextAnswers({});
+      setContextSelections({});
+      setCompileState("idle");
+      setCompiledBrief(null);
+      window.localStorage.setItem(decompositionSessionKey, JSON.stringify(result));
+      window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(result));
+    } catch (error) {
+      setCompileState("error");
+      setCompileError(error instanceof Error ? error.message : "Recompute failed.");
+    } finally {
+      setRecomputing(false);
+    }
+  }
 
   const currentCluster = clusters[elicitationIndex] ?? null;
   const currentContextQuestion = currentCluster?.contextQuestion ?? null;
@@ -252,9 +296,33 @@ export default function ContextualizeMap() {
   return (
     <main className="case-layout map-layout">
       <CaseHeader active="contextualize" />
+      <div className="map-actions">
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Recompute decomposition and questions"
+          data-tooltip="Recompute questions"
+          disabled={recomputing}
+          onClick={() => void recomputeQuestions()}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 3v6h-6" />
+          </svg>
+        </button>
+        <Link className="icon-button" href="/?settings=1" aria-label="Settings" data-tooltip="Settings">⚙︎</Link>
+        <Link className="icon-button" href="/prompts" aria-label="AI agent prompts" data-tooltip="AI agent prompts">✎</Link>
+      </div>
       <div className="case-bounds map-bounds">
         <div className="map-scroll">
-          {compileState === "idle" && currentContextQuestion && (
+          {recomputing && (
+            <div className="compile-overlay">
+              <div className="ai-orb thinking"><span /></div>
+              <h2>Recomputing</h2>
+              <p>Regenerating the decomposition and interview questions on Lyra…</p>
+            </div>
+          )}
+          {!recomputing && compileState === "idle" && currentContextQuestion && (
             <section className="elicitation-screen" aria-label="Context interview" style={{ position: 'relative', background: 'none' }}>
               <div className="elicitation-card" key={currentContextQuestion.id}>
                 <div className="elicitation-meta">
@@ -263,6 +331,7 @@ export default function ContextualizeMap() {
                     type="button"
                     className="icon-button context-info"
                     aria-label={`Why this question matters: ${currentContextQuestion.whyItMatters}`}
+                    data-tooltip={`${currentContextQuestion.effect} · ${currentContextQuestion.whyItMatters}`}
                     title={`${currentContextQuestion.effect}: ${currentContextQuestion.whyItMatters}`}
                   >?</button>
                 </div>

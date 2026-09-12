@@ -9699,3 +9699,19 @@ button.primary-link:disabled {
 .compile-overlay .ai-orb {
   margin: 0 0 4px;
 }
+
+/* /map header actions: recompute + settings + prompts, always visible */
+.map-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  position: fixed;
+  right: clamp(20px, 4vw, 64px);
+  top: 12px;
+  z-index: 60;
+}
+
+.map-actions .icon-button {
+  font-size: 16px;
+  text-decoration: none;
+}
