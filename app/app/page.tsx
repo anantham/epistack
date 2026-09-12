@@ -741,6 +741,24 @@ export default function Home() {
       <div className={`intro-surface ${introComplete ? "is-ready" : ""}`} aria-hidden={!introComplete}>
         <header className="minimal-topbar">
           <StageNav active="decompose" />
+          {result && (
+            <button
+              type="button"
+              className="icon-button recompute-trigger"
+              aria-label="Recompute decomposition"
+              data-tooltip="Recompute"
+              onClick={() => {
+                if (window.confirm(`Recompute this decomposition? It takes about ${formatDuration(expectedTotalMs)}.`)) {
+                  void analyze(decisionContext, true, true);
+                }
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                <path d="M21 3v6h-6" />
+              </svg>
+            </button>
+          )}
           <button
             type="button"
             className="icon-button settings-trigger"
@@ -876,16 +894,11 @@ export default function Home() {
 
           {result && (phase === "review" || phase === "transitioning") && (
           <section className="story-board" aria-labelledby="trace-title">
-            <button type="button" className="icon-button review-back" aria-label="Edit question" data-tooltip="Edit question" onClick={returnToEditor}>←</button>
             <div className="story-heading">
-              <div>
+              <button type="button" className="icon-button review-back" aria-label="Edit question" data-tooltip="Edit question" onClick={returnToEditor}>←</button>
+              <div className="story-heading-title">
                 <h2 id="trace-title">Decomposition</h2>
                 {result.warning && <p className="decomposition-warning">{result.warning}</p>}
-              </div>
-              <div className="story-heading-meta">
-                <span title="Computational freshness only; this does not imply evidential confidence.">{decompositionCacheLabel(result)}</span>
-                <small>{result.decomposition.clusters.length} semantic clusters</small>
-                <button type="button" onClick={() => void analyze(decisionContext, true, true)}>Recompute</button>
               </div>
             </div>
 

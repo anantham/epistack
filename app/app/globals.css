@@ -138,10 +138,17 @@ main {
   top: 12px;
 }
 
+.minimal-topbar .recompute-trigger {
+  pointer-events: auto;
+  position: absolute;
+  right: calc(clamp(20px, 4vw, 64px) + 46px);
+  top: 12px;
+}
+
 .minimal-topbar .stage-nav {
   pointer-events: auto;
   position: absolute;
-  right: clamp(74px, 8vw, 128px);
+  right: calc(clamp(74px, 8vw, 128px) + 46px);
   top: 12px;
 }
 
@@ -788,7 +795,8 @@ main {
 }
 
 .review-back {
-  margin-bottom: 22px;
+  flex: 0 0 auto;
+  margin-bottom: 0;
 }
 
 .topbar {
@@ -3592,12 +3600,17 @@ h2 {
 }
 
 .story-heading {
-  align-items: end;
+  align-items: center;
   border-bottom: 1px solid var(--line);
   display: flex;
-  gap: 28px;
+  gap: 22px;
   justify-content: space-between;
   padding-bottom: 25px;
+}
+
+.story-heading-title {
+  flex: 1;
+  min-width: 0;
 }
 
 .story-heading .eyebrow {
