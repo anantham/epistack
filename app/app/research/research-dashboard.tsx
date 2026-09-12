@@ -15,6 +15,7 @@ import type {
   RecallToolTraceEvent,
 } from "../../lib/broad-recall";
 import { sourceClassLabels, canPromoteSourceClass } from "../../lib/source-class";
+import type { SourceReviewResponse } from "../../lib/source-adapters";
 import {
   researchBriefSchema,
   researchBriefStorageKey,
@@ -50,6 +51,12 @@ type RecallRun = {
   error: string;
   progress: string;
   liveTrace: RecallToolTraceEvent[];
+};
+
+type SourceReviewRun = {
+  status: "idle" | "loading" | "complete" | "error";
+  response: SourceReviewResponse | null;
+  error: string;
 };
 
 type PromotionRecord = {
@@ -131,6 +138,135 @@ function boundedUnique(values: Array<string | null | undefined>, maximumLength: 
     .filter(Boolean))).slice(0, 12);
 }
 
+function sourceReviewRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function sourceReviewText(value: unknown, fallback = "Not stated") {
+  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    const values = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+    if (values.length > 0) return values.join(" · ");
+  }
+  return fallback;
+}
+
+function sourceReviewItems(payload: unknown, key: string) {
+  const value = sourceReviewRecord(payload)[key];
+  return Array.isArray(value) ? value.map(sourceReviewRecord) : [];
+}
+
+function renderSourceReviewPayload(review: SourceReviewResponse) {
+  const payload = sourceReviewRecord(review.payload);
+
+  if (review.role === "normative") {
+    return (
+      <div className="candidate-results">
+        {sourceReviewItems(payload, "recommendations").map((recommendation, index) => {
+          const scope = sourceReviewRecord(recommendation.comparisonScope);
+          return (
+            <article key={`recommendation-${index}`}>
+              <div><span className="relation-chip supports">recommendation</span><small>{sourceReviewText(recommendation.strength)}</small></div>
+              <strong>{sourceReviewText(recommendation.statement)}</strong>
+              <dl className="candidate-study">
+                <div><dt>Issuing body</dt><dd>{sourceReviewText(recommendation.issuingBody)}</dd></div>
+                <div><dt>Effective date</dt><dd>{sourceReviewText(recommendation.effectiveDate)}</dd></div>
+                <div><dt>Topic</dt><dd>{sourceReviewText(scope.topic)}</dd></div>
+                <div><dt>Population</dt><dd>{sourceReviewText(scope.population)}</dd></div>
+                <div><dt>Jurisdiction</dt><dd>{sourceReviewText(scope.jurisdiction)}</dd></div>
+              </dl>
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (review.role === "descriptive") {
+    return (
+      <div className="candidate-results">
+        {sourceReviewItems(payload, "statistics").map((statistic, index) => {
+          const scope = sourceReviewRecord(statistic.comparisonScope);
+          return (
+            <article key={`statistic-${index}`}>
+              <strong>{sourceReviewText(statistic.measure)}</strong>
+              <b>{sourceReviewText(statistic.value)}{statistic.unit ? ` ${sourceReviewText(statistic.unit, "")}` : ""}</b>
+              <dl className="candidate-study">
+                <div><dt>Population</dt><dd>{sourceReviewText(statistic.population)}</dd></div>
+                <div><dt>Geography</dt><dd>{sourceReviewText(statistic.geography)}</dd></div>
+                <div><dt>Period</dt><dd>{sourceReviewText(statistic.period)}</dd></div>
+                <div><dt>Dataset version</dt><dd>{sourceReviewText(statistic.datasetVersion)}</dd></div>
+                <div><dt>Comparison topic</dt><dd>{sourceReviewText(scope.topic)}</dd></div>
+                <div><dt>Comparison jurisdiction</dt><dd>{sourceReviewText(scope.jurisdiction)}</dd></div>
+              </dl>
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (review.role === "status") {
+    const registry = sourceReviewRecord(payload.registry);
+    return (
+      <dl className="candidate-study">
+        <div><dt>Registration ID</dt><dd>{sourceReviewText(registry.registrationId)}</dd></div>
+        <div><dt>Title</dt><dd>{sourceReviewText(registry.title)}</dd></div>
+        <div><dt>Status</dt><dd>{sourceReviewText(registry.status)}</dd></div>
+        <div><dt>Sponsor</dt><dd>{sourceReviewText(registry.sponsor)}</dd></div>
+        <div><dt>Start date</dt><dd>{sourceReviewText(registry.startDate)}</dd></div>
+        <div><dt>Completion date</dt><dd>{sourceReviewText(registry.completionDate)}</dd></div>
+        <div><dt>Conditions</dt><dd>{sourceReviewText(registry.conditions)}</dd></div>
+        <div><dt>Interventions</dt><dd>{sourceReviewText(registry.interventions)}</dd></div>
+      </dl>
+    );
+  }
+
+  if (review.role === "context") {
+    return (
+      <div>
+        <p className="extraction-caveat"><strong>Context only — cannot become evidence.</strong> These signals remain hypotheses and do not establish that an intervention causes an effect.</p>
+        <div className="candidate-results">
+          {sourceReviewItems(payload, "signals").map((signal, index) => (
+            <article key={`signal-${index}`}>
+              <strong>{sourceReviewText(signal.claim)}</strong>
+              <small>{sourceReviewText(signal.signalType)} · {sourceReviewText(signal.sourceType)}</small>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const candidate = sourceReviewRecord(payload.candidate);
+  const results = Array.isArray(payload.results)
+    ? payload.results.map(sourceReviewRecord)
+    : Array.isArray(candidate.results)
+      ? candidate.results.map(sourceReviewRecord)
+      : [];
+  const promotion = sourceReviewRecord(payload.promotion);
+  return (
+    <div className="candidate-results">
+      <header>
+        <div><span>Dual-review results</span><strong>{results.length} result{results.length === 1 ? "" : "s"}</strong></div>
+        <small>{sourceReviewText(promotion.acceptedCount, "No promotion count returned")} accepted · {sourceReviewText(promotion.rejectedCount, "No rejection count returned")} rejected</small>
+      </header>
+      {results.map((result, index) => (
+        <article key={`causal-result-${index}`}>
+          <div><span className={`relation-chip ${sourceReviewText(result.relation, "not-informative")}`}>{sourceReviewText(result.relation, "not-informative")}</span><small>{sourceReviewText(result.claimFrameId)}</small></div>
+          <strong>{sourceReviewText(result.resultText, sourceReviewText(result.analysisLabel))}</strong>
+          {result.estimate !== undefined && result.estimate !== null && <b>{sourceReviewText(result.estimate)}</b>}
+          <p>{sourceReviewText(result.rationale)}</p>
+        </article>
+      ))}
+      {results.length === 0 && <p className="extraction-caveat">No compact causal result summary was returned.</p>}
+    </div>
+  );
+}
+
 export function ResearchDashboard() {
   const [brief, setBrief] = useState<ResearchBrief | null>(null);
   const activeLanes = useMemo(() => brief ? researchLanesFromBrief(brief) : [], [brief]);
@@ -149,6 +285,7 @@ export function ResearchDashboard() {
     progress: "Choose the claims that deserve broad and applicability-specific recall.",
     liveTrace: [],
   });
+  const [sourceReviews, setSourceReviews] = useState<Record<string, SourceReviewRun>>({});
   const [storageReady, setStorageReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionHealth>({ status: "checking", models: null, detail: "Checking the local Claude companion…" });
 
@@ -501,6 +638,48 @@ export function ResearchDashboard() {
         status: "error",
         error: error instanceof Error ? error.message : "The broad-recall sweep failed.",
         progress: "Lead discovery stopped.",
+      }));
+    }
+  }
+
+  async function investigateRecallLead(lead: RecallResponse["leads"][number]) {
+    const sourceClass = lead.sourceClass;
+    if (!sourceClass) return;
+    setSourceReviews((current) => ({
+      ...current,
+      [lead.id]: { status: "loading", response: current[lead.id]?.response ?? null, error: "" },
+    }));
+    try {
+      const response = await fetch("/api/investigate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: {
+            sourceClass,
+            url: lead.source.url,
+            title: lead.source.title,
+          },
+          question: brief?.originalQuestion,
+          decisionContext: brief?.decisionContext,
+          claimFrames: compiledClaimFrames(),
+          applicabilityProfile: localApplicabilityProfile(),
+          promptOverrides: promptOverrides(),
+        }),
+      });
+      const payload = await response.json() as SourceReviewResponse & { error?: string };
+      if (!response.ok || payload.error) throw new Error(payload.error || "The source acquisition and extraction failed.");
+      setSourceReviews((current) => ({
+        ...current,
+        [lead.id]: { status: "complete", response: payload, error: "" },
+      }));
+    } catch (error) {
+      setSourceReviews((current) => ({
+        ...current,
+        [lead.id]: {
+          status: "error",
+          response: current[lead.id]?.response ?? null,
+          error: error instanceof Error ? error.message : "The source acquisition and extraction failed.",
+        },
       }));
     }
   }
@@ -936,7 +1115,9 @@ export function ResearchDashboard() {
                     <p>{recallLane.searchSummary}</p>
                   </header>
                   <div>
-                    {leads.map((lead) => (
+                    {leads.map((lead) => {
+                      const sourceReview = sourceReviews[lead.id] ?? { status: "idle", response: null, error: "" };
+                      return (
                       <article className={lead.disconfirming ? "disconfirming" : ""} key={lead.id}>
                         <div className="recall-lead-status">
                           <span>{lead.status}</span>
@@ -958,9 +1139,40 @@ export function ResearchDashboard() {
                         <footer>
                           <a href={lead.source.url} target="_blank" rel="noreferrer">Open lead ↗</a>
                           <button onClick={() => adoptRecallQuery(lead)}>Use query in PubMed lane</button>
+                          {lead.sourceClass && (
+                            <button
+                              onClick={() => void investigateRecallLead(lead)}
+                              disabled={sourceReview.status === "loading"}
+                              title="Acquire the declared source and extract its typed review payload."
+                            >
+                              {sourceReview.status === "loading" ? "Acquiring & extracting…" : sourceReview.response ? "Re-acquire & extract" : "Acquire & extract"}
+                            </button>
+                          )}
                         </footer>
+                        {sourceReview.status === "loading" && <div className="local-agent-progress"><i aria-hidden="true" /><span>Acquiring and extracting this declared source…</span></div>}
+                        {sourceReview.error && <p className="deep-dive-error" role="alert">{sourceReview.error}</p>}
+                        {sourceReview.response && (
+                          <div className="candidate-extraction source-review-extraction">
+                            <header>
+                              <div>
+                                <span>Source review · {sourceReview.response.role}</span>
+                                <strong>{sourceReview.response.source.title}</strong>
+                              </div>
+                              <div className="candidate-cache-meta">
+                                <em>{sourceReview.response.source.acquisition}</em>
+                                <small>{sourceReview.response.evidenceStatus}{sourceReview.response.preliminary ? " · preliminary" : ""}</small>
+                              </div>
+                            </header>
+                            <div className="recall-observation-badges" aria-label="Source review status">
+                              <span className={sourceReview.response.source.acquisition === "fetched-verified" ? "observed" : ""}>{sourceReview.response.source.acquisition}</span>
+                              <span>{sourceReview.response.role} role</span>
+                            </div>
+                            {renderSourceReviewPayload(sourceReview.response)}
+                          </div>
+                        )}
                       </article>
-                    ))}
+                      );
+                    })}
                   </div>
                   {recallLane.unsearchedBoundaries.length > 0 && (
                     <details className="recall-boundaries">
