@@ -178,8 +178,8 @@ export function ResearchDashboard() {
     // Network Access permission prompt.
     setCompanion({
       status: "online",
-      models: { primary: "Lyra · lyra-chatgpt-pro", adversary: "Lyra · lyra-chatgpt-pro" },
-      detail: "Lead discovery, full-text extraction, adversarial review, and synthesis run on Lyra.",
+      models: { primary: "Astra · GPT 6", adversary: "Astra · adversarial reviewer" },
+      detail: "Lead discovery, full-text extraction, adversarial review, and synthesis run on Astra.",
     });
   }
 
@@ -691,7 +691,7 @@ export function ResearchDashboard() {
   async function investigateFullText(record: PubmedDiscovery, refresh = false) {
     setDeepDives((current) => ({
       ...current,
-      [record.pmid]: { status: "reviewing", payload: null, checked: false, error: "", progress: "Acquiring and cross-checking the full paper on Lyra", fallbackAvailable: false },
+      [record.pmid]: { status: "reviewing", payload: null, checked: false, error: "", progress: "Acquiring and cross-checking the full paper on Astra", fallbackAvailable: false },
     }));
     try {
       const workspace = currentWorkspace();

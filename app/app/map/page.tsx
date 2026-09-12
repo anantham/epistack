@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,7 +19,17 @@ import {
   sanitizeAgentPromptOverrides
 } from "../../lib/agent-prompts";
 import { runHostedDecomposition } from "../../lib/hosted-decomposition-client";
+import {
+  appendBriefTelemetryRun,
+  briefTelemetryStorageKey,
+  emptyBriefTelemetry,
+  parseBriefTelemetry,
+  summarizeBriefTelemetry,
+  type BriefTelemetry
+} from "../../lib/brief-telemetry";
+import { formatDuration } from "../../lib/decomposition-telemetry";
 import { CaseHeader } from "../components/case-navigation";
+import { BackendSettings, normalizeThinkingEffort, preferencesStorageKey, readPreferredEffort, type ThinkingEffort } from "../components/backend-settings";
 
 const editableClaimFields = [
   "shortLabel",
@@ -85,6 +95,15 @@ export default function ContextualizeMap() {
   const [compiledBrief, setCompiledBrief] = useState<ResearchBrief | null>(null);
   const [editedClaims, setEditedClaims] = useState<ResearchClaimFrame[]>([]);
   const [recomputing, setRecomputing] = useState(false);
+  const [briefTelemetry, setBriefTelemetry] = useState<BriefTelemetry>(emptyBriefTelemetry);
+  const [compileElapsed, setCompileElapsed] = useState(0);
+  const [preferredEffort, setPreferredEffort] = useState<ThinkingEffort>("instant");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const compileStartedAtRef = useRef(0);
+  const briefSummary = useMemo(() => summarizeBriefTelemetry(briefTelemetry), [briefTelemetry]);
+  const briefEstimate = briefSummary.byEffort[preferredEffort]?.totalMedianMs ?? briefSummary.totalMedianMs;
+  const briefSamples = briefSummary.byEffort[preferredEffort]?.samples ?? briefSummary.samples;
+  const briefRemaining = briefEstimate ? Math.max(0, briefEstimate - compileElapsed) : null;
 
   useEffect(() => {
     const stored = window.localStorage.getItem(decompositionSessionKey) || window.sessionStorage.getItem(decompositionSessionKey);
@@ -105,9 +124,54 @@ export default function ContextualizeMap() {
     setReady(true);
   }, []);
 
+  useEffect(() => {
+    try {
+      setBriefTelemetry(parseBriefTelemetry(window.localStorage.getItem(briefTelemetryStorageKey)));
+    } catch {
+      setBriefTelemetry(emptyBriefTelemetry);
+    }
+    setPreferredEffort(readPreferredEffort());
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem("epistack:contextualize:v1") || "null") as {
+        contextAnswers?: Record<string, string>;
+        contextSelections?: Record<string, string[]>;
+        elicitationIndex?: number;
+      } | null;
+      if (saved) {
+        if (saved.contextAnswers) setContextAnswers(saved.contextAnswers);
+        if (saved.contextSelections) setContextSelections(saved.contextSelections);
+        if (typeof saved.elicitationIndex === "number") setElicitationIndex(Math.max(0, saved.elicitationIndex));
+      }
+    } catch {
+      // Ignore malformed saved interview state.
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        window.sessionStorage.setItem(
+          "epistack:contextualize:v1",
+          JSON.stringify({ contextAnswers, contextSelections, elicitationIndex }),
+        );
+      } catch {
+        // Session persistence is best-effort.
+      }
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [contextAnswers, contextSelections, elicitationIndex]);
+
+  useEffect(() => {
+    if (compileState !== "compiling") return;
+    const timer = window.setInterval(() => {
+      setCompileElapsed(Date.now() - (compileStartedAtRef.current || Date.now()));
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [compileState]);
+
   async function recomputeQuestions() {
     if (recomputing) return;
-    if (!window.confirm("Recompute the decomposition and regenerate the interview questions on Lyra?")) return;
+    if (!window.confirm("Recompute the decomposition and regenerate the interview questions on Astra?")) return;
     setRecomputing(true);
     setCompileError("");
     try {
@@ -204,6 +268,8 @@ export default function ContextualizeMap() {
       return data;
     }
 
+    compileStartedAtRef.current = Date.now();
+    setCompileElapsed(0);
     setCompileState("compiling");
     setCompileProgress("Preparing the edited scope for the research compiler");
     setCompileError("");
@@ -233,9 +299,19 @@ export default function ContextualizeMap() {
           setCompileState("review");
           setCompileProgress("Review the compiled claims before starting research");
           setCompileError("");
+          const totalMs = Math.max(0, Date.now() - compileStartedAtRef.current);
+          setBriefTelemetry((current) => {
+            const next = appendBriefTelemetryRun(current, { totalMs, effort: preferredEffort, at: new Date().toISOString() });
+            try {
+              window.localStorage.setItem(briefTelemetryStorageKey, JSON.stringify(next));
+            } catch {
+              // Telemetry is an estimate; failing to persist it must not block the run.
+            }
+            return next;
+          });
           return;
         }
-        setCompileProgress("Compiling the research contract on Lyra");
+        setCompileProgress("Compiling the research contract on Astra");
       }
       throw new Error("This compilation is taking longer than expected. Try again to resume the saved run.");
     } catch (error) {
@@ -283,8 +359,30 @@ export default function ContextualizeMap() {
           <path d="M21 3v6h-6" />
         </svg>
       </button>
-      <Link className="icon-button" href="/?settings=1" aria-label="Settings" data-tooltip="Settings">⚙︎</Link>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Settings"
+        aria-expanded={settingsOpen}
+        data-tooltip="Settings"
+        onClick={() => setSettingsOpen((open) => !open)}
+      >⚙︎</button>
       <Link className="icon-button" href="/prompts" aria-label="AI agent prompts" data-tooltip="AI agent prompts">✎</Link>
+      {settingsOpen && (
+        <BackendSettings
+          effort={preferredEffort}
+          onEffortChange={(next) => {
+            const normalized = normalizeThinkingEffort(next);
+            setPreferredEffort(normalized);
+            try {
+              window.localStorage.setItem(preferencesStorageKey, JSON.stringify({ effort: normalized }));
+            } catch {
+              // Preference persistence is best-effort.
+            }
+          }}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 
@@ -322,7 +420,7 @@ export default function ContextualizeMap() {
             <div className="compile-overlay">
               <div className="ai-orb thinking"><span /></div>
               <h2>Recomputing</h2>
-              <p>Regenerating the decomposition and interview questions on Lyra…</p>
+              <p>Regenerating the decomposition and interview questions on Astra…</p>
             </div>
           )}
           {!recomputing && compileState === "idle" && currentContextQuestion && (
@@ -447,6 +545,15 @@ export default function ContextualizeMap() {
               <div className="ai-orb thinking"><span /></div>
               <h2>{compileState === "compiling" ? "Compiling brief" : "Error"}</h2>
               <p>{compileProgress}</p>
+              {compileState === "compiling" && (
+                <div className="compile-timing">
+                  <div><strong>{formatDuration(compileElapsed)}</strong><span>elapsed</span></div>
+                  <div>
+                    <strong>{briefEstimate ? formatDuration(briefRemaining) : "—"}</strong>
+                    <span>{briefEstimate ? `est. remaining · ${briefSamples} prior run${briefSamples === 1 ? "" : "s"}` : "collecting samples"}</span>
+                  </div>
+                </div>
+              )}
               {compileError && <p className="error-text" style={{color: 'red'}}>{compileError}</p>}
               {compileState === "error" && (
                 <button onClick={backToInterview}>Go back and try again</button>

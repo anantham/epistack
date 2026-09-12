@@ -9712,3 +9712,30 @@ button.primary-link:disabled {
   font-size: 16px;
   text-decoration: none;
 }
+
+.compile-timing {
+  display: flex;
+  gap: 30px;
+  margin-top: 4px;
+}
+
+.compile-timing > div {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+
+.compile-timing strong {
+  color: var(--ink);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 20px;
+  font-weight: 430;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.compile-timing span {
+  color: var(--ink-soft);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+}

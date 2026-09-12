@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { StageNav } from "./components/case-navigation";
+import { BackendSettings } from "./components/backend-settings";
 import type {
   DecompositionResponse,
   QuestionHighlight,
@@ -49,7 +50,6 @@ const effortLabels: Record<ThinkingEffort, string> = {
   xhigh: "Extra High",
   pro: "Pro",
 };
-const effortOptions = canonicalEfforts.map((value) => ({ value, label: effortLabels[value] }));
 const defaultEffort: ThinkingEffort = "instant";
 
 function normalizeEffort(value: unknown): ThinkingEffort {
@@ -748,51 +748,11 @@ export default function Home() {
           </button>
 
           {settingsOpen && (
-            <div className="settings-panel" role="dialog" aria-label="Model settings">
-              <div className="settings-heading">
-                <strong>Settings</strong>
-                <button type="button" className="icon-button" aria-label="Close settings" data-tooltip="Close" onClick={() => setSettingsOpen(false)}>×</button>
-              </div>
-              <label>
-                <span>Backend</span>
-                <input
-                  type="text"
-                  value="Lyra (hosted) · no key needed"
-                  readOnly
-                  aria-readonly="true"
-                  tabIndex={-1}
-                  spellCheck={false}
-                />
-              </label>
-              <label>
-                <span>Thinking effort</span>
-                <select
-                  value={selectedEffort}
-                  onChange={(event) => setSelectedEffort(normalizeEffort(event.target.value))}
-                  style={{
-                    background: "var(--surface-raised)",
-                    border: "1px solid var(--line)",
-                    borderRadius: 9,
-                    color: "var(--ink)",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    padding: "10px 11px",
-                    width: "100%",
-                  }}
-                >
-                  {effortOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-              <Link className="settings-prompt-link" href="/prompts">
-                <span><strong>AI agent prompts</strong><small>Inspect and edit the instructions driving every model call.</small></span>
-                <b aria-hidden="true">→</b>
-              </Link>
-              <p className="connection-status">
-                <i aria-hidden="true" />Higher effort is slower and does not change your quota. Saved in this browser.
-              </p>
-            </div>
+            <BackendSettings
+              effort={selectedEffort}
+              onEffortChange={setSelectedEffort}
+              onClose={() => setSettingsOpen(false)}
+            />
           )}
         </header>
 

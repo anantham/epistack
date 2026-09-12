@@ -65,15 +65,17 @@ test("prompt overrides resolve into runtime text and cache identity", () => {
 });
 
 test("the settings link opens an editable Prompt Lab wired into model requests", async () => {
-  const [home, lab, decompositionApi, deepDiveApi, dashboard] = await Promise.all([
+  const [home, lab, settings, decompositionApi, deepDiveApi, dashboard] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/prompts/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/backend-settings.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/decompose/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/deep-dive/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/research/research-dashboard.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(home, /href="\/prompts"/);
-  assert.match(home, /AI agent prompts/);
+  assert.match(home, /BackendSettings/);
+  assert.match(settings, /href="\/prompts"/);
+  assert.match(settings, /AI agent prompts/);
   assert.match(lab, /Prompt Lab/);
   assert.match(lab, /System instructions/);
   assert.match(lab, /Runtime task template/);

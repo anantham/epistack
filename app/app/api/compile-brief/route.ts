@@ -197,7 +197,7 @@ export async function POST(request: Request) {
               outboundQueryPolicy: "Only each claim's compact searchQuery and publication filters leave the workflow during discovery.",
             },
             generatedAt: new Date().toISOString(),
-            compiledBy: 'Lyra · lyra-chatgpt-pro',
+            compiledBy: 'Astra · GPT 6',
           });
           state.status = 'completed';
         } else if (result && ['failed', 'cancelled', 'incomplete'].includes(result.status || '')) {

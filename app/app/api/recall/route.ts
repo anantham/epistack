@@ -141,9 +141,9 @@ function buildLeads(lane: RecallLane, links: Array<{ url: string; title: string 
     lane,
     claimIds: [firstClaimId],
     source: { url: link.url, title: link.title, type: "other" as const },
-    whyRelevant: `Discovered by the hosted ${lane} Lyra web-search lane for claim ${firstClaimId}.`,
+    whyRelevant: `Discovered by the hosted ${lane} Astra web-search lane for claim ${firstClaimId}.`,
     disconfirming: false,
-    limitation: "Model-reported discovery from Lyra's cited web-search synthesis; the underlying page was not fetched or verified.",
+    limitation: "Model-reported discovery from Astra's cited web-search synthesis; the underlying page was not fetched or verified.",
     status: "lead-only" as const,
     discovery: {
       reportedQuery,
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
       return {
         laneResult: {
           lane,
-          searchSummary: `Hosted Lyra web search returned ${leads.length} candidate source${leads.length === 1 ? "" : "s"} for the ${lane} lane.`,
+          searchSummary: `Hosted Astra web search returned ${leads.length} candidate source${leads.length === 1 ? "" : "s"} for the ${lane} lane.`,
           unsearchedBoundaries: [] as string[],
           leadIds: leads.map((lead) => lead.id),
         },
@@ -206,14 +206,14 @@ export async function POST(request: Request) {
       question: input.question,
       compiledQuestion,
       generatedAt: new Date().toISOString(),
-      model: "Lyra · lyra-web-search",
+      model: "Astra · web search",
       lanes: laneResults.map((entry) => entry.laneResult),
       leads: laneResults.flatMap((entry) => entry.leads),
       toolTrace: [],
       observability: {
         mode: "model-reported-only",
         capturedToolEvents: 0,
-        boundary: "Lyra web search returns cited synthesis, not a verifiable WebSearch/WebFetch trace; leads are model-reported discovery only.",
+        boundary: "Astra web search returns cited synthesis, not a verifiable WebSearch/WebFetch trace; leads are model-reported discovery only.",
       },
       cache: {
         status: input.refresh ? "bypass" : "miss",

@@ -51,7 +51,7 @@ export async function runHostedDecomposition(input: HostedInput, identity: strin
     if (result.status === 'completed') {
       if (!result.artifact?.clusters?.length) throw new Error('The saved run has no validated decomposition.');
       return {
-        caseId: receipt.id, mode: 'ai', model: 'Lyra · lyra-chatgpt-pro · orchestrated specialists', warning: null,
+        caseId: receipt.id, mode: 'ai', model: 'Astra · GPT 6 · orchestrated specialists', warning: null,
         prompt: result.question || input.question, decisionContext: result.decisionContext ?? input.decisionContext,
         decomposition: result.artifact as DecompositionArtifact,
         cache: { status: refresh ? 'bypass' : 'miss', layer: 'd1', createdAt: null, expiresAt: null },

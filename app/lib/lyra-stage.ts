@@ -54,7 +54,7 @@ async function gatewayRequest(
 ) {
   while (true) {
     const remaining = deadline - Date.now();
-    if (remaining <= 0) throw new Error("The hosted Lyra stage timed out before it completed.");
+    if (remaining <= 0) throw new Error("The hosted Astra stage timed out before it completed.");
     const response = await fetch(`${baseUrl}${path}`, {
       method: init.method,
       headers: {
@@ -66,11 +66,11 @@ async function gatewayRequest(
     });
     if (response.status === 429 || response.status === 503) {
       const delay = retryDelayMs(response);
-      if (Date.now() + delay > deadline) throw new Error("The hosted Lyra stage timed out while rate limited.");
+      if (Date.now() + delay > deadline) throw new Error("The hosted Astra stage timed out while rate limited.");
       await new Promise<void>((resolve) => setTimeout(resolve, delay));
       continue;
     }
-    if (!response.ok) throw new Error(`The hosted Lyra stage returned HTTP ${response.status}.`);
+    if (!response.ok) throw new Error(`The hosted Astra stage returned HTTP ${response.status}.`);
     return response;
   }
 }
@@ -78,7 +78,7 @@ async function gatewayRequest(
 export async function runLyraStage(options: LyraStageOptions): Promise<string> {
   const current = lyraEnvironment();
   if (!current.LYRA_PUBLIC_GATEWAY_URL || !current.LYRA_API_KEY) {
-    throw new Error("The hosted Lyra gateway is not configured.");
+    throw new Error("The hosted Astra gateway is not configured.");
   }
   const baseUrl = current.LYRA_PUBLIC_GATEWAY_URL.replace(/\/$/, "");
   const deadline = Date.now() + (options.timeoutMs ?? defaultTimeoutMs);
@@ -93,7 +93,7 @@ export async function runLyraStage(options: LyraStageOptions): Promise<string> {
     }),
   }, deadline);
   const receipt = await submission.json() as LyraResponse;
-  if (!receipt.id) throw new Error("The hosted Lyra gateway did not return a response id.");
+  if (!receipt.id) throw new Error("The hosted Astra gateway did not return a response id.");
   while (true) {
     const response = await gatewayRequest(
       baseUrl,
@@ -105,9 +105,9 @@ export async function runLyraStage(options: LyraStageOptions): Promise<string> {
     const result = await response.json() as LyraResponse;
     if (result.status === "completed") return extractStageText(result);
     if (["failed", "cancelled", "incomplete"].includes(result.status || "")) {
-      throw new Error("The hosted Lyra stage did not complete.");
+      throw new Error("The hosted Astra stage did not complete.");
     }
-    if (Date.now() >= deadline) throw new Error("The hosted Lyra stage timed out before it completed.");
+    if (Date.now() >= deadline) throw new Error("The hosted Astra stage timed out before it completed.");
     await new Promise<void>((resolve) => setTimeout(resolve, pollIntervalMs));
   }
 }

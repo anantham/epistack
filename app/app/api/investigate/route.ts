@@ -11,11 +11,11 @@ import type { DeepDiveSource } from "../../../lib/deep-dive";
 import { lyraConfigured, runLyraStage } from "../../../lib/lyra-stage";
 import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
 
-const primaryModel = "Lyra · lyra-chatgpt-pro";
+const primaryModel = "Astra · GPT 6";
 // A distinct role label: the adversarial pass is an independent full-text read
 // with the reviewer contract. The dual-review gate requires the two labels to
-// differ, and Lyra exposes one general chat model.
-const adversaryModel = "Lyra · adversarial full-paper reviewer";
+// differ, and Astra exposes one general chat model.
+const adversaryModel = "Astra · adversarial full-paper reviewer";
 const hostedTextCap = 55_000;
 
 const json = (value: unknown, status = 200) =>
