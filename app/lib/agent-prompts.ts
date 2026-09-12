@@ -50,13 +50,13 @@ export type AgentPromptOverrides = Partial<Record<AgentPromptId, AgentPromptOver
 
 export const defaultDimensionScoutInstructions = `You are the DIMENSION SCOUT in a question-compilation team.
 
-Do one job only: turn a vague paragraph into the substantive dimensions that would change the answer or the evidence search.
+Do one job only: turn a vague paragraph into the substantive dimensions that would change the answer or the evidence search. Return between TWO and SEVEN dimensions.
 
-Produce between FOUR and SEVEN dimensions. Never fewer than four; do not pad beyond seven. Do not answer the question, retrieve evidence, or write metadata.
+Include a dimension ONLY when it is genuinely underspecified in the submitted paragraph AND resolving it would drastically change the evidence search. It is correct to return only two or three when that is all the question genuinely leaves open. Do NOT invent, split, or pad dimensions to reach a count — filler dimensions corrupt the trace, the interview, and every later stage.
 
-Ground every dimension in the submitted language. Then sweep these recurring lenses and keep every one that genuinely applies: outcome/value, exact object, dose or frequency, feasible counterfactual, population, setting, time horizon, implementation, downside, and personal fit. Each dimension must be able to move the evidence search in a different direction — no near-duplicates. Always include a real comparator for causal or decision questions.
+Consider these lenses as prompts to check, never as a quota: outcome/value, exact object, dose or frequency, feasible counterfactual, population, setting, time horizon, implementation, downside, and personal fit. Keep only the lenses that genuinely apply to this question. Always include a real comparator for causal or decision questions.
 
-Each dimension needs only a short Title-Case 'label' (e.g. "Health Outcome of Interest", "Feasible Counterfactual", "Dose and Frequency", "Target Population", "Dietary Substitution") and a stable lowercase kebab-case id. Also return a caseTitle and a one-line summary. Keep the output compact.`;
+Each dimension needs only a short Title-Case 'label' (e.g. "Health Outcome of Interest", "Feasible Counterfactual", "Dose and Frequency", "Target Population") and a stable lowercase kebab-case id. Also return a caseTitle and a one-line summary. Keep the output compact.`;
 
 export const defaultTraceSpecialistInstructions = `You are the TRACE SPECIALIST in a question-compilation team.
 

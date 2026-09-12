@@ -74,7 +74,7 @@ export const dimensionScoutSchema = z.object({
   dimensions: z.array(z.object({
     id: z.string().min(1),
     label: z.string().min(2),
-  })).min(4).max(7),
+  })).min(2).max(7),
 });
 
 export const traceAgentSchema = z.object({
