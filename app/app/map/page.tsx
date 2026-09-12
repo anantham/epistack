@@ -268,6 +268,26 @@ export default function ContextualizeMap() {
     setCompileError("");
   }
 
+  const mapActions = (
+    <div className="map-actions">
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Recompute decomposition and questions"
+        data-tooltip="Recompute questions"
+        disabled={recomputing}
+        onClick={() => void recomputeQuestions()}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+          <path d="M21 3v6h-6" />
+        </svg>
+      </button>
+      <Link className="icon-button" href="/?settings=1" aria-label="Settings" data-tooltip="Settings">⚙︎</Link>
+      <Link className="icon-button" href="/prompts" aria-label="AI agent prompts" data-tooltip="AI agent prompts">✎</Link>
+    </div>
+  );
+
   if (!ready) return null;
   if (!clusters.length) {
     return (
@@ -281,7 +301,7 @@ export default function ContextualizeMap() {
   if (!clusters.some((cluster) => cluster.contextQuestion)) {
     return (
       <main className="case-layout map-layout">
-        <CaseHeader active="contextualize" />
+        <CaseHeader active="contextualize" actions={mapActions} />
         <div className="case-bounds">
           <p>
             This saved decomposition has no interview questions — it was created before the Contextualize
@@ -295,24 +315,7 @@ export default function ContextualizeMap() {
 
   return (
     <main className="case-layout map-layout">
-      <CaseHeader active="contextualize" />
-      <div className="map-actions">
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Recompute decomposition and questions"
-          data-tooltip="Recompute questions"
-          disabled={recomputing}
-          onClick={() => void recomputeQuestions()}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-            <path d="M21 3v6h-6" />
-          </svg>
-        </button>
-        <Link className="icon-button" href="/?settings=1" aria-label="Settings" data-tooltip="Settings">⚙︎</Link>
-        <Link className="icon-button" href="/prompts" aria-label="AI agent prompts" data-tooltip="AI agent prompts">✎</Link>
-      </div>
+      <CaseHeader active="contextualize" actions={mapActions} />
       <div className="case-bounds map-bounds">
         <div className="map-scroll">
           {recomputing && (

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 export type InvestigationStage = "decompose" | "contextualize" | "investigate" | "artifact";
 
@@ -59,10 +59,11 @@ export function StageNav({ active, estimates }: { active: InvestigationStage; es
   );
 }
 
-export function CaseHeader({ active }: { active: InvestigationStage }) {
+export function CaseHeader({ active, actions }: { active: InvestigationStage; actions?: ReactNode }) {
   return (
     <header className="topbar">
       <StageNav active={active} />
+      {actions}
     </header>
   );
 }
