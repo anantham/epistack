@@ -1,12 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { sourceClassLabels, type SourceClass } from "../../lib/source-class";
+import type { Divergence, DivergenceItem } from "../../lib/source-divergence";
 import {
   researchBriefSchema,
   researchBriefStorageKey,
   type ResearchBrief,
 } from "../../lib/research-brief";
+
+type SourceMetadata = {
+  sourceClass?: string;
+  epistemicRole?: string;
+  acquisition?: string;
+};
 
 type ArtifactSource = {
   id: string;
@@ -27,7 +35,7 @@ type ArtifactFamily = {
   dependsOn: string[];
 };
 
-type ArtifactRelation = {
+type ArtifactRelation = SourceMetadata & {
   id: string;
   resultId: string;
   claimFrameId: string;
@@ -84,6 +92,7 @@ type ArtifactResponse = {
   } | null;
   claims: ArtifactClaim[];
   orphanRelations: ArtifactRelation[];
+  divergenceItems: DivergenceItem[];
   counts: {
     claims: number;
     resultRelations: number;
@@ -129,6 +138,120 @@ function field(row: JsonRecord, ...keys: string[]) {
 function textField(row: JsonRecord, ...keys: string[]) {
   const value = field(row, ...keys);
   return typeof value === "string" ? value : value === null ? null : String(value);
+}
+
+function sourceMetadata(...rows: JsonRecord[]): SourceMetadata {
+  const value = (camel: string, snake: string) => rows
+    .map((row) => field(row, camel, snake))
+    .find((entry): entry is string => typeof entry === "string" && Boolean(entry.trim()));
+  return {
+    sourceClass: value("sourceClass", "source_class"),
+    epistemicRole: value("epistemicRole", "epistemic_role"),
+    acquisition: value("acquisition", "acquisition"),
+  };
+}
+
+function SourceBadges({ item }: { item: SourceMetadata }) {
+  if (!item.sourceClass && !item.epistemicRole && !item.acquisition) return null;
+  return (
+    <span className="live-relation-summary" aria-label="Source metadata">
+      {item.sourceClass && (
+        <span className="live-relation-tag">
+          {Object.hasOwn(sourceClassLabels, item.sourceClass)
+            ? sourceClassLabels[item.sourceClass as SourceClass]
+            : item.sourceClass}
+        </span>
+      )}
+      {item.epistemicRole && <span className="live-relation-tag">{item.epistemicRole}</span>}
+      {item.acquisition && <span className="live-relation-tag">{item.acquisition}</span>}
+    </span>
+  );
+}
+
+function SourceDivergencePanel({ items }: { items: DivergenceItem[] }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [divergences, setDivergences] = useState<Divergence[] | null>(null);
+  const request = useRef<AbortController | null>(null);
+
+  useEffect(() => () => request.current?.abort(), []);
+
+  async function checkDivergence() {
+    if (request.current || items.length < 2) return;
+    const controller = new AbortController();
+    request.current = controller;
+    setLoading(true);
+    setError(null);
+    setDivergences(null);
+    try {
+      const response = await fetch("/api/divergence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+        signal: controller.signal,
+      });
+      const payload = record(await response.json());
+      if (!response.ok) {
+        throw new Error(typeof payload.error === "string" ? payload.error : "The divergence comparison failed.");
+      }
+      if (!Array.isArray(payload.divergences) || !payload.divergences.every((value) => {
+        const entry = record(value);
+        return typeof entry.aId === "string" && typeof entry.bId === "string"
+          && typeof entry.rationale === "string"
+          && ["same", "partial", "different"].includes(String(entry.scopeMatch))
+          && ["contradicts", "differs-by-scope", "consistent", "indeterminate"].includes(String(entry.verdict));
+      })) {
+        throw new Error("The divergence service returned an unreadable response.");
+      }
+      setDivergences(payload.divergences as Divergence[]);
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        setError(cause instanceof Error ? cause.message : "The divergence comparison failed.");
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        request.current = null;
+        setLoading(false);
+      }
+    }
+  }
+
+  return (
+    <section className="live-artifact-options" aria-labelledby="source-divergence-title">
+      <header>
+        <span>Context only · Never causal evidence</span>
+        <h2 id="source-divergence-title">Source divergence</h2>
+        <p>Compare scoped source statements. These comparisons do not change accepted evidence or claim coverage.</p>
+      </header>
+      {items.length < 2 ? (
+        <small>Need at least two scoped normative/descriptive sources to compare.</small>
+      ) : (
+        <>
+          <div>
+            <article>
+              <button className="primary-button" type="button" disabled={loading} onClick={() => void checkDivergence()}>
+                {loading ? "Checking divergence…" : "Check divergence"}
+              </button>
+              <p role="status">{loading ? "Comparing source statements…" : `${items.length} scoped items available.`}</p>
+              {error && <p role="alert">{error}</p>}
+            </article>
+          </div>
+          {divergences !== null && (
+            <div aria-live="polite">
+              {divergences.length === 0 ? <article><p>No divergences were returned.</p></article> : divergences.map((entry, index) => (
+                <article key={`${entry.aId}-${entry.bId}-${index}`}>
+                  <span>Context · Never causal evidence</span>
+                  <strong>{entry.aId} ↔ {entry.bId}</strong>
+                  <p>Scope match: {entry.scopeMatch} · Verdict: {entry.verdict}</p>
+                  <p>{entry.rationale}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
 }
 
 function parseJsonRecord(value: unknown) {
@@ -253,6 +376,7 @@ function normalizeArtifactResponse(payload: unknown): ArtifactResponse | null {
     const estimate = parseJsonRecord(field(rawResult, "estimate", "estimateJson", "estimate_json"));
 
     return {
+      ...sourceMetadata(rawRelation, rawResult, rawSource ?? {}),
       id: textField(rawRelation, "id") || `${claimFrameId}-${resultId}`,
       resultId,
       claimFrameId,
@@ -325,8 +449,36 @@ function normalizeArtifactResponse(payload: unknown): ArtifactResponse | null {
   const latestDecision = record(candidate.latestDecision);
   const apiCase = record(candidate.case);
 
+  const divergenceItems: DivergenceItem[] = [];
+  const comparisonIds = new Set<string>();
+  for (const item of [...rawSources, ...rawResults, ...rawRelations]) {
+    const id = textField(item, "id");
+    const statement = textField(item, "statement")?.trim() || textField(item, "resultText", "result_text")?.trim();
+    const scope = parseJsonRecord(field(item, "comparisonScope", "comparison_scope"));
+    const relation = normalizedRelations.find((entry) => entry.resultId === id || entry.id === id);
+    const sourceClass = sourceMetadata(item).sourceClass || relation?.sourceClass;
+    if (!id || !statement || !sourceClass || comparisonIds.has(id)
+      || typeof scope.topic !== "string" || !scope.topic.trim()
+      || typeof scope.population !== "string" || !scope.population.trim()
+      || typeof scope.jurisdiction !== "string" || !scope.jurisdiction.trim()) continue;
+    comparisonIds.add(id);
+    divergenceItems.push({
+      id,
+      sourceClass,
+      statement,
+      comparisonScope: {
+        topic: scope.topic,
+        population: scope.population,
+        jurisdiction: scope.jurisdiction,
+        ...(typeof scope.effectiveFrom === "string" ? { effectiveFrom: scope.effectiveFrom } : {}),
+        ...(typeof scope.effectiveTo === "string" ? { effectiveTo: scope.effectiveTo } : {}),
+      },
+    });
+  }
+
   return {
     caseId,
+    divergenceItems,
     generatedAt: textField(candidate, "generatedAt") || new Date().toISOString(),
     case: Object.keys(apiCase).length ? {
       id: textField(apiCase, "id") || caseId,
@@ -693,6 +845,7 @@ export function ArtifactWorkspace() {
                           <span>
                             <strong>{relation.result.resultText}</strong>
                             <small>{relation.source.title}</small>
+                            <SourceBadges item={relation} />
                           </span>
                           {relation.result.estimate && <b>{relation.result.estimate}</b>}
                         </summary>
@@ -755,6 +908,11 @@ export function ArtifactWorkspace() {
           })}
         </div>
       </section>
+
+      <SourceDivergencePanel
+        key={`${caseId}-${JSON.stringify(artifact?.divergenceItems ?? [])}`}
+        items={artifact?.divergenceItems ?? []}
+      />
 
       {artifact?.orphanRelations && artifact.orphanRelations.length > 0 && (
         <section className="live-artifact-orphans">
