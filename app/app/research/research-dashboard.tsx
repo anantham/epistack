@@ -14,7 +14,7 @@ import type {
   RecallResponse,
   RecallToolTraceEvent,
 } from "../../lib/broad-recall";
-import { sourceClassLabels, canPromoteSourceClass } from "../../lib/source-class";
+import { sourceClassLabels, canPromoteSourceClass, type SourceClass } from "../../lib/source-class";
 import type { SourceReviewResponse } from "../../lib/source-adapters";
 import {
   researchBriefSchema,
@@ -124,6 +124,35 @@ const publicationOptions: Array<{ id: PublicationFilter; label: string }> = [
   { id: "reviews", label: "Reviews" },
   { id: "observational", label: "Observational" },
 ];
+
+const recallLaneLabels: Record<RecallResponse["lanes"][number]["lane"], string> = {
+  "broad-recall": "Broad recall",
+  applicability: "Applicability",
+  context: "Context",
+};
+
+const compactSourceClassLabels: Record<SourceClass, [singular: string, plural: string]> = {
+  "primary-study": ["primary study", "primary studies"],
+  "systematic-review": ["systematic review", "systematic reviews"],
+  guideline: ["guideline", "guidelines"],
+  standard: ["standard", "standards"],
+  "trial-registry": ["registry", "registries"],
+  "official-statistics": ["official statistic", "official statistics"],
+  preprint: ["preprint", "preprints"],
+  reporting: ["report", "reports"],
+  anecdote: ["anecdote", "anecdotes"],
+};
+
+function recallClassBreakdown(leads: RecallResponse["leads"]) {
+  const counts = new Map<SourceClass, number>();
+  for (const lead of leads) {
+    if (lead.sourceClass) counts.set(lead.sourceClass, (counts.get(lead.sourceClass) ?? 0) + 1);
+  }
+  return Array.from(counts, ([sourceClass, count]) => {
+    const labels = compactSourceClassLabels[sourceClass];
+    return `${count} ${count === 1 ? labels[0] : labels[1]}`;
+  }).join(", ");
+}
 
 function statusLabel(status: LaneRun["status"]) {
   if (status === "running") return "searching live";
@@ -625,7 +654,7 @@ export function ResearchDashboard() {
         status: "complete",
         response: payload,
         error: "",
-        progress: `${payload.leads.length} lead-only records returned across two search lanes.`,
+        progress: `${payload.leads.length} lead-only records returned across ${payload.lanes.length} search lanes.`,
         liveTrace: payload.toolTrace,
       });
     } catch (error) {
@@ -1075,9 +1104,40 @@ export function ResearchDashboard() {
 
         <div className={`recall-progress ${recall.status}`}>
           <i aria-hidden="true" />
-          <span>{recall.error || recall.progress}</span>
+          <span role={recall.status === "running" ? "status" : undefined} aria-live={recall.status === "running" ? "polite" : undefined}>
+            {recall.status === "running" ? "Finding sources…" : recall.error || recall.progress}
+          </span>
           {recall.response && <small>{recall.response.cache.status === "hit" ? "exact local run reused" : recall.response.cache.status === "bypass" ? "recomputed live" : "fresh local run"} · {recall.response.model}</small>}
         </div>
+
+        {recall.status === "complete" && recall.response && (
+          <div
+            className="role-counts"
+            aria-label="Recall discovery leads by lane"
+            style={{
+              alignItems: "center",
+              background: "#f7f8f4",
+              borderBottom: "1px solid var(--line)",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              padding: "10px 28px",
+            }}
+          >
+            {recall.response.lanes.map((lane) => {
+              const leads = recall.response!.leads.filter((lead) => lane.leadIds.includes(lead.id));
+              const classBreakdown = recallClassBreakdown(leads);
+              return (
+                <em key={lane.lane}>
+                  <b>{recallLaneLabels[lane.lane]}</b>
+                  · {leads.length}
+                  {classBreakdown && <span style={{ opacity: 0.72 }}> · {classBreakdown}</span>}
+                  {lane.lane === "context" && <span style={{ color: "#8b3c32" }}> · context only</span>}
+                </em>
+              );
+            })}
+          </div>
+        )}
 
         {(recall.liveTrace.length > 0 || recall.response) && (
           <details className="recall-trace" open={recall.status === "running"}>
