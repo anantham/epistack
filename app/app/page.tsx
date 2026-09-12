@@ -1033,7 +1033,7 @@ export default function Home() {
             </div>
 
             <div className="story-completion">
-              <p>Accepting the map does not accept any branch as true. It accepts this decomposition as the scope for retrieval and review.</p>
+              <p>These dimensions are the interpretations worth investigating — proposals, not settled truth. Next, <strong>Contextualize</strong> will ground them in your actual situation: your routine, your constraints, and what a good decision would look like for you.</p>
               <button className="primary-button" onClick={openMap}>
                 Proceed to Contextualize →
               </button>
