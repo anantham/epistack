@@ -36,11 +36,29 @@ import {
   type DecompositionTelemetry,
 } from "../lib/decomposition-telemetry";
 
-const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
-const previousDefaultOpenRouterModel = "anthropic/claude-sonnet-4.6";
 const brandCharacters = [..."epistack"];
 const preferencesStorageKey = "epistack:preferences:v1";
 const workspaceStorageKey = "epistack:workspace:v1";
+const canonicalEfforts = ["instant", "medium", "high", "xhigh", "pro"] as const;
+type ThinkingEffort = (typeof canonicalEfforts)[number];
+const effortAliases: Record<string, ThinkingEffort> = { low: "instant", max: "pro" };
+const effortLabels: Record<ThinkingEffort, string> = {
+  instant: "Instant",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Extra High",
+  pro: "Pro",
+};
+const effortOptions = canonicalEfforts.map((value) => ({ value, label: effortLabels[value] }));
+const defaultEffort: ThinkingEffort = "instant";
+
+function normalizeEffort(value: unknown): ThinkingEffort {
+  if (typeof value !== "string") return defaultEffort;
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed in effortAliases) return effortAliases[trimmed];
+  return (canonicalEfforts as readonly string[]).includes(trimmed) ? (trimmed as ThinkingEffort) : defaultEffort;
+}
+
 const decompositionStages = [
   { label: "Discovering dimensions", detail: "The dimension scout proposes the axes that could change the answer." },
   { label: "Mapping exact language", detail: "The trace specialist ties your exact words to each dimension." },
@@ -50,8 +68,7 @@ const provisionalDecompositionMs = 120_000;
 
 type AnalysisPhase = "idle" | "analyzing" | "eliciting" | "review" | "transitioning" | "error";
 type IntroPhase = "typing" | "holding" | "docking" | "ready";
-type ConnectionStatus = { state: "idle" | "checking" | "valid" | "invalid"; message: string };
-type PersistedPreferences = { apiKey?: string; model?: string };
+type PersistedPreferences = { effort?: string };
 type PersistedWorkspace = {
   prompt?: string;
   decisionContext?: string;
@@ -145,11 +162,9 @@ function EditableStringList({ title, items, onChange }: { title: string; items: 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [decisionContext, setDecisionContext] = useState("");
-  const [openRouterKey, setOpenRouterKey] = useState("");
-  const [openRouterModel, setOpenRouterModel] = useState(defaultOpenRouterModel);
+  const [selectedEffort, setSelectedEffort] = useState<ThinkingEffort>(defaultEffort);
   const [introPhase, setIntroPhase] = useState<IntroPhase>("typing");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({ state: "idle", message: "Press Enter to validate." });
   const [phase, setPhase] = useState<AnalysisPhase>("idle");
   const [result, setResult] = useState<DecompositionResponse | null>(null);
   const [activeCluster, setActiveCluster] = useState(-1);
@@ -185,11 +200,15 @@ export default function Home() {
 
   const telemetrySummary = useMemo(() => summarizeDecompositionTelemetry(telemetry), [telemetry]);
   const activeStage = Math.min(Math.max(hostedProgress?.stage ?? 0, 0), decompositionStages.length - 1);
-  const passStats = telemetrySummary.byPass[analysisPass];
-  const empiricalTotalMs = passStats.totalMedianMs ?? telemetrySummary.totalMedianMs;
+  const effortStats = telemetrySummary.byEffort[selectedEffort];
+  const empiricalTotalMs = effortStats?.totalMedianMs ?? telemetrySummary.totalMedianMs;
   const expectedTotalMs = empiricalTotalMs ?? provisionalDecompositionMs;
   const remainingMs = Math.max(0, expectedTotalMs - analysisElapsed);
-  const empiricalSamples = passStats.samples || telemetrySummary.samples;
+  const empiricalSamples = effortStats?.samples || telemetrySummary.samples;
+  const stageEstimates = decompositionStages.map((_, index) => {
+    const medianMs = effortStats?.stageMediansMs?.[index];
+    return medianMs ? `~${formatDuration(medianMs)}` : "collecting samples";
+  });
   const stageAttempts = hostedProgress?.attempts?.[activeStage] ?? 1;
   const retryNote = stageAttempts > 1
     ? `Stage attempt ${stageAttempts}${hostedProgress?.rateLimits ? ` · ${hostedProgress.rateLimits} rate-limit pause${hostedProgress.rateLimits > 1 ? "s" : ""}` : ""}`
@@ -231,15 +250,8 @@ export default function Home() {
       }
       try {
         const savedPreferences = JSON.parse(window.localStorage.getItem(preferencesStorageKey) || "{}") as PersistedPreferences;
-        if (typeof savedPreferences.apiKey === "string") {
-          setOpenRouterKey(savedPreferences.apiKey);
-          if (savedPreferences.apiKey.trim()) {
-            setConnectionStatus({ state: "idle", message: "Saved in this browser. Press Enter to revalidate." });
-          }
-        }
-        if (typeof savedPreferences.model === "string" && savedPreferences.model.trim()) {
-          const savedModel = savedPreferences.model.trim();
-          setOpenRouterModel(savedModel === previousDefaultOpenRouterModel ? defaultOpenRouterModel : savedModel);
+        if (typeof savedPreferences.effort === "string") {
+          setSelectedEffort(normalizeEffort(savedPreferences.effort));
         }
       } catch {
         // Invalid local preferences should never block the app.
@@ -285,14 +297,14 @@ export default function Home() {
     if (!storageReady) return;
     const timer = setTimeout(() => {
       try {
-        const preferences = JSON.stringify({ apiKey: openRouterKey, model: openRouterModel });
+        const preferences = JSON.stringify({ effort: selectedEffort });
         window.localStorage.setItem(preferencesStorageKey, preferences);
       } catch {
         // Browser persistence is a convenience; requests still work without it.
       }
     }, 150);
     return () => window.clearTimeout(timer);
-  }, [openRouterKey, openRouterModel, storageReady]);
+  }, [selectedEffort, storageReady]);
 
   useEffect(() => {
     if (!storageReady || phase === "analyzing" || phase === "transitioning") return;
@@ -452,7 +464,8 @@ export default function Home() {
       typeof contextOverride === "string" ? contextOverride : decisionContext,
     );
     const normalizedPrompt = normalizeDecompositionText(prompt);
-    const normalizedModel = "lyra-chatgpt-pro:hosted-v2";
+    const runEffort = selectedEffort;
+    const normalizedModel = `lyra-chatgpt-pro:hosted-v2:${runEffort}`;
     const promptOverrides = storedAgentPromptOverrides();
     const promptSignature = promptOverridesSignature(promptOverrides);
     let cacheKey = "";
@@ -562,6 +575,7 @@ export default function Home() {
         question: normalizedPrompt,
         decisionContext: contextForRequest,
         promptOverrides,
+        effort: runEffort,
       }, cacheKey, refresh, (progress) => {
         setHostedProgress(progress);
         if (progress.durationsMs?.length) stageDurations.splice(0, stageDurations.length, ...progress.durationsMs);
@@ -575,6 +589,7 @@ export default function Home() {
           pass: skipElicitation && Boolean(contextOverride) ? "refine" : "initial",
           backend: payload.model,
           at: new Date().toISOString(),
+          effort: runEffort,
         });
         try {
           window.localStorage.setItem(decompositionTelemetryStorageKey, JSON.stringify(next));
@@ -619,44 +634,6 @@ export default function Home() {
       analysisInFlightRef.current = false;
       setRequestPending(false);
     }
-  }
-
-  async function validateConnection() {
-    if (connectionStatus.state === "checking") return;
-    if (!openRouterKey.trim()) {
-      setConnectionStatus({ state: "invalid", message: "Enter an API key before validating." });
-      return;
-    }
-    if (!openRouterModel.trim()) {
-      setConnectionStatus({ state: "invalid", message: "Enter a model ID in provider/model form." });
-      return;
-    }
-
-    setConnectionStatus({ state: "checking", message: "Checking key, credits, and model…" });
-    try {
-      const response = await fetch("/api/openrouter/validate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          openRouterApiKey: openRouterKey.trim(),
-          openRouterModel: openRouterModel.trim(),
-        }),
-      });
-      const payload = await response.json() as { ok?: boolean; message?: string };
-      setConnectionStatus({
-        state: response.ok && payload.ok ? "valid" : "invalid",
-        message: payload.message || "OpenRouter did not return a validation result.",
-      });
-    } catch {
-      setConnectionStatus({ state: "invalid", message: "Could not reach OpenRouter. Check the connection and try again." });
-    }
-  }
-
-  function forgetSavedSettings() {
-    window.localStorage.removeItem(preferencesStorageKey);
-    setOpenRouterKey("");
-    setOpenRouterModel(defaultOpenRouterModel);
-    setConnectionStatus({ state: "idle", message: "Saved key removed from this browser." });
   }
 
   function toggleContextOption(questionId: string, option: string) {
@@ -740,13 +717,13 @@ export default function Home() {
 
       <div className={`intro-surface ${introComplete ? "is-ready" : ""}`} aria-hidden={!introComplete}>
         <header className="minimal-topbar">
-          <StageNav active="decompose" />
+          <StageNav active="decompose" estimates={stageEstimates} />
           {result && (
             <button
               type="button"
               className="icon-button recompute-trigger"
               aria-label="Recompute decomposition"
-              data-tooltip="Recompute"
+              data-tooltip={empiricalTotalMs ? `Recompute · ~${formatDuration(empiricalTotalMs)}, n=${empiricalSamples}` : "Recompute · collecting samples"}
               onClick={() => {
                 if (window.confirm(`Recompute this decomposition? It takes about ${formatDuration(expectedTotalMs)}.`)) {
                   void analyze(decisionContext, true, true);
@@ -771,63 +748,51 @@ export default function Home() {
           </button>
 
           {settingsOpen && (
-            <form className="settings-panel" role="dialog" aria-label="Model settings" onSubmit={(event) => {
-              event.preventDefault();
-              void validateConnection();
-            }}>
+            <div className="settings-panel" role="dialog" aria-label="Model settings">
               <div className="settings-heading">
                 <strong>Settings</strong>
                 <button type="button" className="icon-button" aria-label="Close settings" data-tooltip="Close" onClick={() => setSettingsOpen(false)}>×</button>
               </div>
               <label>
-                <span>API key</span>
+                <span>Backend</span>
                 <input
-                  type="password"
-                  value={openRouterKey}
-                  onChange={(event) => {
-                    setOpenRouterKey(event.target.value);
-                    setConnectionStatus({ state: "idle", message: "Press Enter to validate." });
-                  }}
-                  placeholder="sk-or-v1-…"
-                  autoComplete="off"
+                  type="text"
+                  value="Lyra (hosted) · no key needed"
+                  readOnly
+                  aria-readonly="true"
+                  tabIndex={-1}
                   spellCheck={false}
                 />
               </label>
               <label>
-                <span>Model</span>
-                <input
-                  type="text"
-                  value={openRouterModel}
-                  onChange={(event) => {
-                    setOpenRouterModel(event.target.value);
-                    setConnectionStatus({ state: "idle", message: "Press Enter to validate." });
+                <span>Thinking effort</span>
+                <select
+                  value={selectedEffort}
+                  onChange={(event) => setSelectedEffort(normalizeEffort(event.target.value))}
+                  style={{
+                    background: "var(--surface-raised)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 9,
+                    color: "var(--ink)",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    padding: "10px 11px",
+                    width: "100%",
                   }}
-                  placeholder={defaultOpenRouterModel}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
+                >
+                  {effortOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </label>
               <Link className="settings-prompt-link" href="/prompts">
                 <span><strong>AI agent prompts</strong><small>Inspect and edit the instructions driving every model call.</small></span>
                 <b aria-hidden="true">→</b>
               </Link>
-              <div className="settings-footer">
-                <p className={`connection-status ${connectionStatus.state}`} role="status">
-                  <i aria-hidden="true" />{connectionStatus.message}
-                </p>
-                <div className="settings-actions">
-                  <button type="button" className="settings-info" aria-label="Key privacy" data-tooltip="Saved in this browser only. Never added to the case artifact or hosted environment.">?</button>
-                  <button type="button" className="settings-info settings-forget" aria-label="Forget saved key and model" data-tooltip="Forget saved key and model" onClick={forgetSavedSettings}>⌫</button>
-                  <button
-                    type="submit"
-                    className="settings-validate"
-                    aria-label="Validate connection"
-                    data-tooltip="Validate key and model"
-                    disabled={connectionStatus.state === "checking"}
-                  >{connectionStatus.state === "checking" ? "…" : "✓"}</button>
-                </div>
-              </div>
-            </form>
+              <p className="connection-status">
+                <i aria-hidden="true" />Higher effort is slower and does not change your quota. Saved in this browser.
+              </p>
+            </div>
           )}
         </header>
 

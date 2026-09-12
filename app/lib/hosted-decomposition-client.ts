@@ -1,6 +1,6 @@
 import type { DecompositionResponse, DecompositionArtifact } from './decomposition';
 import type { AgentPromptOverrides } from './agent-prompts';
-export type HostedInput = { question: string; decisionContext: string; promptOverrides: AgentPromptOverrides };
+export type HostedInput = { question: string; decisionContext: string; promptOverrides: AgentPromptOverrides; effort?: string };
 export type HostedProgress = { stage: number; status: string; attempts?: number[]; durationsMs?: number[]; rateLimits?: number };
 type Receipt = { id: string; token: string };
 type CodedError = Error & { code?: string };

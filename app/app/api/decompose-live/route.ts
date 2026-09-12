@@ -1,9 +1,9 @@
 import { sanitizeAgentPromptOverrides, type AgentPromptOverrides } from '../../../lib/agent-prompts';
 import { env } from 'cloudflare:workers';
 import { getD1 } from '../../../db';
-import { stageRequest, parseStage, finishDecomposition, stageNames } from '../../../lib/hosted-decomposition';
+import { stageRequest, parseStage, finishDecomposition, stageNames, normalizeEffort } from '../../../lib/hosted-decomposition';
 
-type State = { question: string; decisionContext?: string; promptOverrides?: AgentPromptOverrides; stage: number; results: unknown[]; status: string; remoteId?: string; nextAt?: number; error?: string; artifact?: unknown; stageStartedAt?: number; stageDurationsMs?: number[]; attempts?: number[]; rateLimits?: number };
+type State = { question: string; decisionContext?: string; promptOverrides?: AgentPromptOverrides; effort?: string; stage: number; results: unknown[]; status: string; remoteId?: string; nextAt?: number; error?: string; artifact?: unknown; stageStartedAt?: number; stageDurationsMs?: number[]; attempts?: number[]; rateLimits?: number };
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 export async function POST(request: Request) {
   const origin = request.headers.get('origin');
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const config = env as unknown as { LYRA_PUBLIC_GATEWAY_URL?: string; LYRA_API_KEY?: string };
   if (!config.LYRA_PUBLIC_GATEWAY_URL || !config.LYRA_API_KEY) return json({ error: 'Hosted decomposition is not configured yet.', code: 'hosted-not-configured' }, 503);
   let body;
-  try { const raw = await request.text(); if (raw.length > 140000) return json({ error: 'Request too large.' }, 413); body = JSON.parse(raw) as { question?: string; decisionContext?: string; promptOverrides?: unknown; id?: string; token?: string }; if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Invalid request.' }, 400); }
+  try { const raw = await request.text(); if (raw.length > 140000) return json({ error: 'Request too large.' }, 413); body = JSON.parse(raw) as { question?: string; decisionContext?: string; promptOverrides?: unknown; id?: string; token?: string; effort?: unknown }; if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Invalid request.' }, 400); }
   catch { return json({ error: 'Invalid request.' }, 400); }
   const db = getD1();
   await db.prepare('CREATE TABLE IF NOT EXISTS hosted_decomposition_jobs (id TEXT PRIMARY KEY, token TEXT NOT NULL, state_json TEXT NOT NULL, created_at INTEGER NOT NULL, locked_until INTEGER NOT NULL DEFAULT 0)').run();
@@ -21,8 +21,9 @@ export async function POST(request: Request) {
     const decisionContext = typeof body.decisionContext === 'string' ? body.decisionContext.trim() : '';
     if (decisionContext.length > 4000) return json({ error: 'Keep context under 4,000 characters.' }, 400);
     const promptOverrides = sanitizeAgentPromptOverrides(body.promptOverrides);
+    const effort = normalizeEffort(body.effort);
     const id = crypto.randomUUID(), token = crypto.randomUUID();
-    const state: State = { question, decisionContext, promptOverrides, stage: 0, results: [], status: 'queued' };
+    const state: State = { question, decisionContext, promptOverrides, effort, stage: 0, results: [], status: 'queued' };
     const row = await db.prepare('INSERT INTO hosted_decomposition_jobs (id, token, state_json, created_at) SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM hosted_decomposition_jobs WHERE created_at > ?) < 10 RETURNING id').bind(id, token, JSON.stringify(state), Date.now(), Date.now() - 86400000).first();
     if (!row) return json({ error: 'This preview has reached its limit of 10 investigations per day. Existing runs can still finish.' }, 429);
     return json({ id, token, status: 'queued', stage: 0, stages: stageNames }, 202);
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
         state.attempts[state.stage] = (state.attempts[state.stage] || 0) + 1;
         state.stageStartedAt = Date.now();
         await save();
-        const created = await remote('/v1/responses', stageRequest(state.stage, state.question, state.results, state.decisionContext, state.promptOverrides));
+        const created = await remote('/v1/responses', stageRequest(state.stage, state.question, state.results, state.decisionContext, state.promptOverrides, state.effort));
         if (created) {
           if (!/^job_[a-zA-Z0-9_-]+$/.test(created.id || '')) throw new Error('Backend did not return a durable job receipt.');
           state.remoteId = created.id; state.status = 'in_progress';

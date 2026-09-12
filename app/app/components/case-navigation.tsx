@@ -32,7 +32,7 @@ export function useCaseHref(href: string) {
   return `${href}${separator}caseId=${encodeURIComponent(caseId)}`;
 }
 
-export function StageNav({ active }: { active: InvestigationStage }) {
+export function StageNav({ active, estimates }: { active: InvestigationStage; estimates?: Array<string | null> }) {
   const caseId = useCurrentCaseId();
 
   return (
@@ -41,6 +41,7 @@ export function StageNav({ active }: { active: InvestigationStage }) {
         const href = caseId
           ? `${stage.href}?caseId=${encodeURIComponent(caseId)}`
           : stage.href;
+        const estimate = estimates?.[index];
         return (
           <Link
             className={`stage ${stage.id === active ? "active" : "ready"}`}
@@ -50,7 +51,7 @@ export function StageNav({ active }: { active: InvestigationStage }) {
             aria-label={`Stage ${index + 1}: ${stage.label}`}
           >
             <b>{index + 1}</b>
-            <span className="stage-tooltip" aria-hidden="true">{stage.tooltip}</span>
+            <span className="stage-tooltip" aria-hidden="true">{estimate ? `${stage.tooltip} · ${estimate}` : stage.tooltip}</span>
           </Link>
         );
       })}

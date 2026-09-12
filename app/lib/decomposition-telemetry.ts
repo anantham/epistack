@@ -10,6 +10,7 @@ export type DecompositionTelemetryRun = {
   pass: DecompositionPass;
   backend: string;
   at: string;
+  effort: string;
 };
 
 export type DecompositionTelemetry = {
@@ -22,6 +23,7 @@ export type DecompositionTelemetrySummary = {
   totalMedianMs: number | null;
   stageMediansMs: Array<number | null>;
   byPass: Record<DecompositionPass, { samples: number; totalMedianMs: number | null }>;
+  byEffort: Record<string, { samples: number; totalMedianMs: number | null; stageMediansMs: Array<number | null> }>;
 };
 
 export const emptyDecompositionTelemetry: DecompositionTelemetry = { version: 1, runs: [] };
@@ -32,6 +34,10 @@ function finitePositive(value: unknown): value is number {
 
 function isPass(value: unknown): value is DecompositionPass {
   return value === "initial" || value === "refine";
+}
+
+function normalizeEffort(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value.trim() : "instant";
 }
 
 export function parseDecompositionTelemetry(raw: string | null): DecompositionTelemetry {
@@ -46,6 +52,7 @@ export function parseDecompositionTelemetry(raw: string | null): DecompositionTe
         pass: isPass(run.pass) ? run.pass : "initial",
         backend: typeof run.backend === "string" ? run.backend : "unknown",
         at: typeof run.at === "string" ? run.at : "",
+        effort: normalizeEffort(run.effort),
       }))
       .slice(-telemetryRunLimit);
     return { version: 1, runs };
@@ -62,6 +69,7 @@ export function appendDecompositionTelemetryRun(store: DecompositionTelemetry, r
     pass: isPass(run.pass) ? run.pass : "initial",
     backend: run.backend,
     at: run.at,
+    effort: normalizeEffort(run.effort),
   };
   return { version: 1, runs: [...store.runs, normalized].slice(-telemetryRunLimit) };
 }
@@ -73,12 +81,16 @@ function median(values: number[]): number | null {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
+function stageMediansMs(runs: DecompositionTelemetryRun[]): Array<number | null> {
+  const stageCount = runs.reduce((max, run) => Math.max(max, run.stageMs.length), 0);
+  return Array.from({ length: stageCount }, (_, index) => (
+    median(runs.map((run) => run.stageMs[index]).filter(finitePositive))
+  ));
+}
+
 export function summarizeDecompositionTelemetry(store: DecompositionTelemetry): DecompositionTelemetrySummary {
   const totals = store.runs.map((run) => run.totalMs).filter(finitePositive);
-  const stageCount = store.runs.reduce((max, run) => Math.max(max, run.stageMs.length), 0);
-  const stageMediansMs = Array.from({ length: stageCount }, (_, index) => (
-    median(store.runs.map((run) => run.stageMs[index]).filter(finitePositive))
-  ));
+  const stageMedians = stageMediansMs(store.runs);
   const byPass: DecompositionTelemetrySummary["byPass"] = {
     initial: { samples: 0, totalMedianMs: null },
     refine: { samples: 0, totalMedianMs: null },
@@ -87,7 +99,19 @@ export function summarizeDecompositionTelemetry(store: DecompositionTelemetry): 
     const passTotals = store.runs.filter((run) => run.pass === pass).map((run) => run.totalMs).filter(finitePositive);
     byPass[pass] = { samples: passTotals.length, totalMedianMs: median(passTotals) };
   }
-  return { samples: totals.length, totalMedianMs: median(totals), stageMediansMs, byPass };
+  const effortGroups = new Map<string, DecompositionTelemetryRun[]>();
+  for (const run of store.runs) {
+    const effort = normalizeEffort(run.effort);
+    const group = effortGroups.get(effort);
+    if (group) group.push(run);
+    else effortGroups.set(effort, [run]);
+  }
+  const byEffort: DecompositionTelemetrySummary["byEffort"] = {};
+  for (const [effort, runs] of effortGroups) {
+    const effortTotals = runs.map((run) => run.totalMs).filter(finitePositive);
+    byEffort[effort] = { samples: effortTotals.length, totalMedianMs: median(effortTotals), stageMediansMs: stageMediansMs(runs) };
+  }
+  return { samples: totals.length, totalMedianMs: median(totals), stageMediansMs: stageMedians, byPass, byEffort };
 }
 
 export function formatDuration(ms: number | null): string {

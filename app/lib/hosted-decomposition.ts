@@ -3,11 +3,21 @@ import { resolveAgentPrompt, renderAgentPrompt, type AgentPromptOverrides } from
 import { dimensionScoutSchema, traceAgentSchema, contextAgentSchema, normalizeDimensionScout, assembleDecomposition, decompositionSchema } from './decomposition-server.ts';
 export const stageNames = ['dimension-scout', 'trace-specialist', 'context-retrieval'] as const;
 export const stageSchemas = [dimensionScoutSchema, traceAgentSchema, contextAgentSchema] as const;
-export function stageRequest(stage: number, question: string, results: unknown[], decisionContext = "", promptOverrides: AgentPromptOverrides = {}) {
+export const canonicalEfforts = ['instant', 'medium', 'high', 'xhigh', 'pro'] as const;
+export type CanonicalEffort = (typeof canonicalEfforts)[number];
+const effortAliases: Record<string, CanonicalEffort> = { low: 'instant', max: 'pro' };
+export function normalizeEffort(value: unknown): CanonicalEffort {
+  if (typeof value !== 'string') return 'instant';
+  const trimmed = value.trim().toLowerCase();
+  const alias = effortAliases[trimmed];
+  if (alias) return alias;
+  return (canonicalEfforts as readonly string[]).includes(trimmed) ? (trimmed as CanonicalEffort) : 'instant';
+}
+export function stageRequest(stage: number, question: string, results: unknown[], decisionContext = "", promptOverrides: AgentPromptOverrides = {}, effort?: string) {
   const agent = resolveAgentPrompt(stageNames[stage], promptOverrides);
   const dimensions = stage > 0 ? normalizeDimensionScout(dimensionScoutSchema.parse(results[0])).dimensions : [];
   return {
-    model: 'lyra-chatgpt-pro', background: true, reasoning: { effort: 'instant' },
+    model: 'lyra-chatgpt-pro', background: true, reasoning: { effort: normalizeEffort(effort) },
     instructions: agent.instructions + '\nReturn only one JSON object matching this schema. No markdown fences. Do not browse or answer the substantive question.\n' + JSON.stringify(z.toJSONSchema(stageSchemas[stage])),
     input: renderAgentPrompt(agent.taskTemplate, { question, decisionContext: decisionContext || 'None supplied. Do not invent personal facts. Stop before conducting the context interview.', dimensionsJson: JSON.stringify(dimensions) }),
     metadata: { client_job: `epistack-hosted-${stageNames[stage]}` },
