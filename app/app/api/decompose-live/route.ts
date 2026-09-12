@@ -53,7 +53,15 @@ export async function POST(request: Request) {
       state.rateLimits = (state.rateLimits || 0) + 1;
       state.status = 'queued'; return null;
     }
-    if (!response.ok) throw new Error(`Backend returned HTTP ${response.status}. The saved run has stopped; it will not resubmit automatically.`);
+    if (!response.ok) {
+      const error = new Error(response.status >= 500
+        ? `The Astra backend returned HTTP ${response.status}.`
+        : `Backend returned HTTP ${response.status}. The saved run has stopped; it will not resubmit automatically.`) as Error & { code?: string };
+      // Cloudflare edge / origin errors (522, 524, 525) and other 5xx mean the
+      // gateway is effectively unreachable; allow the pre-acceptance fallback.
+      if (response.status >= 500) error.code = 'backend-unreachable';
+      throw error;
+    }
     return response.json();
   }
   try {
