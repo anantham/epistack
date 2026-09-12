@@ -14,6 +14,7 @@ import type {
   RecallResponse,
   RecallToolTraceEvent,
 } from "../../lib/broad-recall";
+import { sourceClassLabels, canPromoteSourceClass } from "../../lib/source-class";
 import {
   researchBriefSchema,
   researchBriefStorageKey,
@@ -939,7 +940,8 @@ export function ResearchDashboard() {
                       <article className={lead.disconfirming ? "disconfirming" : ""} key={lead.id}>
                         <div className="recall-lead-status">
                           <span>{lead.status}</span>
-                          <small>{lead.source.type.replaceAll("-", " ")}</small>
+                          <small>{lead.sourceClass ? sourceClassLabels[lead.sourceClass] : lead.source.type.replaceAll("-", " ")}</small>
+                          {lead.sourceClass && !canPromoteSourceClass(lead.sourceClass) && <em className="lead-class-note">context, not evidence</em>}
                           {lead.disconfirming && <b>could disconfirm</b>}
                         </div>
                         <h3>{lead.source.title}</h3>

@@ -5,8 +5,7 @@ import {
   shareableApplicabilityProfileSchema,
   type RecallLane,
 } from "../../../lib/broad-recall";
-
-const lanes: RecallLane[] = ["broad-recall", "applicability"];
+import { sourceClassSchema, sourceClassPromptList, type SourceClass } from "../../../lib/source-class";
 
 const hostedRecallClaimSchema = z.object({
   id: z.string().trim().min(2).max(80),
@@ -53,8 +52,8 @@ function reportedQueryFor(claims: HostedRecallClaim[]) {
   return bounded(query || claims[0].statement, 3, 600);
 }
 
-function buildLanePrompt(lane: RecallLane, input: HostedRecallRequest, profile: typeof emptyApplicabilityProfile) {
-  const claimBlock = input.claims.map((claim) => {
+function claimBlock(claims: HostedRecallClaim[]) {
+  return claims.map((claim) => {
     const query = claim.retrieval?.searchQuery?.trim();
     return [
       `- id: ${claim.id}`,
@@ -63,11 +62,19 @@ function buildLanePrompt(lane: RecallLane, input: HostedRecallRequest, profile: 
       query ? `  search query: ${query}` : "",
     ].filter(Boolean).join("\n");
   }).join("\n");
+}
+
+function buildLanePrompt(
+  lane: RecallLane,
+  input: HostedRecallRequest,
+  profile: typeof emptyApplicabilityProfile,
+  claims: HostedRecallClaim[],
+) {
   const lines = [
     `You are the ${lane} lead-discovery lane of an evidence-investigation system.`,
     "",
     "Search the web and return a short Markdown report. Every source you cite must appear as a Markdown link: [title](https://...)",
-    "Return between 2 and 12 distinct, directly relevant sources. Prefer primary sources, authoritative records, and evidence that could weaken, reverse, or bound a claim.",
+    "Return between 2 and 12 distinct, directly relevant sources.",
     "Do not invent a source, URL, title, or query. Do not include names, addresses, employers, contact details, or other local-only facts.",
     "",
     `LANE: ${lane}`,
@@ -75,7 +82,7 @@ function buildLanePrompt(lane: RecallLane, input: HostedRecallRequest, profile: 
     `HUMAN-COMPILED QUESTION: ${input.compiledQuestion || input.question}`,
     "",
     "SCOPED CLAIMS (shareable, privacy-minimized):",
-    claimBlock,
+    claimBlock(claims),
   ];
   if (lane === "applicability") {
     lines.push(
@@ -92,10 +99,17 @@ function buildLanePrompt(lane: RecallLane, input: HostedRecallRequest, profile: 
       "",
       "Focus on whether the evidence transports to this shareable population, setting, feasible action, comparator, and constraints.",
     );
+  } else if (lane === "context") {
+    lines.push(
+      "",
+      "Search for first-person reports, forums, and journalism that reveal symptoms, usability problems, failure modes, or hypotheses.",
+      "These are CONTEXT SIGNALS ONLY. They can never be evidence that an intervention causes an effect. Prefer well-sourced reporting and clear primary accounts.",
+    );
   } else {
     lines.push(
       "",
-      "Search widely: direct evidence, negative results, failed replications, corrections, rebuttals, and boundary cases. Do not personalize the search.",
+      "Search widely for direct evidence, systematic reviews, guidelines, trial registries, official statistics, preprints, and boundary cases.",
+      "Prefer primary evidence, but include authoritative non-study sources (guidelines, registries, statistics) where they are the right kind of source.",
     );
   }
   return lines.join("\n");
@@ -133,15 +147,37 @@ function extractLinks(markdown: string) {
   return found;
 }
 
-function buildLeads(lane: RecallLane, links: Array<{ url: string; title: string }>, claims: HostedRecallClaim[]) {
-  const firstClaimId = claims[0].id;
-  const reportedQuery = reportedQueryFor(claims);
+function stripFences(value: string) {
+  return value.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+}
+
+type Lead = {
+  id: string;
+  lane: RecallLane;
+  claimIds: string[];
+  source: { url: string; title: string; type: "other" };
+  sourceClass?: SourceClass;
+  whyRelevant: string;
+  disconfirming: boolean;
+  limitation: string;
+  status: "lead-only";
+  discovery: {
+    reportedQuery: string;
+    queryObserved: boolean;
+    sourceFetchObserved: boolean;
+    toolEventIds: string[];
+    observability: "model-reported-only";
+  };
+};
+
+function buildLeads(lane: RecallLane, links: Array<{ url: string; title: string }>, claimIds: string[]) {
+  const reportedQuery = bounded(claimIds.length ? `scoped lane ${lane}` : "scoped lane", 3, 600);
   return links.slice(0, 12).map((link) => ({
     id: `lead-${lane}-${shortHash(link.url).slice(0, 10)}`,
     lane,
-    claimIds: [firstClaimId],
+    claimIds: claimIds.length ? claimIds : ["claim"],
     source: { url: link.url, title: link.title, type: "other" as const },
-    whyRelevant: `Discovered by the hosted ${lane} Astra web-search lane for claim ${firstClaimId}.`,
+    whyRelevant: `Discovered by the hosted ${lane} Astra web-search lane.`,
     disconfirming: false,
     limitation: "Model-reported discovery from Astra's cited web-search synthesis; the underlying page was not fetched or verified.",
     status: "lead-only" as const,
@@ -152,7 +188,36 @@ function buildLeads(lane: RecallLane, links: Array<{ url: string; title: string 
       toolEventIds: [],
       observability: "model-reported-only" as const,
     },
-  }));
+  })) as Lead[];
+}
+
+const classificationSchema = z.object({
+  classifications: z.array(z.object({
+    url: z.string().min(8).max(2_000),
+    sourceClass: sourceClassSchema,
+  })).max(120),
+});
+
+async function classifyLeads(leads: Lead[]) {
+  const unique = new Map<string, string>();
+  for (const lead of leads) unique.set(lead.source.url, lead.source.title);
+  if (!unique.size) return;
+  const list = [...unique.entries()].map(([url, title]) => ({ url, title }));
+  const instructions = [
+    "You classify web sources by their source class. For each item return its exact url and one sourceClass.",
+    "Classes:",
+    sourceClassPromptList,
+    "Rules: a peer-reviewed randomized or observational human study is primary-study; a meta-analysis or systematic review is systematic-review; a professional-society or public-health recommendation is guideline; a formal spec (ISO, NIST, etc.) is standard; a trials registry entry is trial-registry; a government or international dataset/report is official-statistics; an unreviewed manuscript server is preprint; news and expert commentary is reporting; a forum post or first-person account is anecdote.",
+    "Return only JSON matching this schema. No markdown fences.",
+    JSON.stringify(z.toJSONSchema(classificationSchema)),
+  ].join("\n");
+  const raw = await runLyraStage({ model: "lyra-chatgpt-pro", effort: "instant", instructions, input: JSON.stringify(list) });
+  const parsed = classificationSchema.parse(JSON.parse(stripFences(raw)));
+  const map = new Map(parsed.classifications.map((entry) => [normalizeUrl(entry.url), entry.sourceClass]));
+  for (const lead of leads) {
+    const classified = map.get(lead.source.url);
+    if (classified) lead.sourceClass = classified;
+  }
 }
 
 const json = (value: unknown, status = 200) =>
@@ -182,24 +247,60 @@ export async function POST(request: Request) {
     claims: input.claims,
     applicabilityProfile: profile,
   }))}`;
+
+  async function searchLane(lane: RecallLane, claims: HostedRecallClaim[]) {
+    const markdown = await runLyraStage({
+      model: "lyra-web-search",
+      input: buildLanePrompt(lane, input, profile, claims),
+    });
+    return buildLeads(lane, extractLinks(markdown), claims.map((claim) => claim.id));
+  }
+
   try {
-    const laneResults = await Promise.all(lanes.map(async (lane) => {
-      const markdown = await runLyraStage({
-        model: "lyra-web-search",
-        input: buildLanePrompt(lane, input, profile),
-      });
-      const leads = buildLeads(lane, extractLinks(markdown), input.claims);
-      if (!leads.length) throw new Error(`The ${lane} hosted web-search lane returned no usable source links.`);
+    const tasks: Array<Promise<Lead[]>> = [
+      // One broad-recall agent per claim: more scoped agents, not one broad sweep.
+      ...input.claims.map((claim) => searchLane("broad-recall", [claim])),
+      searchLane("applicability", input.claims),
+      searchLane("context", input.claims),
+    ];
+    const settled = await Promise.allSettled(tasks);
+    let leads = settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+
+    // Dedupe across lanes by URL, preferring the first non-context lane.
+    const byUrl = new Map<string, Lead>();
+    const laneRank: Record<RecallLane, number> = { "broad-recall": 0, applicability: 1, context: 2 };
+    for (const lead of leads) {
+      const existing = byUrl.get(lead.source.url);
+      if (!existing || laneRank[lead.lane] < laneRank[existing.lane]) byUrl.set(lead.source.url, lead);
+    }
+    leads = [...byUrl.values()];
+
+    if (!leads.length) {
+      return json({ error: "Hosted lead discovery returned no usable source links." }, 502);
+    }
+
+    try {
+      await classifyLeads(leads);
+    } catch {
+      // Classification is an enhancement; unclassified leads stay valid.
+    }
+
+    const laneOrder: RecallLane[] = ["broad-recall", "applicability", "context"];
+    const laneResults = laneOrder.map((lane) => {
+      const laneLeads = leads.filter((lead) => lead.lane === lane);
       return {
-        laneResult: {
-          lane,
-          searchSummary: `Hosted Astra web search returned ${leads.length} candidate source${leads.length === 1 ? "" : "s"} for the ${lane} lane.`,
-          unsearchedBoundaries: [] as string[],
-          leadIds: leads.map((lead) => lead.id),
-        },
-        leads,
+        lane,
+        searchSummary: lane === "broad-recall"
+          ? `Hosted Astra broad-recall returned ${laneLeads.length} candidate source${laneLeads.length === 1 ? "" : "s"} across ${input.claims.length} claim lane${input.claims.length === 1 ? "" : "s"}.`
+          : lane === "context"
+            ? `Hosted Astra context lane returned ${laneLeads.length} signal${laneLeads.length === 1 ? "" : "s"} (context only; cannot promote to evidence).`
+            : `Hosted Astra applicability lane returned ${laneLeads.length} candidate source${laneLeads.length === 1 ? "" : "s"}.`,
+        unsearchedBoundaries: [] as string[],
+        leadIds: (laneLeads.length ? laneLeads : leads.filter((lead) => lead.lane === "broad-recall")).map((lead) => lead.id),
       };
-    }));
+    });
+    const presentLaneResults = laneResults.filter((lane) => lane.leadIds.length > 0);
+
     const response = recallResponseSchema.parse({
       schemaVersion: "0.1.0",
       status: "lead-only",
@@ -207,8 +308,8 @@ export async function POST(request: Request) {
       compiledQuestion,
       generatedAt: new Date().toISOString(),
       model: "Astra · web search",
-      lanes: laneResults.map((entry) => entry.laneResult),
-      leads: laneResults.flatMap((entry) => entry.leads),
+      lanes: presentLaneResults.slice(0, 12),
+      leads: leads.slice(0, 24),
       toolTrace: [],
       observability: {
         mode: "model-reported-only",

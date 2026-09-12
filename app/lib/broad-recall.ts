@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { sourceClassSchema } from "./source-class.ts";
 
 const boundedText = (minimum: number, maximum: number) => z.string().trim().min(minimum).max(maximum);
 
-export const recallLaneSchema = z.enum(["broad-recall", "applicability"]);
+export const recallLaneSchema = z.enum(["broad-recall", "applicability", "context"]);
 export type RecallLane = z.infer<typeof recallLaneSchema>;
 
 export const recallSourceTypeSchema = z.enum([
@@ -99,6 +100,7 @@ export type RecallToolTraceEvent = z.infer<typeof recallToolTraceEventSchema>;
 export const recallLeadSchema = recallLeadDraftSchema.omit({ reportedQuery: true }).extend({
   id: boundedText(6, 120),
   lane: recallLaneSchema,
+  sourceClass: sourceClassSchema.optional(),
   discovery: z.object({
     reportedQuery: boundedText(3, 600),
     queryObserved: z.boolean(),
@@ -122,7 +124,7 @@ export const recallResponseSchema = z.object({
   compiledQuestion: boundedText(8, 5_000),
   generatedAt: z.string().datetime(),
   model: boundedText(1, 120),
-  lanes: z.array(recallLaneResultSchema).length(2),
+  lanes: z.array(recallLaneResultSchema).min(2).max(12),
   leads: z.array(recallLeadSchema).min(2).max(24),
   toolTrace: z.array(recallToolTraceEventSchema).max(240),
   observability: z.object({
