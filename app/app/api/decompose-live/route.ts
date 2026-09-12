@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import { getD1 } from '../../../db';
 import { stageRequest, parseStage, finishDecomposition, stageNames, normalizeEffort } from '../../../lib/hosted-decomposition';
 
-type State = { question: string; decisionContext?: string; promptOverrides?: AgentPromptOverrides; effort?: string; stage: number; results: unknown[]; status: string; remoteId?: string; nextAt?: number; error?: string; artifact?: unknown; stageStartedAt?: number; stageDurationsMs?: number[]; attempts?: number[]; rateLimits?: number };
+type State = { question: string; decisionContext?: string; promptOverrides?: AgentPromptOverrides; effort?: string; stage: number; results: unknown[]; status: string; remoteId?: string; nextAt?: number; error?: string; code?: string; artifact?: unknown; stageStartedAt?: number; stageDurationsMs?: number[]; attempts?: number[]; rateLimits?: number };
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 export async function POST(request: Request) {
   const origin = request.headers.get('origin');
@@ -37,7 +37,16 @@ export async function POST(request: Request) {
   const state = JSON.parse(row.state_json) as State;
   const save = () => db.prepare('UPDATE hosted_decomposition_jobs SET state_json = ? WHERE id = ?').bind(JSON.stringify(state), body.id).run();
   async function remote(path: string, payload?: unknown) {
-    const response = await fetch(config.LYRA_PUBLIC_GATEWAY_URL!.replace(/\/$/, '') + path, { method: payload ? 'POST' : 'GET', headers: { Authorization: `Bearer ${config.LYRA_API_KEY}`, 'Content-Type': 'application/json' }, ...(payload ? { body: JSON.stringify(payload) } : {}), signal: AbortSignal.timeout(25000) });
+    let response: Response;
+    try {
+      response = await fetch(config.LYRA_PUBLIC_GATEWAY_URL!.replace(/\/$/, '') + path, { method: payload ? 'POST' : 'GET', headers: { Authorization: `Bearer ${config.LYRA_API_KEY}`, 'Content-Type': 'application/json' }, ...(payload ? { body: JSON.stringify(payload) } : {}), signal: AbortSignal.timeout(25000) });
+    } catch {
+      // A thrown fetch (network error / timeout) means the Astra gateway is
+      // unreachable — distinct from an HTTP error response.
+      const failure = new Error('The Astra backend is unreachable.') as Error & { code?: string };
+      failure.code = 'backend-unreachable';
+      throw failure;
+    }
     if ((response.status === 429 || response.status === 503) && payload) {
       const delay = Number(response.headers.get('retry-after'));
       state.nextAt = Date.now() + (Number.isFinite(delay) && delay > 0 ? Math.min(delay, 86400) : 60) * 1000;
@@ -77,10 +86,18 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     state.status = 'failed';
-    state.error = error instanceof Error && error.message.startsWith('Backend returned') ? error.message : 'This stage could not complete or validate. The saved run has stopped without retrying the submission.';
+    const failureCode = (error as { code?: string })?.code;
+    if (failureCode === 'backend-unreachable' && !state.remoteId) {
+      // The first submission never reached Astra, so it is safe to let the
+      // client fall back to the alternate provider.
+      state.code = 'backend-unreachable';
+      state.error = 'Astra is unreachable; falling back to the alternate provider.';
+    } else {
+      state.error = error instanceof Error && error.message.startsWith('Backend returned') ? error.message : 'This stage could not complete or validate. The saved run has stopped without retrying the submission.';
+    }
   } finally {
     await save();
     await db.prepare('UPDATE hosted_decomposition_jobs SET locked_until = 0 WHERE id = ?').bind(body.id).run();
   }
-  return json({ id: body.id, status: state.status, stage: state.stage, stages: stageNames, question: state.question, decisionContext: state.decisionContext || '', error: state.error, artifact: state.artifact, results: state.results, nextAt: state.nextAt, attempts: state.attempts, durationsMs: state.stageDurationsMs, rateLimits: state.rateLimits });
+  return json({ id: body.id, status: state.status, stage: state.stage, stages: stageNames, question: state.question, decisionContext: state.decisionContext || '', error: state.error, code: state.code, artifact: state.artifact, results: state.results, nextAt: state.nextAt, attempts: state.attempts, durationsMs: state.stageDurationsMs, rateLimits: state.rateLimits });
 }

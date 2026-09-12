@@ -152,18 +152,7 @@ export async function POST(request: Request) {
       doiLine: source.doi ? ` · DOI ${source.doi}` : "",
       abstract: source.abstract,
     });
-    let output: unknown;
-    if (usingLyra) {
-      const text = await runLyraStage({
-        model: "lyra-chatgpt-pro",
-        effort: "medium",
-        instructions: extractionAgent.instructions
-          + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
-          + JSON.stringify(z.toJSONSchema(deepDiveSchema)),
-        input: extractionInput,
-      });
-      output = JSON.parse(stripMarkdownFences(text));
-    } else {
+    const runOpenRouterExtraction = async () => {
       const openRouter = createOpenAI({
         apiKey: openRouterApiKey,
         baseURL: openRouterBaseURL,
@@ -185,7 +174,29 @@ export async function POST(request: Request) {
         maxOutputTokens: extractionAgent.maxOutputTokens,
         temperature: extractionAgent.temperature,
       });
-      output = fallback.output;
+      return fallback.output as unknown;
+    };
+    let output: unknown;
+    let usedFallback = false;
+    if (usingLyra) {
+      try {
+        const text = await runLyraStage({
+          model: "lyra-chatgpt-pro",
+          effort: "medium",
+          instructions: extractionAgent.instructions
+            + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
+            + JSON.stringify(z.toJSONSchema(deepDiveSchema)),
+          input: extractionInput,
+        });
+        output = JSON.parse(stripMarkdownFences(text));
+      } catch (lyraError) {
+        // Astra configured but unreachable: degrade to OpenRouter when a key exists.
+        if (!openRouterApiKey) throw lyraError;
+        output = await runOpenRouterExtraction();
+        usedFallback = true;
+      }
+    } else {
+      output = await runOpenRouterExtraction();
     }
     const parsed = deepDiveSchema.safeParse(output);
     if (!parsed.success) {
@@ -194,7 +205,7 @@ export async function POST(request: Request) {
     const payload: CachedDeepDive = {
       source,
       candidate: parsed.data,
-      model: extractionModel,
+      model: usedFallback ? `${openRouterModel} (Astra fallback)` : extractionModel,
       verificationStatus: "abstract-only",
     };
     const stored = await writeOperationCache(
