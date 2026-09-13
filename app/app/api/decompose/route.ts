@@ -238,7 +238,7 @@ export async function POST(request: Request) {
   const traceResult = traceSettled.status === "fulfilled" ? traceSettled.value : null;
   const contextResult = contextSettled.status === "fulfilled" ? contextSettled.value : null;
   const warnings: string[] = [];
-  if (!traceResult) warnings.push("The trace specialist fell back to deterministic exact-word mapping.");
+  if (!traceResult) warnings.push("The trace specialist fell back to deterministic submitted-language mapping.");
   if (!contextResult) warnings.push("The context specialist fell back to domain-general retrieval fields and interview questions.");
   const decomposition = assembleDecomposition(scout, traceResult, contextResult, prompt, decisionContext);
   const validated = decompositionSchema.safeParse(decomposition);

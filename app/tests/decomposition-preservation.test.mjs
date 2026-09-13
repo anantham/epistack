@@ -32,6 +32,27 @@ test('invalid and duplicate traces cannot starve later dimensions', () => {
   assert.ok(artifact.highlights.every(h => prompt.includes(h.quote)));
 });
 
+test('deterministic trace fallback keeps meaningful multi-word submitted cues', () => {
+  const artifact = assembleDecomposition(
+    {
+      ...scout,
+      dimensions: [
+        { id: 'health-outcome', label: 'Health outcome' },
+        { id: 'current-intake-dose-frequency', label: 'Current intake, dose, and frequency' },
+        { id: 'population', label: 'Population and setting' },
+        { id: 'comparator', label: 'Comparator' },
+        { id: 'practical-constraints', label: 'Practical constraints and safety' },
+      ],
+    },
+    null,
+    null,
+    prompt,
+  );
+  assert.ok(artifact.clusters.every((cluster) => cluster.highlightQuotes[0].trim().split(/\s+/).length >= 2));
+  assert.ok(artifact.clusters.some((cluster) => cluster.highlightQuotes.some((quote) => quote.includes('across people'))));
+  assert.ok(artifact.highlights.every((highlight) => prompt.includes(highlight.quote)));
+});
+
 test('a trace failure preserves the context specialist interview', () => {
   const context = {
     enrichments: scout.dimensions.map((dimension, index) => ({

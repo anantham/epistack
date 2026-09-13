@@ -374,13 +374,60 @@ function genericIngestion(label: string) {
   };
 }
 
+const traceStopWords = new Set([
+  "a", "about", "after", "all", "an", "and", "are", "as", "at", "be", "before", "but", "by", "can", "could", "does", "for", "from", "how", "i", "if", "in", "is", "it", "me", "of", "on", "or", "should", "that", "the", "their", "there", "these", "this", "those", "to", "we", "what", "when", "where", "which", "who", "would",
+]);
+
+function traceSemanticTerms(dimension: { id: string; label: string }) {
+  const text = `${dimension.id} ${dimension.label}`.toLowerCase();
+  const terms = new Set(text.match(/[a-z][a-z'-]{2,}/g) ?? []);
+  const add = (values: string[]) => values.forEach((value) => terms.add(value));
+  if (/outcome|health|benefit|harm|good|bad|result|success|goal|value/.test(text)) add(["good", "bad", "health", "benefit", "harm", "predict", "matter"]);
+  if (/exposure|dose|intake|frequency|amount|preparation|form|implementation/.test(text)) add(["eat", "intake", "dose", "often", "frequency", "amount", "moderation", "prepare", "form"]);
+  if (/population|people|person|setting|who|generaliz|transport/.test(text)) add(["people", "person", "across", "adults", "population"]);
+  if (/comparator|alternative|counterfactual|replace|baseline|instead/.test(text)) add(["else", "instead", "replace", "compared", "alternative"]);
+  if (/context|practical|access|afford|budget|location|safety|constraint/.test(text)) add(["else", "attention", "budget", "cost", "where", "safe", "access"]);
+  if (/horizon|time|duration|long|short|follow/.test(text)) add(["time", "long", "short", "when", "duration"]);
+  return terms;
+}
+
+function traceCandidates(prompt: string) {
+  const words = [...prompt.matchAll(/\b[A-Za-z][A-Za-z'-]{1,}\b/g)];
+  return words.flatMap((_, start) => {
+    const candidates = [] as { text: string; terms: string[] }[];
+    for (let length = 2; length <= 5 && start + length <= words.length; length += 1) {
+      const first = words[start];
+      const last = words[start + length - 1];
+      const text = prompt.slice(first.index ?? 0, (last.index ?? 0) + last[0].length).trim();
+      const terms = text.toLowerCase().match(/[a-z][a-z'-]{1,}/g) ?? [];
+      if (terms.some((term) => !traceStopWords.has(term))) candidates.push({ text, terms });
+    }
+    return candidates;
+  });
+}
+
+function chooseTraceQuote(prompt: string, dimension: { id: string; label: string }, used: Set<string>) {
+  const semanticTerms = traceSemanticTerms(dimension);
+  const candidates = traceCandidates(prompt)
+    .map((candidate) => {
+      const hits = candidate.terms.filter((term) => semanticTerms.has(term)).length;
+      const informative = candidate.terms.filter((term) => !traceStopWords.has(term)).length;
+      const duplicatePenalty = used.has(candidate.text) ? 100 : 0;
+      const lengthBonus = candidate.terms.length === 2 ? 3 : candidate.terms.length === 3 ? 4 : 0;
+      const punctuationPenalty = (candidate.text.match(/[?!,]/g) ?? []).length * 8;
+      return { ...candidate, score: hits * 5 + informative * 1.5 + lengthBonus - punctuationPenalty - duplicatePenalty };
+    })
+    .sort((left, right) => right.score - left.score || left.text.length - right.text.length);
+  const selected = candidates.find((candidate) => !used.has(candidate.text)) ?? candidates[0];
+  const quote = selected?.text || prompt.slice(0, Math.min(80, prompt.length));
+  used.add(quote);
+  return quote;
+}
+
 function genericTraceForDimensions(prompt: string, dimensions: { id: string; label: string }[]) {
-  const stopWords = new Set(["about", "after", "before", "could", "does", "from", "have", "how", "should", "their", "there", "these", "those", "what", "when", "where", "which", "would"]);
-  const words = [...prompt.matchAll(/\b[A-Za-z][A-Za-z'-]{1,}\b/g)]
-    .map((match) => match[0])
-    .filter((word, index, all) => !stopWords.has(word.toLowerCase()) && all.findIndex((candidate) => candidate.toLowerCase() === word.toLowerCase()) === index);
-  return dimensions.slice(0, Math.min(7, Math.max(2, words.length))).map((dimension, index) => {
-    const quote = words[index] ?? words[index % Math.max(1, words.length)] ?? prompt.slice(0, Math.min(80, prompt.length));
+  const usedQuotes = new Set<string>();
+  return dimensions.slice(0, Math.min(7, Math.max(2, dimensions.length))).map((dimension) => {
+    const quote = chooseTraceQuote(prompt, dimension, usedQuotes);
     return {
       dimensionId: dimension.id,
       label: compact(dimension.label, 90),
