@@ -124,7 +124,9 @@ export const recallResponseSchema = z.object({
   compiledQuestion: boundedText(8, 5_000),
   generatedAt: z.string().datetime(),
   model: boundedText(1, 120),
-  lanes: z.array(recallLaneResultSchema).min(2).max(12),
+  // Hosted discovery is parallel and may return a useful partial result when
+  // one provider lane times out. The UI reports the lanes that actually ran.
+  lanes: z.array(recallLaneResultSchema).min(1).max(12),
   leads: z.array(recallLeadSchema).min(2).max(24),
   toolTrace: z.array(recallToolTraceEventSchema).max(240),
   observability: z.object({

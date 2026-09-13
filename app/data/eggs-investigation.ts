@@ -74,7 +74,7 @@ export const researchCapabilities = [
     id: "full-text",
     label: "Dual-model full-text review",
     status: "live" as const,
-    detail: "A local Opus process extracts from hashed PMC full text; a fresh Sonnet process attacks every result before policy-gated promotion.",
+    detail: "A hosted extractor preserves hashed PMC full text; a separate hosted reviewer attacks every result before policy-gated promotion.",
   },
   {
     id: "triangulation",

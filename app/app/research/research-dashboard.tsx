@@ -1169,7 +1169,7 @@ export function ResearchDashboard() {
                 </article>
               ))}
               {recall.liveTrace.length === 0 && (
-                <p>No tool invocation inputs were visible in the Claude stream; reported queries must be treated as model-authored.</p>
+                <p>No tool invocation inputs were visible in the hosted provider response; reported queries must be treated as model-authored.</p>
               )}
             </div>
             {recall.response && <small>{recall.response.observability.boundary}</small>}
@@ -1380,7 +1380,7 @@ export function ResearchDashboard() {
                           const actionLabel = deepDive.status === "persisted"
                             ? "Persisted with provenance"
                             : companion.status === "hosted"
-                              ? "Run locally for full text"
+                              ? "Run hosted full-text review"
                             : deepDive.status === "acquiring" || deepDive.status === "extracting"
                               ? "Reading full paper…"
                               : deepDive.status === "reviewing"

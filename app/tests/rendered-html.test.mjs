@@ -183,6 +183,15 @@ test("hosted investigation and recall survive an Astra outage with strict provid
   assert.doesNotMatch(dashboard, /Local Claude companion/);
 });
 
+test("hosted recall accepts a useful partial lane result", async () => {
+  const [schema, route] = await Promise.all([
+    readFile(new URL("lib/broad-recall.ts", root), "utf8"),
+    readFile(new URL("app/api/recall/route.ts", root), "utf8"),
+  ]);
+  assert.match(schema, /lanes: z\.array\(recallLaneResultSchema\)\.min\(1\)/);
+  assert.match(route, /Promise\.allSettled\(tasks\)/);
+});
+
 test("settings validate the key, credits, and model with distinct failures", async () => {
   const [frame, validation, failures, api] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
