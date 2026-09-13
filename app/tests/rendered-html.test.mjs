@@ -110,6 +110,8 @@ test("the investigation is split into focused navigable routes", async () => {
   assert.match(navigation, /href: "\/matrix"/);
   assert.match(navigation, /href: "\/inventory"/);
   assert.match(navigation, /Decompose · dimensions/);
+  assert.match(navigation, /className="stage-home"/);
+  assert.match(navigation, /onHome\?: \(\) => void/);
   assert.match(navigation, /Contextualize · action space/);
   assert.match(navigation, /Investigate · agents & ingestion/);
   assert.match(navigation, /href: "\/artifact"/);

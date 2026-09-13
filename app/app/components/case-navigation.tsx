@@ -32,11 +32,36 @@ export function useCaseHref(href: string) {
   return `${href}${separator}caseId=${encodeURIComponent(caseId)}`;
 }
 
-export function StageNav({ active, estimates }: { active: InvestigationStage; estimates?: Array<string | null> }) {
+function HomeControl({ caseId, onHome }: { caseId: string; onHome?: () => void }) {
+  const icon = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m3 10 9-7 9 7" />
+      <path d="M5 9v11h14V9" />
+      <path d="M9 20v-6h6v6" />
+    </svg>
+  );
+
+  if (onHome) {
+    return (
+      <button type="button" className="stage-home" aria-label="Edit question" data-tooltip="Edit question" onClick={onHome}>
+        {icon}
+      </button>
+    );
+  }
+
+  return (
+    <Link className="stage-home" href={caseId ? `/?caseId=${encodeURIComponent(caseId)}` : "/"} aria-label="Edit question" data-tooltip="Edit question">
+      {icon}
+    </Link>
+  );
+}
+
+export function StageNav({ active, estimates, onHome }: { active: InvestigationStage; estimates?: Array<string | null>; onHome?: () => void }) {
   const caseId = useCurrentCaseId();
 
   return (
     <nav className="stage-nav" aria-label="Investigation stages">
+      <HomeControl caseId={caseId} onHome={onHome} />
       {stages.map((stage, index) => {
         const href = caseId
           ? `${stage.href}?caseId=${encodeURIComponent(caseId)}`
@@ -60,10 +85,10 @@ export function StageNav({ active, estimates }: { active: InvestigationStage; es
   );
 }
 
-export function CaseHeader({ active, actions }: { active: InvestigationStage; actions?: ReactNode }) {
+export function CaseHeader({ active, actions, onHome }: { active: InvestigationStage; actions?: ReactNode; onHome?: () => void }) {
   return (
     <header className="topbar">
-      <StageNav active={active} />
+      <StageNav active={active} onHome={onHome} />
       {actions}
     </header>
   );

@@ -80,13 +80,13 @@ export const researchCapabilities = [
     id: "triangulation",
     label: "Web triangulation",
     status: "placeholder" as const,
-    detail: "Next: search registries, critiques, corrections, data repositories, journalism, and relevant first-person reports.",
+    detail: "Planned next: search registries, critiques, corrections, data repositories, journalism, and relevant first-person reports.",
   },
   {
     id: "updates",
     label: "Retraction and correction watch",
     status: "placeholder" as const,
-    detail: "Later: subscribe sources and propagate reviewed update events through affected results and decisions.",
+    detail: "Planned later: subscribe sources and propagate reviewed update events through affected results and decisions.",
   },
 ];
 

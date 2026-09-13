@@ -1255,7 +1255,7 @@ export function ResearchDashboard() {
       <section className="capability-rail" aria-label="Investigation capability status">
         {researchCapabilities.map((capability) => (
           <article className={capability.status} key={capability.id}>
-            <div><i aria-hidden="true" /><span>{capability.status}</span></div>
+            <div><i aria-hidden="true" /><span>{capability.status === "live" ? "live" : "planned"}</span></div>
             <strong>{capability.label}</strong>
             <p>{capability.detail}</p>
           </article>

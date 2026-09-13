@@ -898,11 +898,6 @@ main {
   width: 18px;
 }
 
-.review-back {
-  flex: 0 0 auto;
-  margin-bottom: 0;
-}
-
 .topbar {
   align-items: center;
   background: rgba(245, 242, 233, 0.9);
@@ -986,6 +981,26 @@ main {
   align-items: center;
   display: flex;
   gap: 12px;
+}
+
+.stage-home {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line-dark);
+  border-radius: 50%;
+  color: var(--ink-soft);
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  padding: 0;
+  width: 38px;
+}
+
+.stage-home:hover,
+.stage-home:focus-visible {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green);
 }
 
 .stage {

@@ -718,7 +718,7 @@ export default function Home() {
 
       <div className={`intro-surface ${introComplete ? "is-ready" : ""}`} aria-hidden={!introComplete}>
         <header className="minimal-topbar">
-          <StageNav active="decompose" estimates={stageEstimates} />
+          <StageNav active="decompose" estimates={stageEstimates} onHome={returnToEditor} />
           {result && (
             <button
               type="button"
@@ -821,7 +821,6 @@ export default function Home() {
           {result && (phase === "review" || phase === "transitioning") && (
           <section className="story-board" aria-labelledby="trace-title">
             <div className="story-heading">
-              <button type="button" className="icon-button review-back" aria-label="Edit question" data-tooltip="Edit question" onClick={returnToEditor}>←</button>
               <div className="story-heading-title">
                 <h2 id="trace-title">Decomposition</h2>
                 {result.warning && <p className="decomposition-warning">{result.warning}</p>}

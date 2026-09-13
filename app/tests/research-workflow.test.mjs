@@ -42,6 +42,11 @@ test("the interface labels unfinished capabilities as placeholders", () => {
   assert.ok(researchCapabilities.some((capability) => capability.status === "placeholder"));
 });
 
+test("the capability rail explains placeholder capabilities as planned", async () => {
+  const dashboard = await readFile(new URL("../app/research/research-dashboard.tsx", import.meta.url), "utf8");
+  assert.match(dashboard, /capability\.status === "live" \? "live" : "planned"/);
+});
+
 test("research route keeps discovery separate from evidence promotion", async () => {
   const [dashboard, api, deepDiveApi, promoteApi, database, decision] = await Promise.all([
     readFile(new URL("../app/research/research-dashboard.tsx", import.meta.url), "utf8"),
