@@ -565,10 +565,10 @@ export function ResearchDashboard() {
     }
   }
 
-  async function runAll() {
+  async function runAll(refresh = false) {
     // PubMed asks unauthenticated clients to stay below three requests/second.
     // Each lane performs a search and summary request, so run lanes in series.
-    for (const lane of activeLanes) await runLane(lane);
+    for (const lane of activeLanes) await runLane(lane, refresh);
   }
 
   function toggleRecallClaim(claimId: string) {
@@ -940,6 +940,21 @@ export function ResearchDashboard() {
 
   const localAgentControlsAvailable = companion.status === "online";
   const artifactHref = caseId ? `/artifact?caseId=${encodeURIComponent(caseId)}` : "/artifact";
+  const refreshInvestigation = () => {
+    if (!brief || activeLanes.length === 0 || activeCount > 0 || recall.status === "running") return;
+    if (!window.confirm("Refresh the investigation live? This reruns broad recall and every PubMed lane, bypassing saved operation results.")) return;
+    void Promise.all([
+      runRecall(true),
+      runAll(true),
+    ]);
+  };
+
+  useEffect(() => {
+    window.addEventListener("epistack:refresh-investigation", refreshInvestigation);
+    return () => window.removeEventListener("epistack:refresh-investigation", refreshInvestigation);
+    // The handler intentionally closes over the current phase state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCount, activeLanes.length, brief, recall.status, storageReady]);
 
   if (!storageReady) {
     return (
@@ -994,7 +1009,7 @@ export function ResearchDashboard() {
             Each lane is traced to the human-edited scope, runs a real editable PubMed sweep, and keeps personal context local for applicability checks. A local Claude companion preserves full text, extracts atomic results, and attacks them with a different model.
           </p>
         </div>
-        <button className="primary-button run-all" onClick={runAll} disabled={activeCount > 0 || activeLanes.length === 0}>
+            <button className="primary-button run-all" onClick={() => void runAll(false)} disabled={activeCount > 0 || activeLanes.length === 0}>
           {activeCount > 0 ? `${activeCount} lanes searching` : `Run all ${activeLanes.length} lanes`}
         </button>
       </header>
@@ -1066,7 +1081,7 @@ export function ResearchDashboard() {
             </button>
             {recall.response && (
               <button className="cache-refresh-button" onClick={() => void runRecall(true)} disabled={!localAgentControlsAvailable || recall.status === "running"}>
-                Bypass local cache
+                Refresh live
               </button>
             )}
           </div>

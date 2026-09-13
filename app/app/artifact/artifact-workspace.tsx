@@ -524,10 +524,17 @@ export function ArtifactWorkspace() {
     artifact: null,
     detail: "Loading the accepted result graph…",
   });
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSession(initialArtifactSession()), 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => setRefreshNonce((current) => current + 1);
+    window.addEventListener("epistack:refresh-artifact", refresh);
+    return () => window.removeEventListener("epistack:refresh-artifact", refresh);
   }, []);
 
   useEffect(() => {
@@ -576,7 +583,7 @@ export function ArtifactWorkspace() {
 
     void loadArtifact();
     return () => controller.abort();
-  }, [caseId]);
+  }, [caseId, refreshNonce]);
 
   const artifact = load.artifact;
   const apiClaimsByBriefId = useMemo(() => {
@@ -712,19 +719,19 @@ export function ArtifactWorkspace() {
 
       <section className="live-artifact-meta" aria-label="Artifact evidence status">
         <div>
-          <span>Accepted result relations</span>
+          <span>Accepted claim–result links</span>
           <b>{counts.resultRelations}</b>
         </div>
         <div>
-          <span>Source containers</span>
+          <span>Distinct source records</span>
           <b>{counts.sources}</b>
         </div>
         <div>
-          <span>Dependence families</span>
+          <span>Dependence groups</span>
           <b>{counts.dependenceFamilies}</b>
         </div>
         <div>
-          <span>Full-text verified</span>
+          <span>Accepted links with full-text review</span>
           <b>{counts.fullTextVerified}</b>
         </div>
         <div className={`live-artifact-freshness ${artifact?.freshness.stale ? "is-stale" : ""}`}>

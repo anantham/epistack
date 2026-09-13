@@ -29,7 +29,7 @@ import {
   type BriefTelemetry
 } from "../../lib/brief-telemetry";
 import { formatDuration } from "../../lib/decomposition-telemetry";
-import { CaseHeader } from "../components/case-navigation";
+import { CaseHeader, RefreshControl } from "../components/case-navigation";
 import { BackendSettings, normalizeThinkingEffort, preferencesStorageKey, readPreferredEffort, type ThinkingEffort } from "../components/backend-settings";
 
 const editableClaimFields = [
@@ -443,19 +443,12 @@ export default function ContextualizeMap() {
 
   const mapActions = (
     <div className="map-actions">
-      <button
-        type="button"
-        className="icon-button"
-        aria-label="Recompute decomposition and questions"
-        data-tooltip="Recompute questions"
-        disabled={recomputing}
+      <RefreshControl
+        label="Recompute questions"
+        disabled={recomputing || !prompt.trim()}
         onClick={() => void recomputeQuestions()}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-          <path d="M21 3v6h-6" />
-        </svg>
-      </button>
+        busy={recomputing}
+      />
       <button
         type="button"
         className="icon-button"
@@ -487,6 +480,7 @@ export default function ContextualizeMap() {
   if (!clusters.length) {
     return (
       <main className="case-layout map-layout">
+        <CaseHeader active="contextualize" actions={mapActions} />
         <div className="case-bounds">
           <p>No clusters found. Please go back and decompose your question first.</p>
         </div>

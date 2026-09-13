@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CaseHeader, useCaseHref } from "../components/case-navigation";
+import { CaseHeader, RefreshControl, useCaseHref } from "../components/case-navigation";
 import { DecisionWorkbench } from "./decision-workbench";
 
 export default function SynthesisPage() {
@@ -9,7 +9,10 @@ export default function SynthesisPage() {
 
   return (
     <main>
-      <CaseHeader active="artifact" />
+      <CaseHeader
+        active="artifact"
+        actions={<RefreshControl label="Recompute synthesis" eventName="epistack:refresh-synthesis" />}
+      />
       <section className="route-page decision-route live-decision-route">
         <header className="page-hero narrow synthesis-hero">
           <div>

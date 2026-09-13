@@ -313,6 +313,17 @@ export function DecisionWorkbench() {
     && load.status !== "error"
     && !isSynthesizing,
   );
+  useEffect(() => {
+    const recompute = () => {
+      if (!canSynthesize) return;
+      if (!window.confirm("Recompute the decision synthesis from the current accepted evidence?")) return;
+      void synthesize(true);
+    };
+    window.addEventListener("epistack:refresh-synthesis", recompute);
+    return () => window.removeEventListener("epistack:refresh-synthesis", recompute);
+    // The handler intentionally closes over the current synthesis state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSynthesize]);
 
   function exportPrivate() {
     if (!artifact || !synthesis) return;
@@ -350,7 +361,8 @@ export function DecisionWorkbench() {
   }
 
   return (
-    <section className="decision-workbench live-decision-workbench" aria-labelledby="decision-workbench-title">
+    <>
+      <section className="decision-workbench live-decision-workbench" aria-labelledby="decision-workbench-title">
       <header>
         <div>
           <span>Accepted graph → contextualized action</span>
@@ -412,7 +424,7 @@ export function DecisionWorkbench() {
         </button>
         {synthesis && (
           <button className="cache-refresh-button" onClick={() => synthesize(true)} disabled={!canSynthesize}>
-            Bypass cache
+            Refresh live
           </button>
         )}
         <span>Only accepted D1 result records are sent to this specialist. Discovery leads remain outside.</span>
@@ -573,6 +585,7 @@ export function DecisionWorkbench() {
           </section>
         </>
       )}
-    </section>
+      </section>
+    </>
   );
 }

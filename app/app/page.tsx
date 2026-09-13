@@ -719,12 +719,13 @@ export default function Home() {
       <div className={`intro-surface ${introComplete ? "is-ready" : ""}`} aria-hidden={!introComplete}>
         <header className="minimal-topbar">
           <StageNav active="decompose" estimates={stageEstimates} onHome={returnToEditor} />
-          {result && (
+          <>
             <button
               type="button"
               className="icon-button recompute-trigger"
               aria-label="Recompute decomposition"
-              data-tooltip={empiricalTotalMs ? `Recompute · ~${formatDuration(empiricalTotalMs)}, n=${empiricalSamples}` : "Recompute · collecting samples"}
+              disabled={!result || busy}
+              data-tooltip={!result ? "Recompute · enter a question first" : empiricalTotalMs ? `Recompute · ~${formatDuration(empiricalTotalMs)}, n=${empiricalSamples}` : "Recompute · collecting samples"}
               onClick={() => {
                 if (window.confirm(`Recompute this decomposition? It takes about ${formatDuration(expectedTotalMs)}.`)) {
                   void analyze(decisionContext, true, true);
@@ -736,7 +737,7 @@ export default function Home() {
                 <path d="M21 3v6h-6" />
               </svg>
             </button>
-          )}
+          </>
           <button
             type="button"
             className="icon-button settings-trigger"

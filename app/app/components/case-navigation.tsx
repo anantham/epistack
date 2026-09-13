@@ -85,6 +85,42 @@ export function StageNav({ active, estimates, onHome }: { active: InvestigationS
   );
 }
 
+export function RefreshControl({
+  label,
+  onClick,
+  eventName,
+  disabled = false,
+  busy = false,
+}: {
+  label: string;
+  onClick?: () => void;
+  eventName?: string;
+  disabled?: boolean;
+  busy?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className="icon-button phase-refresh-control"
+      aria-label={busy ? `${label} in progress` : label}
+      data-tooltip={busy ? `${label}…` : label}
+      disabled={disabled || busy}
+      onClick={() => {
+        if (onClick) {
+          onClick();
+        } else if (eventName) {
+          window.dispatchEvent(new CustomEvent(eventName));
+        }
+      }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+        <path d="M21 3v6h-6" />
+      </svg>
+    </button>
+  );
+}
+
 export function CaseHeader({ active, actions, onHome }: { active: InvestigationStage; actions?: ReactNode; onHome?: () => void }) {
   return (
     <header className="topbar">

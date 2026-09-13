@@ -18,8 +18,8 @@ test("stage four renders the live accepted evidence contract", async () => {
   assert.match(research, /Open live artifact/);
   assert.match(workspace, /\/api\/artifact\?caseId=/);
   assert.match(workspace, /live-artifact\.v1/);
-  assert.match(workspace, /Accepted result relations/);
-  assert.match(workspace, /Dependence famil/);
+  assert.match(workspace, /Accepted claim–result links/);
+  assert.match(workspace, /Dependence groups/);
   assert.match(workspace, /No evidence has crossed the promotion boundary/);
   assert.match(workspace, /Resolving the active investigation/);
   assert.match(workspace, /No promoted result currently bears on this claim/);

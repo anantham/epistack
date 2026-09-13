@@ -912,6 +912,10 @@ main {
   backdrop-filter: blur(16px);
 }
 
+.topbar > .phase-refresh-control {
+  margin-left: 12px;
+}
+
 .navigation-progress {
   align-items: center;
   background: rgba(245, 242, 233, 0.96);
