@@ -220,7 +220,9 @@ export async function POST(request: Request) {
   async function openRouterCompilerRequest(current: State) {
     const apiKey = config.OPENROUTER_API_KEY;
     if (!apiKey) throw new Error('Astra is unreachable and the hosted fallback is not configured.');
-    const modelId = config.EPISTACK_OPENROUTER_MODEL || defaultOpenRouterModel;
+    const primaryModelId = config.EPISTACK_OPENROUTER_MODEL || defaultOpenRouterModel;
+    const repairModelId = config.EPISTACK_OPENROUTER_REPAIR_MODEL || defaultOpenRouterRepairModel;
+    const modelIds = Array.from(new Set([primaryModelId, repairModelId]));
     const agent = resolveAgentPrompt('research-brief-compiler', current.promptOverrides);
     const dimensionAssignments = buildDimensionAssignments({ clusters: current.clusters, dimensionRoles: current.dimensionRoles });
     const values = {
@@ -240,25 +242,29 @@ export async function POST(request: Request) {
         'X-OpenRouter-Metadata': 'enabled',
       },
     });
-    try {
-      const result = await generateText({
-        model: openRouter(modelId),
-        output: Output.object({
-          name: 'research_brief',
-          description: 'A validated research contract with claim frames for a decision question.',
-          schema: researchBriefDraftSchema,
-        }),
-        system: agent.instructions,
-        prompt: renderAgentPrompt(agent.taskTemplate, values),
-        maxOutputTokens: agent.maxOutputTokens,
-        temperature: agent.temperature,
-        abortSignal: AbortSignal.timeout(30000),
-      });
-      return { draft: result.output, model: modelId };
-    } catch (error) {
-      const failure = openRouterFailureFromThrown(error);
-      throw new Error(failure.message);
+    let lastFailure: Error | null = null;
+    for (const modelId of modelIds) {
+      try {
+        const result = await generateText({
+          model: openRouter(modelId),
+          output: Output.object({
+            name: 'research_brief',
+            description: 'A validated research contract with claim frames for a decision question.',
+            schema: researchBriefDraftSchema,
+          }),
+          system: agent.instructions,
+          prompt: renderAgentPrompt(agent.taskTemplate, values),
+          maxOutputTokens: agent.maxOutputTokens,
+          temperature: agent.temperature,
+          abortSignal: AbortSignal.timeout(30000),
+        });
+        return { draft: result.output, model: modelId };
+      } catch (error) {
+        const failure = openRouterFailureFromThrown(error);
+        lastFailure = new Error(failure.message);
+      }
     }
+    throw lastFailure || new Error('OpenRouter could not compile the research brief.');
   }
   async function openRouterRepairRequest(current: State, raw: string, issues: string) {
     const apiKey = config.OPENROUTER_API_KEY;
