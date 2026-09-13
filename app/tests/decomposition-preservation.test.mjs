@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { assembleDecomposition, decompositionSchema } from '../lib/decomposition-server.ts';
-import { normalizeOpenRouterReasoningEffort } from '../lib/openrouter-reasoning.ts';
+import { normalizeOpenRouterReasoningEffort, structuredOutputReasoningEfforts } from '../lib/openrouter-reasoning.ts';
 
 const prompt = 'Are eggs good to eat? Bad to eat? Great in moderation? How can we tell? Does it vary across people, and what predicts this? What else should we be paying attention to here?';
 const quotes = ['eggs', 'good', 'moderation', 'How can we tell?', 'across people', 'predicts this', 'What else'];
@@ -18,6 +18,9 @@ test('fallback reasoning preserves the selected effort and keeps provider defaul
   assert.equal(normalizeOpenRouterReasoningEffort('pro'), 'max');
   assert.equal(normalizeOpenRouterReasoningEffort(undefined), undefined);
   assert.equal(normalizeOpenRouterReasoningEffort('not-an-effort'), undefined);
+  assert.deepEqual(structuredOutputReasoningEfforts('high'), ['high', 'none']);
+  assert.deepEqual(structuredOutputReasoningEfforts('instant'), ['none']);
+  assert.deepEqual(structuredOutputReasoningEfforts(undefined), [undefined]);
 });
 
 test('the fifth scout alternative survives assembly and persistent validation', () => {

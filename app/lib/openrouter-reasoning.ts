@@ -11,3 +11,14 @@ export function normalizeOpenRouterReasoningEffort(value: unknown): OpenRouterRe
     ? (normalized as OpenRouterReasoningEffort)
     : undefined;
 }
+
+/**
+ * Structured JSON calls need output tokens after the reasoning budget is spent.
+ * If a high reasoning setting exhausts that budget, retry once with reasoning
+ * disabled before accepting a deterministic scaffold.
+ */
+export function structuredOutputReasoningEfforts(value: unknown): Array<OpenRouterReasoningEffort | undefined> {
+  const normalized = normalizeOpenRouterReasoningEffort(value);
+  if (normalized === "high" || normalized === "xhigh" || normalized === "max") return [normalized, "none"];
+  return [normalized];
+}

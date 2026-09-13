@@ -30,7 +30,11 @@ import {
   normalizeDecompositionText,
 } from "../../../lib/decomposition-cache";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
-import { normalizeOpenRouterReasoningEffort } from "../../../lib/openrouter-reasoning";
+import {
+  structuredOutputReasoningEfforts,
+  type OpenRouterReasoningEffort,
+  normalizeOpenRouterReasoningEffort,
+} from "../../../lib/openrouter-reasoning";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
 const openRouterBaseURL = "https://openrouter.ai/api/v1";
@@ -41,6 +45,12 @@ type DecompositionEnvironment = {
   OPENROUTER_API_KEY?: string;
   EPISTACK_OPENROUTER_MODEL?: string;
 };
+
+type OpenRouterProviderOptions = { openai: { reasoningEffort: OpenRouterReasoningEffort } };
+
+function providerOptionsFor(reasoningEffort: OpenRouterReasoningEffort | undefined): OpenRouterProviderOptions | undefined {
+  return reasoningEffort ? { openai: { reasoningEffort } } : undefined;
+}
 
 type DecompositionRequest = {
   prompt?: unknown;
@@ -142,9 +152,7 @@ export async function POST(request: Request) {
   const dimensionAgent = resolveAgentPrompt("dimension-scout", promptOverrides);
   const traceAgent = resolveAgentPrompt("trace-specialist", promptOverrides);
   const contextAgent = resolveAgentPrompt("context-retrieval", promptOverrides);
-  const providerOptions = reasoningEffort
-    ? { openai: { reasoningEffort } }
-    : undefined;
+  const structuredReasoningEfforts = structuredOutputReasoningEfforts(effort);
   const dimensionPrompt = renderAgentPrompt(dimensionAgent.taskTemplate, {
     question: prompt,
     decisionContext: decisionContext || "None supplied. Do not invent personal facts.",
@@ -155,6 +163,7 @@ export async function POST(request: Request) {
 
   for (let attempt = 0; attempt < 2 && !scout; attempt += 1) {
     try {
+      const attemptReasoningEffort = structuredReasoningEfforts[Math.min(attempt, structuredReasoningEfforts.length - 1)];
       const { output } = await generateText({
         model: openRouter(openRouterModel),
         output: Output.object({
@@ -171,7 +180,7 @@ export async function POST(request: Request) {
             }),
         maxOutputTokens: dimensionAgent.maxOutputTokens,
         temperature: dimensionAgent.temperature,
-        ...(providerOptions ? { providerOptions } : {}),
+        ...(providerOptionsFor(attemptReasoningEffort) ? { providerOptions: providerOptionsFor(attemptReasoningEffort) } : {}),
       });
       const parsed = dimensionScoutSchema.safeParse(output);
       if (parsed.success) scout = parsed.data;
@@ -208,43 +217,59 @@ export async function POST(request: Request) {
     label: dimension.label,
   }));
   const tracePromise = (async (): Promise<TraceAgentResult> => {
-    const { output } = await generateText({
-      model: openRouter(openRouterModel),
-      output: Output.object({
-        name: "decomposition_trace",
-        description: "Exact submitted-language cues mapped to fixed dimensions.",
-        schema: traceAgentOutputSchema,
-      }),
-      system: traceAgent.instructions,
-      prompt: renderAgentPrompt(traceAgent.taskTemplate, {
-        question: prompt,
-        dimensionsJson: JSON.stringify(axisBrief),
-      }),
-      maxOutputTokens: traceAgent.maxOutputTokens,
-      temperature: traceAgent.temperature,
-      ...(providerOptions ? { providerOptions } : {}),
-    });
-    return traceAgentSchema.parse(output);
+    let lastError: unknown;
+    for (const attemptReasoningEffort of structuredReasoningEfforts) {
+      try {
+        const { output } = await generateText({
+          model: openRouter(openRouterModel),
+          output: Output.object({
+            name: "decomposition_trace",
+            description: "Exact submitted-language cues mapped to fixed dimensions.",
+            schema: traceAgentOutputSchema,
+          }),
+          system: traceAgent.instructions,
+          prompt: renderAgentPrompt(traceAgent.taskTemplate, {
+            question: prompt,
+            dimensionsJson: JSON.stringify(axisBrief),
+          }),
+          maxOutputTokens: traceAgent.maxOutputTokens,
+          temperature: traceAgent.temperature,
+          ...(providerOptionsFor(attemptReasoningEffort) ? { providerOptions: providerOptionsFor(attemptReasoningEffort) } : {}),
+        });
+        return traceAgentSchema.parse(output);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("Trace specialist did not return a usable object.");
   })();
   const contextPromise = (async (): Promise<ContextAgentResult> => {
-    const { output } = await generateText({
-      model: openRouter(openRouterModel),
-      output: Output.object({
-        name: "context_and_retrieval_plan",
-        description: "Retrieval metadata, mismatch risks, claim template, and high-value context questions for fixed dimensions.",
-        schema: contextAgentOutputSchema,
-      }),
-      system: contextAgent.instructions,
-      prompt: renderAgentPrompt(contextAgent.taskTemplate, {
-        question: prompt,
-        dimensionsJson: JSON.stringify(axisBrief),
-        decisionContext: decisionContext || "None supplied. Ask only facts with high pruning or evidence-matching value.",
-      }),
-      maxOutputTokens: contextAgent.maxOutputTokens,
-      temperature: contextAgent.temperature,
-      ...(providerOptions ? { providerOptions } : {}),
-    });
-    return contextAgentSchema.parse(output);
+    let lastError: unknown;
+    for (const attemptReasoningEffort of structuredReasoningEfforts) {
+      try {
+        const { output } = await generateText({
+          model: openRouter(openRouterModel),
+          output: Output.object({
+            name: "context_and_retrieval_plan",
+            description: "Retrieval metadata, mismatch risks, claim template, and high-value context questions for fixed dimensions.",
+            schema: contextAgentOutputSchema,
+          }),
+          system: contextAgent.instructions,
+          prompt: renderAgentPrompt(contextAgent.taskTemplate, {
+            question: prompt,
+            dimensionsJson: JSON.stringify(axisBrief),
+            decisionContext: decisionContext || "None supplied. Ask only facts with high pruning or evidence-matching value.",
+          }),
+          maxOutputTokens: contextAgent.maxOutputTokens,
+          temperature: contextAgent.temperature,
+          ...(providerOptionsFor(attemptReasoningEffort) ? { providerOptions: providerOptionsFor(attemptReasoningEffort) } : {}),
+        });
+        return contextAgentSchema.parse(output);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("Context specialist did not return a usable object.");
   })();
   const [traceSettled, contextSettled] = await Promise.allSettled([tracePromise, contextPromise]);
   const traceResult = traceSettled.status === "fulfilled" ? traceSettled.value : null;
