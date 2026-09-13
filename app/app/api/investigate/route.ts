@@ -20,7 +20,10 @@ const primaryModel = "Astra · GPT 6";
 // with the reviewer contract. The dual-review gate requires the two labels to
 // differ, and Astra exposes one general chat model.
 const adversaryModel = "Astra · adversarial full-paper reviewer";
-const hostedTextCap = 55_000;
+// Keep the hosted request inside the worker's browser-visible latency budget.
+// This article's methods, results, discussion, and conclusion fit within the
+// first 32k characters; the artifact hash still attests to the complete text.
+const hostedTextCap = 32_000;
 
 type InvestigateEnvironment = {
   OPENROUTER_API_KEY?: string;
@@ -36,7 +39,7 @@ function investigateEnvironment() {
   return env as unknown as InvestigateEnvironment;
 }
 
-function openRouterModel(role: "extractor" | "reviewer") {
+function openRouterModel(role: "extractor" | "reviewer" | "repair") {
   const current = investigateEnvironment();
   return role === "extractor"
     ? current.EPISTACK_OPENROUTER_MODEL || "deepseek/deepseek-v4.1-flash"
@@ -52,7 +55,7 @@ function openRouterMessageText(message: OpenRouterMessage) {
   return (message.content || []).map((part) => part.text || "").join("\n");
 }
 
-async function runOpenRouterStructured(input: string, instructions: string, role: "extractor" | "reviewer") {
+async function runOpenRouterStructured(input: string, instructions: string, role: "extractor" | "reviewer" | "repair") {
   const apiKey = investigateEnvironment().OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("The hosted OpenRouter investigation fallback is not configured.");
   const model = openRouterModel(role);
@@ -76,9 +79,9 @@ async function runOpenRouterStructured(input: string, instructions: string, role
         response_format: { type: "json_object" },
         reasoning: { effort: "none" },
         temperature: 0,
-        max_tokens: 7_000,
+        max_tokens: role === "extractor" ? 4_500 : 3_500,
       }),
-      signal: AbortSignal.timeout(90_000),
+      signal: AbortSignal.timeout(45_000),
     });
   } catch {
     throw new Error("The hosted OpenRouter investigation fallback could not be reached.");
@@ -414,8 +417,8 @@ export async function POST(request: Request) {
 
     const extractorAgent = resolveAgentPrompt("full-paper-extractor", promptOverrides);
     const extractorTask = renderAgentPrompt(extractorAgent.taskTemplate, commonValues);
-    async function structuredStage(input: string, instructions: string, role: "extractor" | "reviewer") {
-      if (lyraConfigured()) {
+    async function structuredStage(input: string, instructions: string, role: "extractor" | "reviewer" | "repair") {
+      if (role !== "repair" && lyraConfigured()) {
         try {
           const text = await runLyraStage({
             model: "lyra-chatgpt-pro",
@@ -428,10 +431,24 @@ export async function POST(request: Request) {
           if (!isBackendUnreachable(error) || !openRouterConfigured()) throw error;
         }
       }
-      return {
-        ...await runOpenRouterStructured(input, instructions, role),
-        model: `OpenRouter · ${openRouterModel(role)} · ${role === "extractor" ? "extractor" : "adversarial reviewer"}`,
-      };
+      try {
+        const result = await runOpenRouterStructured(input, instructions, role);
+        return {
+          ...result,
+          model: `OpenRouter · ${openRouterModel(role)} · ${role === "extractor" ? "extractor" : role === "reviewer" ? "adversarial reviewer" : "JSON repair"}`,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const canUseCheapFallback = role === "extractor"
+          && openRouterModel(role) !== openRouterModel("repair")
+          && /could not be reached|HTTP (408|429|5\d\d)/.test(message);
+        if (!canUseCheapFallback) throw error;
+        const fallback = await runOpenRouterStructured(input, instructions, "repair");
+        return {
+          ...fallback,
+          model: `OpenRouter · ${openRouterModel("repair")} · extractor timeout fallback`,
+        };
+      }
     }
 
     const extractorInstructions = extractorAgent.instructions
@@ -444,7 +461,7 @@ export async function POST(request: Request) {
       repair: async ({ raw, issues }) => (await structuredStage(
         `${extractorTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
         extractorAgent.instructions + repairInstruction(fullPaperExtractionSchema, issues),
-        "extractor",
+        "repair",
       )).text,
     });
 
@@ -464,7 +481,7 @@ export async function POST(request: Request) {
       repair: async ({ raw, issues }) => (await structuredStage(
         `${reviewerTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
         reviewerAgent.instructions + repairInstruction(adversarialReviewSchema, issues),
-        "reviewer",
+        "repair",
       )).text,
     });
 
