@@ -5,7 +5,7 @@ import { generateText, Output } from 'ai';
 import { env } from 'cloudflare:workers';
 import { getD1, ensureHostedJobTables } from '../../../db';
 import { resolveAgentPrompt, renderAgentPrompt, sanitizeAgentPromptOverrides, type AgentPromptOverrides } from '../../../lib/agent-prompts';
-import { dimensionRoleSchema, researchBriefDraftSchema, researchBriefSchema, normalizeResearchBriefDraft, buildDimensionAssignments, type DimensionRole } from '../../../lib/research-brief';
+import { contextualizationEntrySchema, dimensionRoleSchema, researchBriefDraftSchema, researchBriefSchema, normalizeResearchBriefDraft, buildDimensionAssignments, type ContextualizationEntry, type DimensionRole } from '../../../lib/research-brief';
 import type { DecompositionCluster } from '../../../lib/decomposition';
 import { parseStructured, repairInstruction, StructuredOutputError } from '../../../lib/structured-output';
 import { openRouterFailureFromThrown } from '../../../lib/openrouter-errors';
@@ -46,6 +46,7 @@ const createInputSchema = z.object({
   knownUnknowns: z.array(z.string()).max(20).optional(),
   dimensionRoles: z.record(z.string(), dimensionRoleSchema).optional(),
   promptOverrides: z.unknown().optional(),
+  contextualization: z.array(contextualizationEntrySchema).max(12).optional(),
 });
 
 type State = {
@@ -57,6 +58,7 @@ type State = {
   knownUnknowns: string[];
   dimensionRoles: Record<string, DimensionRole>;
   promptOverrides: AgentPromptOverrides;
+  contextualization: ContextualizationEntry[];
   status: string;
   remoteId?: string | null;
   nextAt?: number;
@@ -135,6 +137,7 @@ export async function POST(request: Request) {
       knownUnknowns: input.knownUnknowns ?? [],
       dimensionRoles: input.dimensionRoles ?? {},
       promptOverrides: sanitizeAgentPromptOverrides(input.promptOverrides),
+      contextualization: input.contextualization ?? [],
       status: 'queued',
       remoteId: null,
       origin: new URL(request.url).origin,
@@ -299,6 +302,7 @@ export async function POST(request: Request) {
       compiledQuestion: state.compiledQuestion,
       decisionContext: state.decisionContext,
       dimensionAssignments: buildDimensionAssignments({ clusters: state.clusters, dimensionRoles: state.dimensionRoles }),
+      contextualization: state.contextualization,
       privacy: {
         localContextPolicy: 'The full decision context stays in this device-local brief and is used only to compile the research contract; it is not sent to PubMed.',
         outboundQueryPolicy: "Only each claim's compact searchQuery and publication filters leave the workflow during discovery.",

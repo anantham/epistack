@@ -54,6 +54,19 @@ export const dimensionAssignmentSchema = z.object({
   mismatchRisks: z.array(boundedText(2, 320)).max(10),
 });
 
+export const contextualizationEntrySchema = z.object({
+  axisId: boundedText(1, 80),
+  label: boundedText(2, 120),
+  question: boundedText(8, 520),
+  whyItMatters: boundedText(8, 520),
+  effect: z.enum(["prune", "branch", "match"]),
+  selectedValues: z.array(boundedText(1, 320)).max(12),
+  typedAnswer: z.string().max(1000),
+  researchConsequence: boundedText(8, 520),
+});
+
+export type ContextualizationEntry = z.infer<typeof contextualizationEntrySchema>;
+
 export const researchBriefDraftSchema = z.object({
   stakeholderProfile: z.object({
     summary: boundedText(12, 720),
@@ -96,6 +109,7 @@ export const researchBriefSchema = researchBriefDraftSchema.extend({
   compiledQuestion: boundedText(8, 5_000),
   decisionContext: z.string().max(8_000),
   dimensionAssignments: z.array(dimensionAssignmentSchema).min(1).max(12),
+  contextualization: z.array(contextualizationEntrySchema).max(12).default([]),
   privacy: z.object({
     localContextPolicy: boundedText(8, 420),
     outboundQueryPolicy: boundedText(8, 420),
@@ -205,6 +219,7 @@ export function normalizeResearchBriefDraft(draft: ResearchBriefDraft, validAxis
 }
 
 export function researchLanesFromBrief(brief: ResearchBrief) {
+  const contextualization = brief.contextualization ?? [];
   return brief.claims
     .slice()
     .sort((a, b) => a.priority - b.priority)
@@ -221,5 +236,13 @@ export function researchLanesFromBrief(brief: ResearchBrief) {
       budgetShare: claim.budgetShare,
       relaxationOrder: claim.retrieval.relaxationOrder,
       applicabilityFields: claim.applicabilityFields,
+      contextualization: contextualization
+        .filter((entry) => claim.axisIds.includes(entry.axisId))
+        .map((entry) => ({
+          axisId: entry.axisId,
+          label: entry.label,
+          answer: [...entry.selectedValues, entry.typedAnswer].filter(Boolean).join("; ") || "No answer supplied",
+          consequence: entry.researchConsequence,
+        })),
     }));
 }

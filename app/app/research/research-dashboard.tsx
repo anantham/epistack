@@ -1309,6 +1309,16 @@ export function ResearchDashboard() {
                     <div><span>Agent brief</span><p>{lane.focus}</p></div>
                     <div><span>Crux</span><p>{lane.crux}</p></div>
                     <div><span>Inclusion rule</span><p>{lane.inclusionRule}</p></div>
+                    <div className="lane-context-bridge">
+                      <span>Why this lane exists</span>
+                      {lane.contextualization.length ? lane.contextualization.map((context) => (
+                        <div className="lane-context-link" key={context.axisId}>
+                          <strong>{context.label}</strong>
+                          <p><b>Answer:</b> {context.answer}</p>
+                          <p><b>Effect:</b> {context.consequence}</p>
+                        </div>
+                      )) : <p>This claim has no recorded contextual answer. It follows the compiled decomposition contract directly.</p>}
+                    </div>
                     {lane.budgetShare && <div><span>Token budget</span><p>{lane.budgetShare}% of this investigation portfolio.</p></div>}
                     {lane.relaxationOrder?.length ? <div><span>Constraint relaxation</span><ol>{lane.relaxationOrder.map((step) => <li key={step}>{step}</li>)}</ol></div> : null}
                   </div>

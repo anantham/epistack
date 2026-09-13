@@ -11,6 +11,7 @@ import {
 import {
   completeDimensionRoles,
   researchBriefStorageKey,
+  type ContextualizationEntry,
   type ResearchBrief,
   type ResearchClaimFrame
 } from "../../lib/research-brief";
@@ -242,6 +243,28 @@ export default function ContextualizeMap() {
     }).filter(Boolean);
 
     const nextContext = [decisionContext.trim(), ...additions].filter(Boolean).join("\n");
+    const contextualization: ContextualizationEntry[] = clusters.map((cluster) => {
+      const question = cluster.contextQuestion;
+      const selectedValues = contextSelections[question.id] ?? [];
+      const typedAnswer = contextAnswers[question.id]?.trim() ?? "";
+      const answer = Array.from(new Set([...selectedValues, ...(typedAnswer ? [typedAnswer] : [])]));
+      const answerText = answer.length ? answer.join("; ") : "No answer supplied";
+      const researchConsequence = question.effect === "prune"
+        ? `Narrow retrieval and screening around ${answerText}.`
+        : question.effect === "branch"
+          ? `Keep separate evidence paths for ${answerText}.`
+          : `Use ${answerText} to test whether evidence transfers to this situation.`;
+      return {
+        axisId: cluster.id,
+        label: cluster.label,
+        question: question.question,
+        whyItMatters: question.whyItMatters,
+        effect: question.effect,
+        selectedValues,
+        typedAnswer,
+        researchConsequence,
+      };
+    });
     setDecisionContext(nextContext);
 
     function readPromptOverrides() {
@@ -283,6 +306,7 @@ export default function ContextualizeMap() {
         knownUnknowns,
         dimensionRoles: completeDimensionRoles(clusters, {}),
         promptOverrides: readPromptOverrides(),
+        contextualization,
       });
       if (!created?.id || !created?.token) throw new Error("The hosted compiler did not return a saved-run receipt.");
       const receipt = { id: created.id as string, token: created.token as string };
@@ -492,6 +516,21 @@ export default function ContextualizeMap() {
                 <p className="mode-note" style={{ marginBottom: 28 }}>
                   Edit any claim before the investigation starts. Only the compact shareable search concepts leave this device.
                 </p>
+                <section className="contextualization-bridge" aria-labelledby="contextualization-bridge-title">
+                  <div className="bridge-heading">
+                    <span>Contextualization bridge</span>
+                    <strong id="contextualization-bridge-title">How your answers changed the investigation</strong>
+                  </div>
+                  <div className="contextualization-entries">
+                    {compiledBrief.contextualization.map((entry) => (
+                      <article key={entry.axisId}>
+                        <span>{entry.label} · {entry.effect}</span>
+                        <p><b>Your answer:</b> {[...entry.selectedValues, entry.typedAnswer].filter(Boolean).join("; ") || "No answer supplied"}</p>
+                        <p><b>Research consequence:</b> {entry.researchConsequence}</p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
                 {editedClaims.map((claim, index) => (
                   <div className="compiled-claim-card" key={claim.id}>
                     <span>Claim {index + 1} · {claim.kind}</span>
