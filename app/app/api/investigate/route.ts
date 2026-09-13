@@ -61,6 +61,19 @@ function canonicalEnum(value: unknown, aliases: Record<string, string>) {
   return aliases[normalized] || value;
 }
 
+function coerceAuditText(value: unknown): unknown {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    const parts = value.map((item) => coerceAuditText(item)).filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+    return parts.length ? parts.join(" ") : value;
+  }
+  if (value && typeof value === "object") {
+    const parts = Object.values(value).map((item) => coerceAuditText(item)).filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+    return parts.length ? parts.join(" ") : value;
+  }
+  return value;
+}
+
 function normalizeInvestigationJson(text: string) {
   const slice = extractJsonSlice(text);
   if (!slice) return text;
@@ -70,6 +83,7 @@ function normalizeInvestigationJson(text: string) {
     for (const result of results) {
       if (!result || typeof result !== "object") continue;
       const record = result as Record<string, unknown>;
+      record.rationale = coerceAuditText(record.rationale);
       record.resultRole = canonicalEnum(record.resultRole, {
         "primary result": "primary",
         "secondary result": "secondary",
@@ -88,6 +102,7 @@ function normalizeInvestigationJson(text: string) {
       const applicability = record.applicability;
       if (applicability && typeof applicability === "object") {
         const vector = applicability as Record<string, unknown>;
+        vector.rationale = coerceAuditText(vector.rationale);
         vector.distance = canonicalEnum(vector.distance, {
           "exact match": "exact",
           close: "near",
@@ -106,6 +121,7 @@ function normalizeInvestigationJson(text: string) {
     for (const review of reviews) {
       if (!review || typeof review !== "object") continue;
       const record = review as Record<string, unknown>;
+      record.rationale = coerceAuditText(record.rationale);
       record.verdict = canonicalEnum(record.verdict, {
         approve: "accept",
         approved: "accept",
