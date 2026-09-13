@@ -109,18 +109,26 @@ export async function POST(request: Request) {
             if (state.stage === 3) { state.artifact = finishDecomposition(state.question, state.results, state.decisionContext); state.status = 'completed'; }
             else { state.status = 'queued'; state.nextAt = 0; }
           }
-        } else if (['failed', 'cancelled', 'incomplete'].includes(result.status)) throw new Error('The backend job failed. Its receipt is retained; no automatic resubmission.');
+        } else if (['failed', 'cancelled', 'incomplete'].includes(result.status)) {
+          const failure = new Error('The Astra job failed before a validated decomposition was produced.') as Error & { code?: string };
+          // A failed remote receipt contains no accepted artifact. Let the
+          // browser continue through the server-side OpenRouter pipeline
+          // instead of trapping the user behind a terminal Astra error.
+          failure.code = 'backend-unreachable';
+          throw failure;
+        }
         else state.status = result.status === 'queued' ? 'queued' : 'in_progress';
       }
     }
   } catch (error) {
     state.status = 'failed';
     const failureCode = (error as { code?: string })?.code;
-    if (failureCode === 'backend-unreachable' && !state.remoteId) {
-      // The first submission never reached Astra, so it is safe to let the
-      // client fall back to the alternate provider.
+    if (failureCode === 'backend-unreachable' && !state.artifact) {
+      // No validated artifact has been accepted, so it is safe to let the
+      // client continue through the alternate provider even when Astra had
+      // already issued a receipt that later failed.
       state.code = 'backend-unreachable';
-      state.error = 'Astra is unreachable; falling back to the alternate provider.';
+      state.error = 'Astra could not complete this run; falling back to the alternate provider.';
     } else if (error instanceof StructuredOutputError) {
       state.parseFailure = { stage: state.stage, raw: error.raw.slice(0, 4000), issues: error.issues.slice(0, 2000) };
       state.error = `${stageNames[state.stage]} output did not match its schema after a repair attempt.`;
