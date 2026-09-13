@@ -1,6 +1,6 @@
 # Epistack Question Compiler
 
-The deployed homepage now runs decomposition through the server-side Lyra Responses adapter. Configure `LYRA_PUBLIC_GATEWAY_URL` and `LYRA_API_KEY` as hosted secrets. Browser requests contain the question, context, and prompt overrides; the Lyra key never enters the browser. Jobs retain three independent specialist stages in D1 and can resume from the browser receipt. `/decompose-live` remains an alternate inspector. Legacy OpenRouter endpoints and the local research companion remain separate.
+The deployed homepage now runs decomposition through the server-side Lyra Responses adapter. Configure `LYRA_PUBLIC_GATEWAY_URL` and `LYRA_API_KEY` as hosted secrets. Browser requests contain the question, context, and prompt overrides; the Lyra key never enters the browser. Jobs retain three independent specialist stages in D1 and can resume from the browser receipt. A Cron Trigger sweep (`worker/index.ts` `scheduled()` + `lib/job-sweeper.ts`) advances due jobs even when no tab is open, with a guarded `POST /api/jobs/tick` fallback and `GET /api/jobs/stats` for run telemetry. `/decompose-live` remains an alternate inspector. Legacy OpenRouter endpoints and the local research companion remain separate.
 
 A browser prototype of an Epistack investigation loop: collaboratively decompose a vague question, ground it in a real stakeholder and action space, compile a typed research brief, direct live evidence agents, and turn only accepted result records into a versioned, reversible decision.
 
@@ -127,9 +127,13 @@ npm run dev
 npm run agents
 npm run build
 npm test
+npm run typecheck
+npm run lint
 npm run db:generate
 npm run evidence:discover
 ```
+
+`npm test` runs `typecheck` (tsc --noEmit, now clean), then `build`, then the Node test suite.
 
 ## Main files
 
@@ -158,4 +162,9 @@ npm run evidence:discover
 - `data/pubmed-discovery.json` — reproducible discovery output
 - `scripts/discover-pubmed.mjs` — PubMed discovery collector
 - `db/schema.ts` — relational epistemic artifact model
-- `drizzle/` — generated database migrations
+- `drizzle/` — database migrations (including hosted job tables and `decomposition_runs`)
+- `lib/structured-output.ts` — model-JSON parsing with balanced extraction and a single repair retry
+- `lib/job-sweeper.ts` + `worker/index.ts` — cron sweep that advances stranded jobs (`vite.config.ts` owns `triggers.crons`)
+- `app/api/jobs/tick/route.ts` — guarded manual sweep fallback
+- `app/api/jobs/stats/route.ts` + `lib/decomposition-runs.ts` — guarded run telemetry (p50/p95, success rate)
+- `cloudflare-workers.d.ts` — minimal Cloudflare ambient types for the `tsc` gate

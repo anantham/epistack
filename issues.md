@@ -3,108 +3,179 @@
 Deferred maintainability/architecture work. Not user-facing bugs. Ordered roughly
 by impact if this ever needs to be reliable, multi-user, or long-lived.
 
-## 1. Decomposition jobs are driven by the browser, not the server (highest impact)
+Status tags: **[open]** not started · **[partial]** reduced but not finished ·
+**[done]** resolved (kept briefly for history).
 
-`app/app/api/decompose-live/route.ts` advances the job state machine **one step per
-incoming POST**. The only caller is the poll loop in
-`app/lib/hosted-decomposition-client.ts` (plus the `/decompose-live` inspector). There
-is no server-side driver:
+---
 
-- `app/worker/index.ts` has no `scheduled` handler.
-- `dist/server/wrangler.json` has `"triggers":{}` and no Durable Objects or queues.
-- The job row lives in D1 (`hosted_decomposition_jobs`) as an opaque `state_json`.
+## A. The LLM output boundary is where this system lives or dies (highest impact)
 
-Consequences:
+Every stage of the pipeline consumes untrusted model output and feeds it through a
+tight Zod schema. Inlining `max(140)`, `min(1)` arrays, exact enums, and
+"return only JSON" into a prompt is a *hope*, not a contract: the model will
+occasionally return prose, fences, a JSON array instead of an object, an over-long
+field, or an empty array where one item is required. When that happens, the run dies
+— and it dies opaquely ("could not complete or validate"), which is the worst
+combination: no result, no diagnosis.
 
-- Closing the tab strands the job until a client with the saved receipt polls again.
-- Background-tab timer throttling slows the run.
-- A different browser/device cannot resume (receipt is in `localStorage`).
+This is **the core physics of building on generative models**, not a bug you fix
+once. It was effectively treated as an afterthought until the Phase 1 hardening, and
+that hardening is incomplete.
 
-Options (smallest to cleanest): Cron Trigger sweep of due jobs; Durable Object per job
-with `alarm()`; Cloudflare Queues with `delaySeconds`.
+What exists now:
 
-This is also the fix that forces items 2–4 to be resolved for the job table.
+- `app/lib/structured-output.ts` — balanced-JSON extraction (tolerates fences and
+  surrounding prose), `safeParse`, and `parseStructuredWithRepair` (one repair pass
+  that feeds the Zod issues back to the model).
+- Wired into the decompose stage flow (`hosted-decomposition.ts` + a bounded retry in
+  `decompose-live/route.ts`), source adapters (`source-adapters.ts`), and the causal
+  extract/review path (`investigate/route.ts`).
+- Acquisition guard: `extractSource` refuses to run on `<40` chars instead of
+  producing an opaque schema failure.
+- Parse failures now persist the raw text + Zod issues on the job (`state.parseFailure`).
 
-## 2. ORM vs raw SQL split-brain
+What remains:
 
-Drizzle is installed and `app/db/schema.ts` defines ~18 tables, but `getDb()`
-(`app/db/index.ts:14`) is only used in `app/examples/d1/app/api/notes/route.ts`.
-Every real route uses raw `getD1().prepare(...)`.
+- **Repair budget is one.** A model that fails twice still kills the run.
+- **Tight bounds still fail even after repair** — only `study.design` was relaxed
+  (140→320); other `max(...)`/`min(1)` constraints across `decomposition-server.ts`,
+  `deep-dive.ts`, `source-adapters.ts`, and `research-brief.ts` can still reject a
+  plausible answer. A guideline that legitimately yields zero recommendations is a
+  typed empty result, not a failure, but we currently cannot express that.
+- **No uniform policy.** Some routes throw on a schema miss; there is no shared rule
+  that a run *degrades* (empty/evidence-less result) rather than *dies*.
+- **No observability of the failure rate.** `decomposition_runs` records outcomes but
+  not parse-repair attempts or schema-miss causes, so we cannot see whether this is
+  rare or routine.
+- **No streaming/partial recovery.** A reply cut off mid-JSON cannot be salvaged, and
+  large schema-bound answers are more likely to be truncated.
 
-Note: migrations *are* tracked (`app/drizzle/0000–0002` + `meta/_journal.json`); the
-review claim that they aren't is wrong. The real gap is inconsistency and dead weight.
+Principle to adopt: **model output is untrusted input.** Every boundary needs an
+explicit repair/relax/refuse path, and "refuse" must surface a typed, user-legible
+outcome — never a generic validation error.
 
-Decision needed: either (a) adopt Drizzle in app code, or (b) delete the unused ORM
-layer and keep a single `schema.sql`. Given the typed/relational nature of the
-evidence graph, (a) is probably right long-term.
+Note: three duplicated `stripMarkdownFences`/`parseStructured` copies were
+consolidated into `structured-output.ts` by the same work. **[done]**
 
-## 3. Runtime DDL in the hot path
+---
 
-`CREATE TABLE IF NOT EXISTS` runs during live requests:
+## 1. Decomposition jobs are driven by the browser, not the server **[partial]**
 
-- `app/app/api/decompose-live/route.ts:17` — `hosted_decomposition_jobs` on every submit.
-- `app/db/cache.ts:35,67` — `operation_cache` on every cache read/write (already in
-  `schema.ts:248` and migrations).
-- `app/lib/live-artifact-store.ts:35`, and the promote/synthesize/cases routes call
-  `ensureEvidenceGraphTables()` / `ensureDecisionTables()` / `ensureSnapshotTables()`.
+The job state machine still advances on incoming POSTs, but there is now a
+server-side safety net: `app/lib/job-sweeper.ts` + `app/worker/index.ts` `scheduled()`
++ `triggers.crons` (`* * * * *`) drive due jobs, and `POST /api/jobs/tick` is a
+guarded manual fallback. Jobs persist their `origin`, so sweeps reach the right
+deployment. The existing `locked_until` lease prevents client/cron races.
 
-Every one is an avoidable D1 round-trip. Fix: move all DDL into migrations and run
-them once at deploy.
+Still true:
 
-## 4. Job state is a JSON blob with no queryable columns
+- The client poll remains the primary, fast path; the cron is a recovery net (and on
+  a stranded run it advances a few polls per tick, so completion is slow).
+- A different browser/device still cannot resume (the receipt is in `localStorage`).
+- The cron has **not been observed firing on the Sites platform**; only the config is
+  verified. If the platform ignores crons, `/api/jobs/tick` needs an external caller.
 
-`hosted_decomposition_jobs.state_json` hides `status`, `stage`, `next_at`, `attempts`,
-and `rate_limits`. You cannot index or query "which jobs are due", which is exactly
-what a server-side driver (item 1) needs.
+Remaining option: Durable Object per job with `alarm()` (or Queues) for
+"close the tab and it still finishes quickly," rather than a sweep.
 
-Note: JSON payloads elsewhere are mostly justified (flexible/polymorphic agent
-output; the evidence graph extracts queryable fields into real columns). The job
-table is the genuine anti-pattern.
+## 2. ORM vs raw SQL split-brain **[open]**
 
-## 5. No persistent cross-run telemetry
+Drizzle is installed and `app/db/schema.ts` defines every table (now including the
+hosted job tables and `decomposition_runs`), but every real route still uses raw
+`getD1().prepare(...)`; `getDb()` is effectively unused. The job tables are now
+declared in Drizzle for migrations/types, which sharpens the inconsistency rather
+than resolving it.
 
-Client-side per-run durations exist (`app/lib/decomposition-telemetry.ts`, bounded to
-25 runs in `localStorage`), and the server tracks per-stage durations/attempts per
-job. There is no aggregate table (per-stage p50/p95, success rate, rate-limit counts
-across runs/users).
+Decision still needed: adopt Drizzle in app code, or delete the ORM layer and keep a
+single SQL source of truth. Given the relational evidence graph, adopting Drizzle is
+probably right long-term.
 
-## 6. `scripts/compare-decomposition.mjs` still paces on a hardcoded 61s
+## 3. Runtime DDL in the hot path **[partial]**
+
+`CREATE TABLE IF NOT EXISTS` still runs at request time, but it is now **memoized per
+isolate** (one batch per isolate, not per request) for `ensureSnapshotTables`,
+`ensureEvidenceGraphTables`, `ensureDecisionTables`, `ensureOperationCacheTable`, and
+`ensureHostedJobTables`. Inline per-request job-table DDL was removed; migrations
+`0003`/`0004` now create the job/telemetry tables (`IF NOT EXISTS`), and the existing
+tables were already in `0000–0002`.
+
+Full removal (deleting the `ensure*` helpers and their call sites) is **gated on
+confirming the platform actually applies and tracks `drizzle/` on prod D1** — the
+table list alone is inconclusive because the runtime ensure creates the same tables.
+That will also require updating the source-grep tests in
+`tests/research-workflow.test.mjs` / `tests/decision-workflow.test.mjs`.
+
+## 4. Job state is a JSON blob with no queryable columns **[partial]**
+
+`state_json` still hides the hot fields. The sweeper queries them with
+`json_extract(...)` plus a `locked_until` index, which is sufficient at this scale.
+Promoting `status`/`stage`/`next_at`/`attempts` to real columns is still the proper
+version (and needs an additive `ALTER` against the existing prod tables).
+
+## 5. No persistent cross-run telemetry **[done]**
+
+`decomposition_runs` (schema + migration `0004`) records each finished run; the
+sweeper's completion path writes it; `summarizeDecompositionRuns` computes per-stage
+p50/p95, success rate, and rate-limit counts; `GET /api/jobs/stats` (guarded) exposes
+it. Next: include parse-repair attempts / schema-miss causes (see section A).
+
+## 6. `scripts/compare-decomposition.mjs` still paces on a hardcoded 61s **[open]**
 
 `app/scripts/compare-decomposition.mjs:59` hardcodes the 60s cooldown and has no
 429/`retry-after` handling (it throws on any non-OK). The app route was fixed; this
 diagnostic was left as-is deliberately.
 
-## 7. Cache-key backend mismatch
+## 7. Cache-key backend mismatch **[done]**
 
-The homepage computes the browser-cache key with the constant
-`lyra-chatgpt-pro:hosted-v2` even when the OpenRouter fallback runs, so a result from
-one backend can be served as a cache hit for the other.
+`decompositionBackendIsPrimary()` gates the homepage browser-cache write so only an
+Astra result is stored under the Astra-keyed cache; an OpenRouter fallback result can
+no longer be served as if Astra produced it.
 
-## 8. `/decompose-live` inspector has no OpenRouter fallback
+## 8. `/decompose-live` inspector has no OpenRouter fallback **[done]**
 
-`app/app/decompose-live/page.tsx` calls `/api/decompose-live` directly and shows
-"not configured" without Lyra; the homepage fallback is not wired there.
+`app/app/decompose-live/page.tsx` now drives the shared
+`runHostedDecomposition` client, so it gets the same Astra → OpenRouter fallback and
+resume behavior as the homepage.
 
-## 9. Only decomposition is hosted
+## 9. Only decomposition is hosted **[open]**
 
 The research → evidence promotion → synthesis workflow still requires the local
 Claude companion (`npm run agents`). A fully hosted investigation is unbuilt.
 
-## 10. TypeScript checking is not clean
+## 10. TypeScript checking is not clean **[done]**
 
-Existing project errors plus missing Cloudflare ambient types. `npm run build` works
-and tests pass; `tsc` is not a usable gate yet.
+`app/cloudflare-workers.d.ts` declares the minimal Cloudflare ambient types
+(`D1Database`, `D1PreparedStatement`, `D1Result`, `Fetcher`, `cloudflare:workers`
+env), the remaining genuine type errors were fixed, and `tsc --noEmit` is now 0
+errors. `npm run typecheck` runs as part of `npm test`.
 
-## 11. Secret handling
+Follow-up (not required for the gate): adopting the full
+`@cloudflare/workers-types` narrows `Response.json()` to `unknown` and surfaces ~45
+call sites — worth doing eventually for a stricter gate.
 
-Lyra/OpenRouter secrets live in `.dev.vars` locally (gitignored) and as hosted
-secrets. No secret-manager story, rotation policy, or per-user key isolation.
+## 11. Secret handling **[open]**
+
+Lyra/OpenRouter/job secrets live in `.dev.vars` locally (gitignored) and as hosted
+secrets. No rotation policy or per-user key isolation.
+
+Immediate follow-up from the last deploy: `JOBS_TICK_TOKEN` was printed in plaintext
+in deploy logs and the Sites write credential appeared in a push URL — **rotate
+`JOBS_TICK_TOKEN` and confirm the credential is short-lived/revoked.**
+
+## 12. Deploy is a divergent copy, not `main` **[open]**
+
+The Sites source repo holds its own commit (`411460b`) distinct from this repo's
+`main`. The prior workflow rsync'd `app/` into a hand-maintained copy under
+`/private/tmp` and committed there, which is how Codex's work was lost once. Better:
+add the Sites git URL as a remote of this repo and push `main` directly, or at least
+diff the deploy tree against `main` before every publish. Deploy artifacts should be
+built from a clean checkout of a tag, not a `/tmp` directory.
 
 ---
 
 ## Stage 3: multi-source investigation model
 
-The hosted investigation path now classifies sources as `primary-study`,
+The hosted investigation path classifies sources as `primary-study`,
 `systematic-review`, `guideline`, `standard`, `trial-registry`,
 `official-statistics`, `preprint`, `reporting`, or `anecdote`. Source class is
 kept separate from three axes: `evidenceStatus` (lead through accepted or
@@ -117,8 +188,8 @@ be accepted. The adapters acquire PMC JATS for eligible research records,
 ClinicalTrials.gov v2 records for trial registries, or best-effort HTML; a failed
 acquisition remains a cited-unverified fallback rather than verified evidence.
 
-Recall now fans out one broad agent per claim, plus separate applicability and
-context lanes. These returns remain lead-only; the context lane cannot promote
-evidence. Remaining work is Phase-4 lane display in the artifact, wiring the
-planned `computeDivergence` step into that artifact (the current divergence
-helpers are not connected there), and live lane-progress reporting.
+Recall fans out one broad agent per claim, plus separate applicability and context
+lanes; those returns remain lead-only and the context lane cannot promote evidence.
+Remaining work: Phase-4 lane display in the artifact, wiring `computeDivergence`
+into the artifact (the helpers exist but are not connected there), and live
+lane-progress reporting.

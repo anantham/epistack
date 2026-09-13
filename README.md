@@ -64,7 +64,7 @@ The underlying package preserves claims, exact source material, assessments, dep
 
 ## Current code and remaining gaps
 
-Source inspection baseline: `357b0a2` (2026-09-12). This describes the local implementation, not a claim that these commits are deployed or that live provider calls pass.
+Source inspection baseline: `1a7ca13` (2026-09-13). This describes the local implementation, not a claim that these commits are deployed or that live provider calls pass.
 
 | Area | Present in this checkout | Still needed to meet the vision |
 |---|---|---|
@@ -75,7 +75,7 @@ Source inspection baseline: `357b0a2` (2026-09-12). This describes the local imp
 | Research display | Classified leads and typed source-review cards | Persist and connect non-study findings to the Artifact and decision view under their own roles |
 | Artifact and synthesis | Accepted-result graph, provenance and dependence views, graph-grounded decision infrastructure | Demonstrate the complete flow on current code, including empty/failed runs and useful multi-source decisions |
 
-The newer multi-source work is visible in `6c8983c`, `a80f84c`, `0fcd9c9`, and `357b0a2`. It extends the previous PubMed-centered workflow; it does not establish end-to-end completion by itself.
+The newer multi-source work is visible in `6c8983c`, `a80f84c`, `0fcd9c9`, and `357b0a2`; the Phase 1–3 hardening (structured-output repair, backend-unreachable handling, cron job driver, persistent telemetry, `tsc` gate) is in `1a7ca13`. It extends the previous PubMed-centered workflow; it does not establish end-to-end completion by itself.
 
 ## Highest-value next improvements
 
