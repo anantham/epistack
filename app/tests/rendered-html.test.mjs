@@ -179,7 +179,7 @@ test("hosted investigation and recall survive an Astra outage with strict provid
   assert.match(investigate, /normalizeInvestigationJson/);
   assert.match(investigate, /OpenRouter · \$\{openRouterModel\(role\)\}/);
   assert.match(investigate, /role !== "repair" && lyraConfigured\(\)/);
-  assert.match(investigate, /AbortSignal\.timeout\(45_000\)/);
+  assert.match(investigate, /AbortSignal\.timeout\(60_000\)/);
   assert.match(investigate, /hostedTextCap = 32_000/);
   assert.match(investigate, /extractor timeout fallback/);
   assert.match(investigate, /repairInstruction\(fullPaperExtractionSchema, issues\),\n        "repair"/);

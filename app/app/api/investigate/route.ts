@@ -61,6 +61,15 @@ function canonicalEnum(value: unknown, aliases: Record<string, string>) {
   return aliases[normalized] || value;
 }
 
+function canonicalReviewVerdict(value: unknown) {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+  if (/\b(reject|den(?:y|ied)|fail|unsupported|not acceptable)\b/.test(normalized)) return "reject";
+  if (/\b(revis|conditional|caveat|partial|mixed|qualif)\b/.test(normalized)) return "revise";
+  if (/\b(accept|approv|pass|support)\b/.test(normalized)) return "accept";
+  return value;
+}
+
 function coerceAuditText(value: unknown): unknown {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
@@ -122,17 +131,7 @@ function normalizeInvestigationJson(text: string) {
       if (!review || typeof review !== "object") continue;
       const record = review as Record<string, unknown>;
       record.rationale = coerceAuditText(record.rationale);
-      record.verdict = canonicalEnum(record.verdict, {
-        approve: "accept",
-        approved: "accept",
-        accepted: "accept",
-        pass: "accept",
-        conditional: "revise",
-        modify: "revise",
-        revise: "revise",
-        rejected: "reject",
-        fail: "reject",
-      });
+      record.verdict = canonicalReviewVerdict(record.verdict);
     }
     value.conclusionFit = canonicalEnum(value.conclusionFit, {
       "matches result": "matches-results",
@@ -176,7 +175,7 @@ async function runOpenRouterStructured(
         temperature: 0,
         max_tokens: role === "extractor" ? 4_500 : 3_500,
       }),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(60_000),
     });
   } catch {
     throw new Error("The hosted OpenRouter investigation fallback could not be reached.");
