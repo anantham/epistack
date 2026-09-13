@@ -153,23 +153,24 @@ Follow-up (not required for the gate): adopting the full
 `@cloudflare/workers-types` narrows `Response.json()` to `unknown` and surfaces ~45
 call sites — worth doing eventually for a stricter gate.
 
-## 11. Secret handling **[open]**
+## 11. Secret handling **[partial]**
 
 Lyra/OpenRouter/job secrets live in `.dev.vars` locally (gitignored) and as hosted
 secrets. No rotation policy or per-user key isolation.
 
-Immediate follow-up from the last deploy: `JOBS_TICK_TOKEN` was printed in plaintext
-in deploy logs and the Sites write credential appeared in a push URL — **rotate
-`JOBS_TICK_TOKEN` and confirm the credential is short-lived/revoked.**
+Immediate exposure follow-up is complete: `JOBS_TICK_TOKEN` was rotated before the
+final deployment, and Sites write credentials are short-lived. The remaining work
+is to document an owner/rotation policy and consider per-user key isolation.
 
-## 12. Deploy is a divergent copy, not `main` **[open]**
+## 12. Deploy source reconciliation **[partial]**
 
-The Sites source repo holds its own commit (`411460b`) distinct from this repo's
-`main`. The prior workflow rsync'd `app/` into a hand-maintained copy under
-`/private/tmp` and committed there, which is how Codex's work was lost once. Better:
-add the Sites git URL as a remote of this repo and push `main` directly, or at least
-diff the deploy tree against `main` before every publish. Deploy artifacts should be
-built from a clean checkout of a tag, not a `/tmp` directory.
+The Sites source now fast-forwards from the prior deployment history to a clean
+mirror commit (`737a0fe`) derived from canonical `main` (`82e91c7`). The artifact is
+built from the ignored `app/.deploy/` tree created from the pushed repository
+commit, and the Sites remote is registered in the main repo. The remaining
+imperfection is that the Sites repository has an unrelated historical root, so its
+commit hash cannot equal the GitHub `main` hash without a force rewrite. Keep the
+tree comparison and clean-checkout packaging as the release invariant.
 
 ---
 
