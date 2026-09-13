@@ -35,6 +35,22 @@ type OpenRouterMessage = {
   content?: string | Array<{ type?: string; text?: string }>;
 };
 
+const unsupportedOpenRouterSchemaKeywords = new Set([
+  "minLength", "maxLength", "pattern", "format", "minimum", "maximum", "multipleOf",
+  "patternProperties", "unevaluatedProperties", "propertyNames", "minProperties", "maxProperties",
+  "unevaluatedItems", "contains", "minContains", "maxContains", "minItems", "maxItems", "uniqueItems",
+]);
+
+function providerSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(providerSchema);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !unsupportedOpenRouterSchemaKeywords.has(key))
+      .map(([key, child]) => [key, providerSchema(child)]),
+  );
+}
+
 function investigateEnvironment() {
   return env as unknown as InvestigateEnvironment;
 }
@@ -55,7 +71,12 @@ function openRouterMessageText(message: OpenRouterMessage) {
   return (message.content || []).map((part) => part.text || "").join("\n");
 }
 
-async function runOpenRouterStructured(input: string, instructions: string, role: "extractor" | "reviewer" | "repair") {
+async function runOpenRouterStructured(
+  input: string,
+  instructions: string,
+  role: "extractor" | "reviewer" | "repair",
+  schema?: z.ZodType<unknown>,
+) {
   const apiKey = investigateEnvironment().OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("The hosted OpenRouter investigation fallback is not configured.");
   const model = openRouterModel(role);
@@ -76,7 +97,16 @@ async function runOpenRouterStructured(input: string, instructions: string, role
           { role: "system", content: instructions },
           { role: "user", content: input },
         ],
-        response_format: { type: "json_object" },
+        response_format: role === "repair" && schema
+          ? {
+              type: "json_schema",
+              json_schema: {
+                name: "epistack_investigation_repair",
+                strict: true,
+                schema: providerSchema(z.toJSONSchema(schema)),
+              },
+            }
+          : { type: "json_object" },
         reasoning: { effort: "none" },
         temperature: 0,
         max_tokens: role === "extractor" ? 4_500 : 3_500,
@@ -417,7 +447,12 @@ export async function POST(request: Request) {
 
     const extractorAgent = resolveAgentPrompt("full-paper-extractor", promptOverrides);
     const extractorTask = renderAgentPrompt(extractorAgent.taskTemplate, commonValues);
-    async function structuredStage(input: string, instructions: string, role: "extractor" | "reviewer" | "repair") {
+    async function structuredStage(
+      input: string,
+      instructions: string,
+      role: "extractor" | "reviewer" | "repair",
+      schema?: z.ZodType<unknown>,
+    ) {
       if (role !== "repair" && lyraConfigured()) {
         try {
           const text = await runLyraStage({
@@ -432,7 +467,7 @@ export async function POST(request: Request) {
         }
       }
       try {
-        const result = await runOpenRouterStructured(input, instructions, role);
+        const result = await runOpenRouterStructured(input, instructions, role, schema);
         return {
           ...result,
           model: `OpenRouter · ${openRouterModel(role)} · ${role === "extractor" ? "extractor" : role === "reviewer" ? "adversarial reviewer" : "JSON repair"}`,
@@ -443,7 +478,7 @@ export async function POST(request: Request) {
           && openRouterModel(role) !== openRouterModel("repair")
           && /could not be reached|HTTP (408|429|5\d\d)/.test(message);
         if (!canUseCheapFallback) throw error;
-        const fallback = await runOpenRouterStructured(input, instructions, "repair");
+        const fallback = await runOpenRouterStructured(input, instructions, "repair", schema);
         return {
           ...fallback,
           model: `OpenRouter · ${openRouterModel("repair")} · extractor timeout fallback`,
@@ -454,7 +489,7 @@ export async function POST(request: Request) {
     const extractorInstructions = extractorAgent.instructions
       + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
       + JSON.stringify(z.toJSONSchema(fullPaperExtractionSchema));
-    const primaryStage = await structuredStage(extractorTask, extractorInstructions, "extractor");
+    const primaryStage = await structuredStage(extractorTask, extractorInstructions, "extractor", fullPaperExtractionSchema);
     const primary = await parseStructuredWithRepair({
       text: primaryStage.text,
       schema: fullPaperExtractionSchema,
@@ -462,6 +497,7 @@ export async function POST(request: Request) {
         `${extractorTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
         extractorAgent.instructions + repairInstruction(fullPaperExtractionSchema, issues),
         "repair",
+        fullPaperExtractionSchema,
       )).text,
       maxRepairs: 2,
     });
@@ -475,7 +511,7 @@ export async function POST(request: Request) {
     const reviewerInstructions = reviewerAgent.instructions
       + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
       + JSON.stringify(z.toJSONSchema(adversarialReviewSchema));
-    const reviewStage = await structuredStage(reviewerTask, reviewerInstructions, "reviewer");
+    const reviewStage = await structuredStage(reviewerTask, reviewerInstructions, "reviewer", adversarialReviewSchema);
     const review = await parseStructuredWithRepair({
       text: reviewStage.text,
       schema: adversarialReviewSchema,
@@ -483,6 +519,7 @@ export async function POST(request: Request) {
         `${reviewerTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
         reviewerAgent.instructions + repairInstruction(adversarialReviewSchema, issues),
         "repair",
+        adversarialReviewSchema,
       )).text,
       maxRepairs: 2,
     });
