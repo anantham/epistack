@@ -16,7 +16,7 @@ export function normalizeEffort(value: unknown): CanonicalEffort {
 }
 export function stageRequest(stage: number, question: string, results: unknown[], decisionContext = "", promptOverrides: AgentPromptOverrides = {}, effort?: string, repairIssues?: string) {
   const agent = resolveAgentPrompt(stageNames[stage], promptOverrides);
-  const dimensions = stage > 0 ? normalizeDimensionScout(dimensionScoutSchema.parse(results[0])).dimensions : [];
+  const dimensions = stage > 0 ? normalizeDimensionScout(dimensionScoutSchema.parse(results[0]), question).dimensions : [];
   const schema = z.toJSONSchema(stageSchemas[stage]);
   return {
     model: 'lyra-chatgpt-pro', background: true, reasoning: { effort: normalizeEffort(effort) },

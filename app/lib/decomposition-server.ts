@@ -374,6 +374,45 @@ function genericIngestion(label: string) {
   };
 }
 
+function isFoodHealthQuestion(prompt: string) {
+  const text = prompt.toLowerCase();
+  return /\b(egg|eggs|food|meal|diet|nutrition)\b/.test(text)
+    && /\b(eat|eating|health|good|bad|moderation|safe|people|predict|outcome)\b/.test(text);
+}
+
+function isPreparationDimension(dimension: { id: string; label: string }) {
+  return /prepar|cook|form|accompani/i.test(`${dimension.id} ${dimension.label}`);
+}
+
+function foodHealthFallback(dimension: { id: string; label: string }, prompt: string) {
+  if (!isFoodHealthQuestion(prompt) || !isPreparationDimension(dimension)) return null;
+  return {
+    requiredFields: [
+      "cooking method",
+      "added fats, salt, and accompaniments",
+      "whole eggs versus whites",
+      "meal composition",
+    ],
+    searchConcepts: [
+      "boiled versus fried eggs",
+      "eggs with bacon or cheese",
+      "egg preparation method",
+    ],
+    mismatchRisks: [
+      "Boiled eggs may be treated as equivalent to fried eggs with butter, bacon, or cheese.",
+      "Eggs alone may be treated as equivalent to the whole meal and its added sodium or saturated fat.",
+    ],
+    contextQuestion: {
+      id: "context-preparation-and-accompaniments",
+      label: "Preparation and accompaniments",
+      question: "How do you usually prepare eggs, and what do you eat with them — for example boiled, fried, or scrambled with oil, cheese, meat, vegetables, or toast?",
+      whyItMatters: "Preparation and the surrounding meal can change the exposure being compared.",
+      effect: "branch" as const,
+      options: ["boiled or poached", "fried or scrambled", "omelet with additions", "varies"],
+    },
+  };
+}
+
 const traceStopWords = new Set([
   "a", "about", "after", "all", "an", "and", "are", "as", "at", "be", "before", "but", "by", "can", "could", "does", "for", "from", "how", "i", "if", "in", "is", "it", "me", "of", "on", "or", "should", "that", "the", "their", "there", "these", "this", "those", "to", "we", "what", "when", "where", "which", "who", "would",
 ]);
@@ -438,7 +477,7 @@ function genericTraceForDimensions(prompt: string, dimensions: { id: string; lab
   });
 }
 
-export function normalizeDimensionScout(scout: DimensionScout): DimensionScout {
+export function normalizeDimensionScout(scout: DimensionScout, prompt = ""): DimensionScout {
   const usedIds = new Set<string>();
   const dimensions = scout.dimensions.slice(0, 7).map((dimension, index) => {
     const baseId = slug(dimension.id || dimension.label || `dimension-${index + 1}`);
@@ -451,6 +490,9 @@ export function normalizeDimensionScout(scout: DimensionScout): DimensionScout {
       label: compact(dimension.label, 90),
     };
   });
+  if (isFoodHealthQuestion(prompt) && dimensions.length < 7 && !dimensions.some(isPreparationDimension)) {
+    dimensions.push({ id: "preparation-and-accompaniments", label: "Preparation and Accompaniments" });
+  }
   return {
     caseTitle: compact(scout.caseTitle, 90),
     summary: compact(scout.summary, 320),
@@ -465,7 +507,7 @@ export function assembleDecomposition(
   prompt: string,
   decisionContext = "",
 ): DecompositionArtifact {
-  scout = normalizeDimensionScout(scout);
+  scout = normalizeDimensionScout(scout, prompt);
   const usedDimensionIds = new Set<string>();
   const dimensions = scout.dimensions.slice(0, 7).map((dimension) => {
     usedDimensionIds.add(dimension.id);
@@ -480,8 +522,8 @@ export function assembleDecomposition(
 
   function ingestionFor(dimension: { id: string; label: string }) {
     const proposed = enrichmentByDimension.get(dimension.id);
-    if (!proposed) return genericIngestion(dimension.label);
-    const fallback = genericIngestion(dimension.label);
+    const fallback = foodHealthFallback(dimension, prompt) || genericIngestion(dimension.label);
+    if (!proposed) return fallback;
     const requiredFields = proposed.requiredFields.map((item) => compact(item, 100)).filter(Boolean).slice(0, 8);
     const searchConcepts = proposed.searchConcepts.map((item) => compact(item, 100)).filter(Boolean).slice(0, 8);
     const mismatchRisks = proposed.mismatchRisks.map((item) => compact(item, 140)).filter(Boolean).slice(0, 6);
@@ -519,6 +561,8 @@ export function assembleDecomposition(
         options,
       };
     }
+    const foodFallback = foodHealthFallback(dimension, prompt)?.contextQuestion;
+    if (foodFallback) return foodFallback;
     return {
       id: `context-${dimension.id}`,
       label: dimension.label,

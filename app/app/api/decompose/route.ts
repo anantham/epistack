@@ -192,7 +192,7 @@ export async function POST(request: Request) {
     } satisfies DecompositionResponse);
   }
 
-  scout = normalizeDimensionScout(scout);
+  scout = normalizeDimensionScout(scout, prompt);
   const axisBrief = scout.dimensions.slice(0, 7).map((dimension) => ({
     id: dimension.id,
     label: dimension.label,

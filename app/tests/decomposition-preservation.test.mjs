@@ -106,3 +106,22 @@ test('food decisions keep activity and geographic feasibility visible in the int
   assert.match(artifact.clusters[1].contextQuestion.question, /budget|price/i);
   assert.match(artifact.clusters[1].contextQuestion.question, /live|shop/i);
 });
+
+test('food-health coverage restores a missing preparation axis with actionable context', () => {
+  const incompleteScout = {
+    ...scout,
+    dimensions: [
+      { id: 'health-outcome', label: 'Health Outcome of Interest' },
+      { id: 'current-intake', label: 'Current Egg Intake and Frequency' },
+      { id: 'replacement', label: 'Feasible Replacement or Counterfactual' },
+      { id: 'personal-health', label: 'Personal Health and Life-Stage Context' },
+      { id: 'goals-activity', label: 'Goals, Body Composition, and Activity' },
+      { id: 'practical', label: 'Practical Constraints and Access' },
+    ],
+  };
+  const artifact = assembleDecomposition(incompleteScout, null, null, prompt);
+  const preparation = artifact.clusters.find((cluster) => /preparation|accompaniments/i.test(cluster.label));
+  assert.ok(preparation);
+  assert.ok(preparation.ingestionRequirements.requiredFields.some((field) => /cook|preparation|accompani/i.test(field)));
+  assert.match(preparation.contextQuestion.question, /prepare|boiled|fried|scrambled/i);
+});
