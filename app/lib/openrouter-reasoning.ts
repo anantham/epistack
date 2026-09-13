@@ -12,12 +12,15 @@ export function normalizeOpenRouterReasoningEffort(value: unknown): OpenRouterRe
     : undefined;
 }
 
-/**
- * Structured JSON calls need output tokens after the reasoning budget is spent.
- * If a high reasoning setting exhausts that budget, retry once with reasoning
- * disabled before accepting a deterministic scaffold.
- */
+/** Structured JSON calls need output tokens after the reasoning budget is spent. */
 export function structuredOutputReasoningEfforts(value: unknown): Array<OpenRouterReasoningEffort | undefined> {
+  const normalized = normalizeOpenRouterReasoningEffort(value);
+  if (normalized === "high" || normalized === "xhigh" || normalized === "max") return ["none"];
+  return [normalized];
+}
+
+/** Let the dimension scout use the requested effort, with one bounded repair. */
+export function dimensionScoutReasoningEfforts(value: unknown): Array<OpenRouterReasoningEffort | undefined> {
   const normalized = normalizeOpenRouterReasoningEffort(value);
   if (normalized === "high" || normalized === "xhigh" || normalized === "max") return [normalized, "none"];
   return [normalized];

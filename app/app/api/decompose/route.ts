@@ -31,6 +31,7 @@ import {
 } from "../../../lib/decomposition-cache";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
 import {
+  dimensionScoutReasoningEfforts,
   structuredOutputReasoningEfforts,
   type OpenRouterReasoningEffort,
   normalizeOpenRouterReasoningEffort,
@@ -152,6 +153,7 @@ export async function POST(request: Request) {
   const dimensionAgent = resolveAgentPrompt("dimension-scout", promptOverrides);
   const traceAgent = resolveAgentPrompt("trace-specialist", promptOverrides);
   const contextAgent = resolveAgentPrompt("context-retrieval", promptOverrides);
+  const scoutReasoningEfforts = dimensionScoutReasoningEfforts(effort);
   const structuredReasoningEfforts = structuredOutputReasoningEfforts(effort);
   const dimensionPrompt = renderAgentPrompt(dimensionAgent.taskTemplate, {
     question: prompt,
@@ -163,7 +165,7 @@ export async function POST(request: Request) {
 
   for (let attempt = 0; attempt < 2 && !scout; attempt += 1) {
     try {
-      const attemptReasoningEffort = structuredReasoningEfforts[Math.min(attempt, structuredReasoningEfforts.length - 1)];
+      const attemptReasoningEffort = scoutReasoningEfforts[Math.min(attempt, scoutReasoningEfforts.length - 1)];
       const { output } = await generateText({
         model: openRouter(openRouterModel),
         output: Output.object({
