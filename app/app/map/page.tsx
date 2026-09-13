@@ -176,7 +176,7 @@ export default function ContextualizeMap() {
         finishCompiledBrief(completed.brief, receipt.startedAt);
         return;
       }
-      setCompileProgress("Compiling the research contract on Astra");
+      setCompileProgress(result.repairing ? "Repairing the Astra response with the hosted JSON validator" : "Compiling the research contract on Astra");
     }
     throw new Error("This compilation is taking longer than expected. Try again to resume the saved run.");
   }
@@ -268,6 +268,7 @@ export default function ContextualizeMap() {
     if (!window.confirm("Recompute the decomposition and regenerate the interview questions on Astra?")) return;
     setRecomputing(true);
     setCompileError("");
+    window.localStorage.removeItem(briefCompileStorageKey);
     try {
       const promptOverrides = sanitizeAgentPromptOverrides(
         JSON.parse(window.localStorage.getItem(agentPromptStorageKey) || "{}"),
@@ -401,7 +402,7 @@ export default function ContextualizeMap() {
           finishCompiledBrief(completed.brief, receipt.startedAt);
           return;
         }
-        setCompileProgress("Compiling the research contract on Astra");
+        setCompileProgress(result.repairing ? "Repairing the Astra response with the hosted JSON validator" : "Compiling the research contract on Astra");
       }
       throw new Error("This compilation is taking longer than expected. Try again to resume the saved run.");
     } catch (error) {

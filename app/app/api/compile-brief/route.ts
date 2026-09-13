@@ -392,5 +392,5 @@ export async function POST(request: Request) {
     await save();
     await db.prepare('UPDATE hosted_brief_jobs SET locked_until = 0 WHERE id = ?').bind(body.id).run();
   }
-  return json({ id: body.id, status: state.status, brief: state.brief ?? null, error: state.error, code: state.code, nextAt: state.nextAt });
+  return json({ id: body.id, status: state.status, brief: state.brief ?? null, error: state.error, code: state.code, nextAt: state.nextAt, repairing: Boolean(state.repairing) });
 }
