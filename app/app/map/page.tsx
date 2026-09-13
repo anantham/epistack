@@ -73,6 +73,17 @@ const claimInputStyle = {
   width: "100%"
 };
 
+const briefCompileStorageKey = "epistack:brief-compile:v1";
+
+type PendingBriefCompile = {
+  caseId: string;
+  id: string;
+  token: string;
+  startedAt: number;
+  status: "queued" | "completed";
+  brief?: ResearchBrief;
+};
+
 export default function ContextualizeMap() {
   const router = useRouter();
   
@@ -106,6 +117,70 @@ export default function ContextualizeMap() {
   const briefSamples = briefSummary.byEffort[preferredEffort]?.samples ?? briefSummary.samples;
   const briefRemaining = briefEstimate ? Math.max(0, briefEstimate - compileElapsed) : null;
 
+  async function requestCompile(body: unknown) {
+    const response = await fetch("/api/compile-brief", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let data: any;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("The hosted compiler returned an unreadable response.");
+    }
+    if (!response.ok) throw new Error(data?.error || `The hosted compiler returned HTTP ${response.status}.`);
+    return data;
+  }
+
+  function finishCompiledBrief(brief: ResearchBrief, startedAt: number, recordTelemetry = true) {
+    setCompiledBrief(brief);
+    setEditedClaims(brief.claims as ResearchClaimFrame[]);
+    setCompileState("review");
+    setCompileProgress("Review the compiled claims before starting research");
+    setCompileError("");
+    if (recordTelemetry) {
+      const totalMs = Math.max(0, Date.now() - startedAt);
+      setBriefTelemetry((current) => {
+        const next = appendBriefTelemetryRun(current, { totalMs, effort: preferredEffort, at: new Date().toISOString() });
+        try {
+          window.localStorage.setItem(briefTelemetryStorageKey, JSON.stringify(next));
+        } catch {
+          // Telemetry is an estimate; failing to persist it must not block the run.
+        }
+        return next;
+      });
+    }
+  }
+
+  async function resumeBriefCompile(receipt: PendingBriefCompile) {
+    compileStartedAtRef.current = receipt.startedAt;
+    setCompileElapsed(Math.max(0, Date.now() - receipt.startedAt));
+    setCompileState("compiling");
+    setCompileProgress("Resuming the saved research compiler run");
+    setCompileError("");
+    if (receipt.status === "completed" && receipt.brief) {
+      finishCompiledBrief(receipt.brief, receipt.startedAt, false);
+      return;
+    }
+    const deadline = Date.now() + 30 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => window.setTimeout(resolve, 5000));
+      const result = await requestCompile({ id: receipt.id, token: receipt.token });
+      if (result.status === "busy") continue;
+      if (result.status === "failed") throw new Error(result.error || "The hosted research compiler failed.");
+      if (result.status === "completed") {
+        if (!result.brief?.claims?.length) throw new Error("The hosted compiler returned no validated brief.");
+        const completed = { ...receipt, status: "completed" as const, brief: result.brief as ResearchBrief };
+        try { window.localStorage.setItem(briefCompileStorageKey, JSON.stringify(completed)); } catch { /* best effort */ }
+        finishCompiledBrief(completed.brief, receipt.startedAt);
+        return;
+      }
+      setCompileProgress("Compiling the research contract on Astra");
+    }
+    throw new Error("This compilation is taking longer than expected. Try again to resume the saved run.");
+  }
+
   useEffect(() => {
     const stored = window.localStorage.getItem(decompositionSessionKey) || window.sessionStorage.getItem(decompositionSessionKey);
     if (stored) {
@@ -124,6 +199,24 @@ export default function ContextualizeMap() {
     }
     setReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!ready || !caseId || compileState !== "idle") return;
+    try {
+      const pending = JSON.parse(window.localStorage.getItem(briefCompileStorageKey) || "null") as PendingBriefCompile | null;
+      if (!pending || pending.caseId !== caseId) return;
+      const timer = window.setTimeout(() => {
+        void resumeBriefCompile(pending).catch((error) => {
+          setCompileState("error");
+          setCompileProgress("");
+          setCompileError(error instanceof Error ? error.message : "An unknown error occurred during compilation.");
+        });
+      }, 0);
+      return () => window.clearTimeout(timer);
+    } catch {
+      // Ignore malformed saved compile receipts.
+    }
+  }, [ready, caseId, compileState]);
 
   useEffect(() => {
     try {
@@ -275,29 +368,13 @@ export default function ContextualizeMap() {
       }
     }
 
-    async function request(body: unknown) {
-      const response = await fetch("/api/compile-brief", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      let data: any;
-      try {
-        data = await response.json();
-      } catch {
-        throw new Error("The hosted compiler returned an unreadable response.");
-      }
-      if (!response.ok) throw new Error(data?.error || `The hosted compiler returned HTTP ${response.status}.`);
-      return data;
-    }
-
     compileStartedAtRef.current = Date.now();
     setCompileElapsed(0);
     setCompileState("compiling");
     setCompileProgress("Preparing the edited scope for the research compiler");
     setCompileError("");
     try {
-      const created = await request({
+      const created = await requestCompile({
         caseId,
         originalQuestion: prompt,
         compiledQuestion: prompt, // simplified for now
@@ -309,30 +386,19 @@ export default function ContextualizeMap() {
         contextualization,
       });
       if (!created?.id || !created?.token) throw new Error("The hosted compiler did not return a saved-run receipt.");
-      const receipt = { id: created.id as string, token: created.token as string };
+      const receipt: PendingBriefCompile = { caseId, id: created.id as string, token: created.token as string, startedAt: compileStartedAtRef.current, status: "queued" };
+      try { window.localStorage.setItem(briefCompileStorageKey, JSON.stringify(receipt)); } catch { /* best effort */ }
       const deadline = Date.now() + 30 * 60 * 1000;
       while (Date.now() < deadline) {
         await new Promise((resolve) => window.setTimeout(resolve, 5000));
-        const result = await request(receipt);
+        const result = await requestCompile(receipt);
         if (result.status === "busy") continue;
         if (result.status === "failed") throw new Error(result.error || "The hosted research compiler failed.");
         if (result.status === "completed") {
           if (!result.brief?.claims?.length) throw new Error("The hosted compiler returned no validated brief.");
-          setCompiledBrief(result.brief as ResearchBrief);
-          setEditedClaims(result.brief.claims as ResearchClaimFrame[]);
-          setCompileState("review");
-          setCompileProgress("Review the compiled claims before starting research");
-          setCompileError("");
-          const totalMs = Math.max(0, Date.now() - compileStartedAtRef.current);
-          setBriefTelemetry((current) => {
-            const next = appendBriefTelemetryRun(current, { totalMs, effort: preferredEffort, at: new Date().toISOString() });
-            try {
-              window.localStorage.setItem(briefTelemetryStorageKey, JSON.stringify(next));
-            } catch {
-              // Telemetry is an estimate; failing to persist it must not block the run.
-            }
-            return next;
-          });
+          const completed = { ...receipt, status: "completed" as const, brief: result.brief as ResearchBrief };
+          try { window.localStorage.setItem(briefCompileStorageKey, JSON.stringify(completed)); } catch { /* best effort */ }
+          finishCompiledBrief(completed.brief, receipt.startedAt);
           return;
         }
         setCompileProgress("Compiling the research contract on Astra");
@@ -355,6 +421,7 @@ export default function ContextualizeMap() {
     if (!compiledBrief) return;
     const brief: ResearchBrief = { ...compiledBrief, claims: editedClaims };
     window.localStorage.setItem(researchBriefStorageKey, JSON.stringify(brief));
+    window.localStorage.removeItem(briefCompileStorageKey);
     window.localStorage.removeItem("epistack:research-ui-cache:v1");
     window.localStorage.removeItem("epistack:research-ui-cache:v2");
     router.push("/research");
