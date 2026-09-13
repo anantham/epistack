@@ -182,6 +182,7 @@ test("hosted investigation and recall survive an Astra outage with strict provid
   assert.match(investigate, /hostedTextCap = 32_000/);
   assert.match(investigate, /extractor timeout fallback/);
   assert.match(investigate, /repairInstruction\(fullPaperExtractionSchema, issues\),\n        "repair"/);
+  assert.match(investigate, /maxRepairs: 2/);
   assert.match(recall, /parseStructuredWithRepair/);
   assert.match(recall, /openRouterJson/);
   assert.match(dashboard, /Hosted evidence backend/);

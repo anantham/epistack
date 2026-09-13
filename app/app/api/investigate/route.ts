@@ -463,6 +463,7 @@ export async function POST(request: Request) {
         extractorAgent.instructions + repairInstruction(fullPaperExtractionSchema, issues),
         "repair",
       )).text,
+      maxRepairs: 2,
     });
 
     const indexedCandidate = primary.results.map((result, resultIndex) => ({ resultIndex, ...result }));
@@ -483,6 +484,7 @@ export async function POST(request: Request) {
         reviewerAgent.instructions + repairInstruction(adversarialReviewSchema, issues),
         "repair",
       )).text,
+      maxRepairs: 2,
     });
 
     const adjudicated = adjudicateDualReview({
