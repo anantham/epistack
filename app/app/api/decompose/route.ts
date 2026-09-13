@@ -30,6 +30,7 @@ import {
   normalizeDecompositionText,
 } from "../../../lib/decomposition-cache";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
+import { normalizeOpenRouterReasoningEffort } from "../../../lib/openrouter-reasoning";
 
 const defaultOpenRouterModel = "anthropic/claude-opus-4.8";
 const openRouterBaseURL = "https://openrouter.ai/api/v1";
@@ -47,6 +48,7 @@ type DecompositionRequest = {
   openRouterApiKey?: unknown;
   openRouterModel?: unknown;
   promptOverrides?: unknown;
+  effort?: unknown;
   refresh?: unknown;
 };
 
@@ -62,6 +64,7 @@ export async function POST(request: Request) {
   let suppliedOpenRouterKey = "";
   let suppliedOpenRouterModel = "";
   let promptOverrides: AgentPromptOverrides = {};
+  let effort: unknown;
   let refresh = false;
   try {
     const body = (await request.json()) as DecompositionRequest;
@@ -73,6 +76,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Prompt overrides are too large." }, { status: 400 });
     }
     promptOverrides = sanitizeAgentPromptOverrides(body.promptOverrides);
+    effort = body.effort;
     refresh = body.refresh === true;
   } catch {
     return Response.json({ error: "Request body must be valid JSON." }, { status: 400 });
@@ -99,10 +103,12 @@ export async function POST(request: Request) {
     || runtimeEnvironment.EPISTACK_OPENROUTER_MODEL
     || process.env.EPISTACK_OPENROUTER_MODEL
     || defaultOpenRouterModel;
+  const reasoningEffort = normalizeOpenRouterReasoningEffort(effort);
   const cacheKey = await operationCacheKey("question-decomposition", decompositionCacheContract, {
     prompt,
     decisionContext,
     model: openRouterModel,
+    effort: reasoningEffort || "provider-default",
     promptConfig: promptOverridesSignature(promptOverrides),
   });
   if (!refresh) {
@@ -136,6 +142,9 @@ export async function POST(request: Request) {
   const dimensionAgent = resolveAgentPrompt("dimension-scout", promptOverrides);
   const traceAgent = resolveAgentPrompt("trace-specialist", promptOverrides);
   const contextAgent = resolveAgentPrompt("context-retrieval", promptOverrides);
+  const providerOptions = reasoningEffort
+    ? { openai: { reasoningEffort } }
+    : undefined;
   const dimensionPrompt = renderAgentPrompt(dimensionAgent.taskTemplate, {
     question: prompt,
     decisionContext: decisionContext || "None supplied. Do not invent personal facts.",
@@ -162,6 +171,7 @@ export async function POST(request: Request) {
             }),
         maxOutputTokens: dimensionAgent.maxOutputTokens,
         temperature: dimensionAgent.temperature,
+        ...(providerOptions ? { providerOptions } : {}),
       });
       const parsed = dimensionScoutSchema.safeParse(output);
       if (parsed.success) scout = parsed.data;
@@ -212,6 +222,7 @@ export async function POST(request: Request) {
       }),
       maxOutputTokens: traceAgent.maxOutputTokens,
       temperature: traceAgent.temperature,
+      ...(providerOptions ? { providerOptions } : {}),
     });
     return traceAgentSchema.parse(output);
   })();
@@ -231,6 +242,7 @@ export async function POST(request: Request) {
       }),
       maxOutputTokens: contextAgent.maxOutputTokens,
       temperature: contextAgent.temperature,
+      ...(providerOptions ? { providerOptions } : {}),
     });
     return contextAgentSchema.parse(output);
   })();

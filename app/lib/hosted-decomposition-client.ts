@@ -84,6 +84,7 @@ async function runOpenRouterFallback(deps: Dependencies, input: HostedInput, ref
       prompt: input.question,
       decisionContext: input.decisionContext,
       promptOverrides: input.promptOverrides,
+      effort: input.effort,
       refresh,
     }),
   });

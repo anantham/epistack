@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { runHostedDecomposition } from '../lib/hosted-decomposition-client.ts';
-const input = { question: 'Are eggs good to eat?', decisionContext: 'A general evidence map, not a personal diet.', promptOverrides: {} };
+const input = { question: 'Are eggs good to eat?', decisionContext: 'A general evidence map, not a personal diet.', promptOverrides: {}, effort: 'high' };
 const artifact = { clusters: [{ id: 'dose' }] };
 function harness(replies, entries = new Map()) {
  const calls = []; let now = 0;
@@ -46,6 +46,7 @@ test('an unconfigured Lyra backend falls back to the server-side OpenRouter spec
  assert.equal(calls[0].url,'/api/decompose-live');
  assert.equal(calls[1].url,'/api/decompose');
  assert.equal(calls[1].body.prompt,input.question);
+ assert.equal(calls[1].body.effort,input.effort);
  assert.equal(calls[1].body.openRouterApiKey,undefined);
  assert.deepEqual(result,payload);
  assert.equal(progress.at(-1).stage,2);

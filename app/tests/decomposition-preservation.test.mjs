@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { assembleDecomposition, decompositionSchema } from '../lib/decomposition-server.ts';
+import { normalizeOpenRouterReasoningEffort } from '../lib/openrouter-reasoning.ts';
 
 const prompt = 'Are eggs good to eat? Bad to eat? Great in moderation? How can we tell? Does it vary across people, and what predicts this? What else should we be paying attention to here?';
 const quotes = ['eggs', 'good', 'moderation', 'How can we tell?', 'across people', 'predicts this', 'What else'];
@@ -10,6 +11,14 @@ const scout = {
   dimensions: quotes.map((_, i) => ({ id: `axis-${i}`, label: `Dimension ${i}`, question: 'Which concrete scope matters?',  })),
 };
 const traces = { traces: scout.dimensions.map((d, i) => ({ dimensionId: d.id, label: d.label, quotes: [quotes[i], 'eat'], latentVariable: 'Decision-relevant scope', rationale: 'The submitted words leave a material choice unresolved.' })) };
+
+test('fallback reasoning preserves the selected effort and keeps provider defaults explicit', () => {
+  assert.equal(normalizeOpenRouterReasoningEffort('instant'), 'none');
+  assert.equal(normalizeOpenRouterReasoningEffort('high'), 'high');
+  assert.equal(normalizeOpenRouterReasoningEffort('pro'), 'max');
+  assert.equal(normalizeOpenRouterReasoningEffort(undefined), undefined);
+  assert.equal(normalizeOpenRouterReasoningEffort('not-an-effort'), undefined);
+});
 
 test('the fifth scout alternative survives assembly and persistent validation', () => {
   const artifact = assembleDecomposition(scout, traces, null, prompt);
