@@ -370,7 +370,11 @@ export async function POST(request: Request) {
             }
           }
         } else if (result && ['failed', 'cancelled', 'incomplete'].includes(result.status || '')) {
-          throw new Error('The backend job failed. Its receipt is retained; no automatic resubmission.');
+          if (!config.OPENROUTER_API_KEY) {
+            throw new Error('The backend job failed. Its receipt is retained; no automatic resubmission.');
+          }
+          const fallback = await openRouterCompilerRequest(state);
+          acceptDraft(fallback.draft, `OpenRouter · ${fallback.model} (Astra provider fallback)`);
         } else if (result) {
           state.status = result.status === 'queued' ? 'queued' : 'in_progress';
         }
