@@ -192,7 +192,7 @@ export async function POST(request: Request) {
     return {
       model: 'lyra-chatgpt-pro',
       background: true,
-      reasoning: { effort: 'medium' },
+      reasoning: { effort: 'high' },
       instructions: agent.instructions + '\nReturn only one JSON object matching this schema. No markdown fences.\n' + JSON.stringify(z.toJSONSchema(researchBriefDraftSchema)),
       input: renderAgentPrompt(agent.taskTemplate, values),
       metadata: { client_job: 'epistack-hosted-research-brief-compiler' },
@@ -203,7 +203,7 @@ export async function POST(request: Request) {
     return {
       model: 'lyra-chatgpt-pro',
       background: true,
-      reasoning: { effort: 'medium' },
+      reasoning: { effort: 'high' },
       instructions: agent.instructions + repairInstruction(researchBriefDraftSchema, issues),
       input: `Repair the previous research brief response below. Preserve its substantive claims where possible, but return a complete valid JSON object.\n\nPREVIOUS RESPONSE\n${raw.slice(0, 40_000)}`,
       metadata: { client_job: 'epistack-hosted-research-brief-compiler-repair' },
@@ -251,6 +251,30 @@ export async function POST(request: Request) {
       throw new Error(failure.message);
     }
   }
+  function acceptDraft(draft: z.infer<typeof researchBriefDraftSchema>, compiledBy: string) {
+    const normalized = normalizeResearchBriefDraft(draft, state.clusters.map((cluster) => cluster.id));
+    state.brief = researchBriefSchema.parse({
+      ...normalized,
+      schemaVersion: '0.2.0',
+      briefId: `brief-${state.caseId.slice(0, 60)}-${shortHash(state.caseId + state.compiledQuestion)}`,
+      caseId: state.caseId,
+      originalQuestion: state.originalQuestion,
+      compiledQuestion: state.compiledQuestion,
+      decisionContext: state.decisionContext,
+      dimensionAssignments: buildDimensionAssignments({ clusters: state.clusters, dimensionRoles: state.dimensionRoles }),
+      privacy: {
+        localContextPolicy: 'The full decision context stays in this device-local brief and is used only to compile the research contract; it is not sent to PubMed.',
+        outboundQueryPolicy: "Only each claim's compact searchQuery and publication filters leave the workflow during discovery.",
+      },
+      generatedAt: new Date().toISOString(),
+      compiledBy,
+    });
+    state.compiledBy = compiledBy;
+    state.repairing = false;
+    state.repairRaw = undefined;
+    state.repairIssues = undefined;
+    state.status = 'completed';
+  }
   try {
     if (state.status === 'submitting') throw new Error('Submission was interrupted before its receipt was saved. Stopped to avoid consuming another job; owner review is needed.');
     if (!['completed', 'failed'].includes(state.status) && Date.now() >= (state.nextAt || 0)) {
@@ -266,25 +290,7 @@ export async function POST(request: Request) {
         } catch (error) {
           if ((error as { code?: string })?.code !== 'backend-unreachable' || !config.OPENROUTER_API_KEY) throw error;
           const fallback = await openRouterCompilerRequest(state);
-          const normalized = normalizeResearchBriefDraft(fallback.draft, state.clusters.map((cluster) => cluster.id));
-          state.brief = researchBriefSchema.parse({
-            ...normalized,
-            schemaVersion: '0.2.0',
-            briefId: `brief-${state.caseId.slice(0, 60)}-${shortHash(state.caseId + state.compiledQuestion)}`,
-            caseId: state.caseId,
-            originalQuestion: state.originalQuestion,
-            compiledQuestion: state.compiledQuestion,
-            decisionContext: state.decisionContext,
-            dimensionAssignments: buildDimensionAssignments({ clusters: state.clusters, dimensionRoles: state.dimensionRoles }),
-            privacy: {
-              localContextPolicy: 'The full decision context stays in this device-local brief and is used only to compile the research contract; it is not sent to PubMed.',
-              outboundQueryPolicy: "Only each claim's compact searchQuery and publication filters leave the workflow during discovery.",
-            },
-            generatedAt: new Date().toISOString(),
-            compiledBy: `OpenRouter · ${fallback.model} (Astra fallback)`,
-          });
-          state.compiledBy = `OpenRouter · ${fallback.model} (Astra fallback)`;
-          state.status = 'completed';
+          acceptDraft(fallback.draft, `OpenRouter · ${fallback.model} (Astra fallback)`);
           created = null;
         }
         if (created) {
@@ -298,35 +304,21 @@ export async function POST(request: Request) {
           const resultText = extractText(result);
           try {
             const draft = parseDraftText(resultText);
-            const normalized = normalizeResearchBriefDraft(draft, state.clusters.map((cluster) => cluster.id));
-            state.brief = researchBriefSchema.parse({
-              ...normalized,
-              schemaVersion: '0.2.0',
-              briefId: `brief-${state.caseId.slice(0, 60)}-${shortHash(state.caseId + state.compiledQuestion)}`,
-              caseId: state.caseId,
-              originalQuestion: state.originalQuestion,
-              compiledQuestion: state.compiledQuestion,
-              decisionContext: state.decisionContext,
-              dimensionAssignments: buildDimensionAssignments({ clusters: state.clusters, dimensionRoles: state.dimensionRoles }),
-              privacy: {
-                localContextPolicy: 'The full decision context stays in this device-local brief and is used only to compile the research contract; it is not sent to PubMed.',
-                outboundQueryPolicy: "Only each claim's compact searchQuery and publication filters leave the workflow during discovery.",
-              },
-              generatedAt: new Date().toISOString(),
-              compiledBy: state.compiledBy || 'Astra · GPT 6',
-            });
-            state.repairing = false;
-            state.repairRaw = undefined;
-            state.repairIssues = undefined;
-            state.status = 'completed';
+            acceptDraft(draft, state.compiledBy || 'Astra · GPT 6');
           } catch (error) {
-            if (!(error instanceof StructuredOutputError) || (state.repairAttempts || 0) >= 1) throw error;
-            state.repairAttempts = (state.repairAttempts || 0) + 1;
-            state.repairing = true;
-            state.repairRaw = resultText;
-            state.repairIssues = error.issues;
-            state.remoteId = null;
-            state.status = 'queued';
+            if (!(error instanceof StructuredOutputError)) throw error;
+            if ((state.repairAttempts || 0) >= 1) {
+              if (!config.OPENROUTER_API_KEY) throw error;
+              const fallback = await openRouterCompilerRequest(state);
+              acceptDraft(fallback.draft, `OpenRouter · ${fallback.model} (Astra repair fallback)`);
+            } else {
+              state.repairAttempts = (state.repairAttempts || 0) + 1;
+              state.repairing = true;
+              state.repairRaw = resultText;
+              state.repairIssues = error.issues;
+              state.remoteId = null;
+              state.status = 'queued';
+            }
           }
         } else if (result && ['failed', 'cancelled', 'incomplete'].includes(result.status || '')) {
           throw new Error('The backend job failed. Its receipt is retained; no automatic resubmission.');
