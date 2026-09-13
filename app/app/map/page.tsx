@@ -434,6 +434,7 @@ export default function ContextualizeMap() {
   }
 
   function backToInterview() {
+    window.localStorage.removeItem(briefCompileStorageKey);
     setCompileState("idle");
     setCompiledBrief(null);
     setEditedClaims([]);

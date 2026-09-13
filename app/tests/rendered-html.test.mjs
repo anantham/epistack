@@ -157,11 +157,15 @@ test("arbitrary questions use hosted elicitation while legacy provider access re
 });
 
 test("brief compilation keeps a fast OpenRouter model available when the primary times out", async () => {
-  const route = await readFile(new URL("app/api/compile-brief/route.ts", root), "utf8");
+  const [route, map] = await Promise.all([
+    readFile(new URL("app/api/compile-brief/route.ts", root), "utf8"),
+    readFile(new URL("app/map/page.tsx", root), "utf8"),
+  ]);
   assert.match(route, /const primaryModelId = config\.EPISTACK_OPENROUTER_MODEL/);
   assert.match(route, /const repairModelId = config\.EPISTACK_OPENROUTER_REPAIR_MODEL/);
   assert.match(route, /for \(const modelId of modelIds\)/);
   assert.match(route, /AbortSignal\.timeout\(30000\)/);
+  assert.match(map, /function backToInterview\(\) \{\s*window\.localStorage\.removeItem\(briefCompileStorageKey\);/);
 });
 
 test("settings validate the key, credits, and model with distinct failures", async () => {
