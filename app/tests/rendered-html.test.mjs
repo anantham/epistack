@@ -19,7 +19,8 @@ test("question compiler stages AI reading before the editable map", async () => 
     readFile(new URL("package.json", root), "utf8"),
   ]);
 
-  assert.match(styles, /\.brand-intro\.is-docked/);
+  assert.doesNotMatch(styles, /\.intro-surface\s*\{[^}]*visibility:\s*hidden/);
+  assert.doesNotMatch(frame, /aria-hidden=\{!introComplete\}/);
   assert.doesNotMatch(styles, /font-size 1700ms/);
   assert.doesNotMatch(styles, /left 1700ms/);
   assert.doesNotMatch(styles, /@keyframes brand-arrive/);
@@ -55,7 +56,7 @@ test("starter preview has been removed", async () => {
   ]);
 
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview|Your site is taking shape/);
-  assert.match(layout, /Epistack · Question Compiler/);
+  assert.match(layout, /template: "%s · Epistack"/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
 
