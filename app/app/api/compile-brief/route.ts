@@ -11,6 +11,7 @@ import { parseStructured, repairInstruction, StructuredOutputError } from '../..
 import { openRouterFailureFromThrown } from '../../../lib/openrouter-errors';
 
 const defaultOpenRouterModel = 'anthropic/claude-opus-4.8';
+const defaultOpenRouterRepairModel = 'openai/gpt-4o-mini';
 const openRouterBaseURL = 'https://openrouter.ai/api/v1';
 
 const contextQuestionSchema = z.object({
@@ -101,6 +102,7 @@ export async function POST(request: Request) {
     LYRA_API_KEY?: string;
     OPENROUTER_API_KEY?: string;
     EPISTACK_OPENROUTER_MODEL?: string;
+    EPISTACK_OPENROUTER_REPAIR_MODEL?: string;
   };
   if (!config.LYRA_PUBLIC_GATEWAY_URL || !config.LYRA_API_KEY) return json({ error: 'Hosted brief compilation is not configured yet.', code: 'hosted-not-configured' }, 503);
   let body: Record<string, unknown>;
@@ -251,6 +253,39 @@ export async function POST(request: Request) {
       throw new Error(failure.message);
     }
   }
+  async function openRouterRepairRequest(current: State, raw: string, issues: string) {
+    const apiKey = config.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error('Astra returned malformed JSON and the hosted repair fallback is not configured.');
+    const modelId = config.EPISTACK_OPENROUTER_REPAIR_MODEL || defaultOpenRouterRepairModel;
+    const agent = resolveAgentPrompt('research-brief-compiler', current.promptOverrides);
+    const openRouter = createOpenAI({
+      apiKey,
+      baseURL: openRouterBaseURL,
+      headers: {
+        'HTTP-Referer': new URL(request.url).origin,
+        'X-OpenRouter-Title': 'Epistack Evidence Lab',
+        'X-OpenRouter-Metadata': 'enabled',
+      },
+    });
+    try {
+      const result = await generateText({
+        model: openRouter(modelId),
+        output: Output.object({
+          name: 'repaired_research_brief',
+          description: 'The same research brief content repaired into valid JSON.',
+          schema: researchBriefDraftSchema,
+        }),
+        system: agent.instructions + repairInstruction(researchBriefDraftSchema, issues),
+        prompt: `Repair this malformed research brief response. Preserve its substantive content and return only the complete JSON object.\n\n${raw.slice(0, 40_000)}`,
+        maxOutputTokens: agent.maxOutputTokens,
+        temperature: 0,
+      });
+      return { draft: result.output, model: modelId };
+    } catch (error) {
+      const failure = openRouterFailureFromThrown(error);
+      throw new Error(failure.message);
+    }
+  }
   function acceptDraft(draft: z.infer<typeof researchBriefDraftSchema>, compiledBy: string) {
     const normalized = normalizeResearchBriefDraft(draft, state.clusters.map((cluster) => cluster.id));
     state.brief = researchBriefSchema.parse({
@@ -309,8 +344,13 @@ export async function POST(request: Request) {
             if (!(error instanceof StructuredOutputError)) throw error;
             if ((state.repairAttempts || 0) >= 1) {
               if (!config.OPENROUTER_API_KEY) throw error;
-              const fallback = await openRouterCompilerRequest(state);
-              acceptDraft(fallback.draft, `OpenRouter · ${fallback.model} (Astra repair fallback)`);
+              try {
+                const repaired = await openRouterRepairRequest(state, resultText, error.issues);
+                acceptDraft(repaired.draft, `OpenRouter · ${repaired.model} (Astra JSON repair)`);
+              } catch {
+                const fallback = await openRouterCompilerRequest(state);
+                acceptDraft(fallback.draft, `OpenRouter · ${fallback.model} (Astra repair fallback)`);
+              }
             } else {
               state.repairAttempts = (state.repairAttempts || 0) + 1;
               state.repairing = true;
