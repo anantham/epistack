@@ -8,10 +8,11 @@ import {
   type SourceArtifact,
 } from "../../../lib/dual-review";
 import type { DeepDiveSource } from "../../../lib/deep-dive";
-import { lyraConfigured, runLyraStage } from "../../../lib/lyra-stage";
+import { lyraConfigured, runLyraStage, isBackendUnreachable, backendUnreachableResponse } from "../../../lib/lyra-stage";
 import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
-import { acquireSource, extractSource, type SourceReviewResponse } from "../../../lib/source-adapters";
+import { acquireSource, extractSource, InsufficientSourceTextError, type SourceReviewResponse } from "../../../lib/source-adapters";
 import { isPreliminarySourceClass, sourceClassSchema } from "../../../lib/source-class";
+import { parseStructuredWithRepair, repairInstruction } from "../../../lib/structured-output";
 
 const primaryModel = "Astra · GPT 6";
 // A distinct role label: the adversarial pass is an independent full-text read
@@ -160,14 +161,6 @@ function inlineArtifactText(fullText: string) {
   ].join("\n") + note;
 }
 
-function stripMarkdownFences(text: string) {
-  return text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-}
-
-function parseStructured<T>(text: string, schema: z.ZodType<T>): T {
-  return schema.parse(JSON.parse(stripMarkdownFences(text)));
-}
-
 function citationFor(record: NormalizedRecord) {
   return [record.title, record.authors, `${record.journal} · ${record.published}`, `PMID ${record.pmid}${record.doi ? ` · DOI ${record.doi}` : ""}`].join("\n");
 }
@@ -251,6 +244,9 @@ async function investigateSource(input: {
     };
     return json(response);
   } catch (error) {
+    if (error instanceof InsufficientSourceTextError) {
+      return json({ error: error.message, code: error.code }, 200);
+    }
     return json({
       error: error instanceof Error ? error.message : "The hosted source review failed.",
     }, 502);
@@ -337,32 +333,50 @@ export async function POST(request: Request) {
     };
 
     const extractorAgent = resolveAgentPrompt("full-paper-extractor", promptOverrides);
-    const extractorInstructions = extractorAgent.instructions
-      + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
-      + JSON.stringify(z.toJSONSchema(fullPaperExtractionSchema));
+    const extractorTask = renderAgentPrompt(extractorAgent.taskTemplate, commonValues);
     const primaryRaw = await runLyraStage({
       model: "lyra-chatgpt-pro",
       effort: "medium",
-      instructions: extractorInstructions,
-      input: renderAgentPrompt(extractorAgent.taskTemplate, commonValues),
+      instructions: extractorAgent.instructions
+        + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
+        + JSON.stringify(z.toJSONSchema(fullPaperExtractionSchema)),
+      input: extractorTask,
     });
-    const primary = parseStructured(primaryRaw, fullPaperExtractionSchema);
+    const primary = await parseStructuredWithRepair({
+      text: primaryRaw,
+      schema: fullPaperExtractionSchema,
+      repair: async ({ raw, issues }) => runLyraStage({
+        model: "lyra-chatgpt-pro",
+        effort: "medium",
+        instructions: extractorAgent.instructions + repairInstruction(fullPaperExtractionSchema, issues),
+        input: `${extractorTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
+      }),
+    });
 
     const indexedCandidate = primary.results.map((result, resultIndex) => ({ resultIndex, ...result }));
     const reviewerAgent = resolveAgentPrompt("adversarial-reviewer", promptOverrides);
-    const reviewerInstructions = reviewerAgent.instructions
-      + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
-      + JSON.stringify(z.toJSONSchema(adversarialReviewSchema));
+    const reviewerTask = renderAgentPrompt(reviewerAgent.taskTemplate, {
+      ...commonValues,
+      candidateJson: JSON.stringify({ ...primary, results: indexedCandidate }, null, 2),
+    });
     const reviewRaw = await runLyraStage({
       model: "lyra-chatgpt-pro",
       effort: "medium",
-      instructions: reviewerInstructions,
-      input: renderAgentPrompt(reviewerAgent.taskTemplate, {
-        ...commonValues,
-        candidateJson: JSON.stringify({ ...primary, results: indexedCandidate }, null, 2),
+      instructions: reviewerAgent.instructions
+        + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
+        + JSON.stringify(z.toJSONSchema(adversarialReviewSchema)),
+      input: reviewerTask,
+    });
+    const review = await parseStructuredWithRepair({
+      text: reviewRaw,
+      schema: adversarialReviewSchema,
+      repair: async ({ raw, issues }) => runLyraStage({
+        model: "lyra-chatgpt-pro",
+        effort: "medium",
+        instructions: reviewerAgent.instructions + repairInstruction(adversarialReviewSchema, issues),
+        input: `${reviewerTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
       }),
     });
-    const review = parseStructured(reviewRaw, adversarialReviewSchema);
 
     const adjudicated = adjudicateDualReview({
       primary,
@@ -401,6 +415,7 @@ export async function POST(request: Request) {
     };
     return json(response);
   } catch (error) {
+    if (isBackendUnreachable(error)) return backendUnreachableResponse();
     if (error instanceof FullTextUnavailableError) {
       return json({ error: error.message, code: error.code }, 200);
     }

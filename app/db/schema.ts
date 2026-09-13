@@ -1,4 +1,4 @@
-import { index, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const cases = sqliteTable("cases", {
   id: text("id").primaryKey(),
@@ -303,3 +303,36 @@ export const beliefs = sqliteTable("beliefs", {
 
 export type CaseRecord = typeof cases.$inferSelect;
 export type NewCaseRecord = typeof cases.$inferInsert;
+
+// Hosted job rows. The hot status fields live in state_json; a server-side
+// sweeper selects due rows with json_extract instead of dedicated columns.
+export const hostedDecompositionJobs = sqliteTable("hosted_decomposition_jobs", {
+  id: text("id").primaryKey(),
+  token: text("token").notNull(),
+  stateJson: text("state_json").notNull(),
+  createdAt: integer("created_at").notNull(),
+  lockedUntil: integer("locked_until").notNull().default(0),
+}, (table) => [index("hosted_decomposition_jobs_locked_idx").on(table.lockedUntil)]);
+
+export const hostedBriefJobs = sqliteTable("hosted_brief_jobs", {
+  id: text("id").primaryKey(),
+  token: text("token").notNull(),
+  stateJson: text("state_json").notNull(),
+  createdAt: integer("created_at").notNull(),
+  lockedUntil: integer("locked_until").notNull().default(0),
+}, (table) => [index("hosted_brief_jobs_locked_idx").on(table.lockedUntil)]);
+
+// One row per finished hosted decomposition run. Complements the per-browser
+// telemetry so stage latency, success rate, and rate limiting can be observed
+// across runs without reading opaque job state.
+export const decompositionRuns = sqliteTable("decomposition_runs", {
+  id: text("id").primaryKey(),
+  jobId: text("job_id").notNull(),
+  outcome: text("outcome").notNull(),
+  stage: integer("stage").notNull(),
+  stageMsJson: text("stage_ms_json").notNull().default("[]"),
+  attemptsJson: text("attempts_json").notNull().default("[]"),
+  rateLimits: integer("rate_limits").notNull().default(0),
+  effort: text("effort"),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [index("decomposition_runs_created_idx").on(table.createdAt)]);

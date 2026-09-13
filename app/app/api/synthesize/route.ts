@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { lyraConfigured, runLyraStage } from "../../../lib/lyra-stage";
+import { lyraConfigured, runLyraStage, isBackendUnreachable, backendUnreachableResponse } from "../../../lib/lyra-stage";
 import {
   promptOverridesSignature,
   renderAgentPrompt,
@@ -552,6 +552,7 @@ export async function POST(request: Request) {
       },
     }, { status: 201 });
   } catch (error) {
+    if (isBackendUnreachable(error)) return backendUnreachableResponse();
     if (error && typeof error === "object" && (error as { code?: unknown }).code === "SYNTHESIS_CONTRACT_FAILED") {
       return Response.json({
         error: error instanceof Error ? error.message : "The synthesis contract failed.",

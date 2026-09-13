@@ -30,6 +30,13 @@ export function normalizeDecompositionText(value: string) {
   return value.normalize("NFKC").replace(/[^\S\r\n]+/gu, " ").replace(/\n\s*\n/g, "\n\n").trim();
 }
 
+// The browser cache key intentionally names the hosted Astra backend. Only
+// results actually produced by that backend may be stored under it, or a
+// fallback result could later be served as if Astra produced it.
+export function decompositionBackendIsPrimary(model: string) {
+  return !/openrouter|fallback/i.test(model);
+}
+
 export async function decompositionCacheEntryKey(identity: DecompositionCacheIdentity) {
   return operationCacheKey("question-decomposition", decompositionCacheContract, {
     prompt: normalizeDecompositionText(identity.prompt),

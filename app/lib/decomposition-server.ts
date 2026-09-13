@@ -59,7 +59,7 @@ function removeUnsupportedProviderConstraints(value: unknown): unknown {
 
 export const decompositionProviderJsonSchema = removeUnsupportedProviderConstraints(
   z.toJSONSchema(decompositionSchema),
-) as ReturnType<typeof z.toJSONSchema>;
+) as unknown as Parameters<typeof jsonSchema>[0];
 
 export const decompositionOutputSchema = jsonSchema<z.infer<typeof decompositionSchema>>(
   decompositionProviderJsonSchema,
@@ -111,13 +111,13 @@ export type TraceAgentResult = z.infer<typeof traceAgentSchema>;
 export type ContextAgentResult = z.infer<typeof contextAgentSchema>;
 
 export const dimensionScoutOutputSchema = jsonSchema<DimensionScout>(
-  removeUnsupportedProviderConstraints(z.toJSONSchema(dimensionScoutSchema)) as ReturnType<typeof z.toJSONSchema>,
+  removeUnsupportedProviderConstraints(z.toJSONSchema(dimensionScoutSchema)) as unknown as Parameters<typeof jsonSchema>[0],
 );
 export const traceAgentOutputSchema = jsonSchema<TraceAgentResult>(
-  removeUnsupportedProviderConstraints(z.toJSONSchema(traceAgentSchema)) as ReturnType<typeof z.toJSONSchema>,
+  removeUnsupportedProviderConstraints(z.toJSONSchema(traceAgentSchema)) as unknown as Parameters<typeof jsonSchema>[0],
 );
 export const contextAgentOutputSchema = jsonSchema<ContextAgentResult>(
-  removeUnsupportedProviderConstraints(z.toJSONSchema(contextAgentSchema)) as ReturnType<typeof z.toJSONSchema>,
+  removeUnsupportedProviderConstraints(z.toJSONSchema(contextAgentSchema)) as unknown as Parameters<typeof jsonSchema>[0],
 );
 
 export const decompositionInstructions = `You are the question-compilation operator in an epistemic research system.

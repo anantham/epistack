@@ -18,6 +18,7 @@ import {
 } from "../../../lib/agent-prompts";
 import { operationCacheKey, readOperationCache, writeOperationCache } from "../../../db/cache";
 import { openRouterFailureFromThrown } from "../../../lib/openrouter-errors";
+import { parseStructured } from "../../../lib/structured-output";
 import { shareableApplicabilityProfileSchema } from "../../../lib/broad-recall";
 import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
 
@@ -188,7 +189,7 @@ export async function POST(request: Request) {
             + JSON.stringify(z.toJSONSchema(deepDiveSchema)),
           input: extractionInput,
         });
-        output = JSON.parse(stripMarkdownFences(text));
+        output = parseStructured(text, deepDiveSchema);
       } catch (lyraError) {
         // Astra configured but unreachable: degrade to OpenRouter when a key exists.
         if (!openRouterApiKey) throw lyraError;
@@ -227,17 +228,13 @@ export async function POST(request: Request) {
   } catch (error) {
     if (!usingLyra) {
       const providerFailure = openRouterFailureFromThrown(error);
-      if (providerFailure.code !== "provider_error") {
+      if (providerFailure.code !== "unknown") {
         return Response.json({ error: providerFailure.message, code: providerFailure.code }, { status: providerFailure.status });
       }
     }
     const detail = error instanceof Error ? error.message : "Unknown deep-dive error";
     return Response.json({ error: "The source could not be extracted from PubMed and the selected model.", detail }, { status: 502 });
   }
-}
-
-function stripMarkdownFences(text: string) {
-  return text.trim().replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
 }
 
 function formatClaimFrames(claimFrames: ResearchClaimFrame[]) {

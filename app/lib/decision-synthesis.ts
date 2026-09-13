@@ -103,7 +103,7 @@ function removeUnsupportedProviderConstraints(value: unknown): unknown {
 
 const decisionProviderJsonSchema = removeUnsupportedProviderConstraints(
   z.toJSONSchema(decisionSynthesisSchema),
-) as ReturnType<typeof z.toJSONSchema>;
+) as unknown as Parameters<typeof jsonSchema>[0];
 
 export const decisionSynthesisOutputSchema = jsonSchema<DecisionSynthesis>(decisionProviderJsonSchema);
 
@@ -167,14 +167,12 @@ export function validateDecisionReferences(
   const results = new Set(allowedResultIds);
   const families = new Set(allowedFamilyIds);
   const claims = new Set(allowedClaimFrameIds);
-  const familyFor = (resultId: string) =>
-    resultFamilyById instanceof Map
-      ? resultFamilyById.get(resultId)
-      : resultFamilyById[resultId];
-  const relationFor = (relationId: string) =>
-    relationById instanceof Map
-      ? relationById.get(relationId)
-      : relationById[relationId];
+  const lookup = <V>(source: ReadonlyMap<string, V> | Record<string, V>) =>
+    source instanceof Map
+      ? (id: string) => source.get(id)
+      : (id: string) => (source as Record<string, V>)[id];
+  const familyFor = lookup(resultFamilyById);
+  const relationFor = lookup(relationById);
   const outcomeReads = synthesis.options.flatMap((option) => option.outcomeReads);
   const referencedResults = new Set([
     ...synthesis.loadBearingResultIds,

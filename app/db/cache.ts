@@ -13,7 +13,17 @@ export type OperationCacheHit<T> = {
   expiresAt: string;
 };
 
-export async function ensureOperationCacheTable() {
+let operationCacheTableEnsured: Promise<void> | null = null;
+
+export function ensureOperationCacheTable(): Promise<void> {
+  operationCacheTableEnsured ??= runEnsureOperationCacheTable().catch((error) => {
+    operationCacheTableEnsured = null;
+    throw error;
+  });
+  return operationCacheTableEnsured;
+}
+
+async function runEnsureOperationCacheTable() {
   const d1 = getD1();
   await d1.batch([
     d1.prepare(`CREATE TABLE IF NOT EXISTS operation_cache (

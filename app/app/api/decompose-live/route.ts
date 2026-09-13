@@ -1,9 +1,11 @@
 import { sanitizeAgentPromptOverrides, type AgentPromptOverrides } from '../../../lib/agent-prompts';
 import { env } from 'cloudflare:workers';
-import { getD1 } from '../../../db';
+import { getD1, ensureHostedJobTables } from '../../../db';
 import { stageRequest, parseStage, finishDecomposition, stageNames, normalizeEffort } from '../../../lib/hosted-decomposition';
+import { StructuredOutputError } from '../../../lib/structured-output';
+import { recordDecompositionRun } from '../../../lib/decomposition-runs';
 
-type State = { question: string; decisionContext?: string; promptOverrides?: AgentPromptOverrides; effort?: string; stage: number; results: unknown[]; status: string; remoteId?: string; nextAt?: number; error?: string; code?: string; artifact?: unknown; stageStartedAt?: number; stageDurationsMs?: number[]; attempts?: number[]; rateLimits?: number };
+type State = { question: string; decisionContext?: string; promptOverrides?: AgentPromptOverrides; effort?: string; stage: number; results: unknown[]; status: string; remoteId?: string; nextAt?: number; error?: string; code?: string; artifact?: unknown; stageStartedAt?: number; stageDurationsMs?: number[]; attempts?: number[]; rateLimits?: number; repairs?: number[]; repairIssues?: string; parseFailure?: { stage: number; raw: string; issues: string }; origin?: string; recorded?: boolean };
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 export async function POST(request: Request) {
   const origin = request.headers.get('origin');
@@ -13,8 +15,8 @@ export async function POST(request: Request) {
   let body;
   try { const raw = await request.text(); if (raw.length > 140000) return json({ error: 'Request too large.' }, 413); body = JSON.parse(raw) as { question?: string; decisionContext?: string; promptOverrides?: unknown; id?: string; token?: string; effort?: unknown }; if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Invalid request.' }, 400); }
   catch { return json({ error: 'Invalid request.' }, 400); }
+  await ensureHostedJobTables();
   const db = getD1();
-  await db.prepare('CREATE TABLE IF NOT EXISTS hosted_decomposition_jobs (id TEXT PRIMARY KEY, token TEXT NOT NULL, state_json TEXT NOT NULL, created_at INTEGER NOT NULL, locked_until INTEGER NOT NULL DEFAULT 0)').run();
   if (!body.id) {
     const question = typeof body.question === 'string' ? body.question.trim() : '';
     if (question.length < 12 || question.length > 5000) return json({ error: 'Enter a question between 12 and 5,000 characters.' }, 400);
@@ -23,7 +25,7 @@ export async function POST(request: Request) {
     const promptOverrides = sanitizeAgentPromptOverrides(body.promptOverrides);
     const effort = normalizeEffort(body.effort);
     const id = crypto.randomUUID(), token = crypto.randomUUID();
-    const state: State = { question, decisionContext, promptOverrides, effort, stage: 0, results: [], status: 'queued' };
+    const state: State = { question, decisionContext, promptOverrides, effort, stage: 0, results: [], status: 'queued', origin: new URL(request.url).origin };
     const row = await db.prepare('INSERT INTO hosted_decomposition_jobs (id, token, state_json, created_at) SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM hosted_decomposition_jobs WHERE created_at > ?) < 10 RETURNING id').bind(id, token, JSON.stringify(state), Date.now(), Date.now() - 86400000).first();
     if (!row) return json({ error: 'This preview has reached its limit of 10 investigations per day. Existing runs can still finish.' }, 429);
     return json({ id, token, status: 'queued', stage: 0, stages: stageNames }, 202);
@@ -73,21 +75,39 @@ export async function POST(request: Request) {
         state.attempts[state.stage] = (state.attempts[state.stage] || 0) + 1;
         state.stageStartedAt = Date.now();
         await save();
-        const created = await remote('/v1/responses', stageRequest(state.stage, state.question, state.results, state.decisionContext, state.promptOverrides, state.effort));
+        const created = await remote('/v1/responses', stageRequest(state.stage, state.question, state.results, state.decisionContext, state.promptOverrides, state.effort, state.repairIssues));
         if (created) {
           if (!/^job_[a-zA-Z0-9_-]+$/.test(created.id || '')) throw new Error('Backend did not return a durable job receipt.');
-          state.remoteId = created.id; state.status = 'in_progress';
+          state.remoteId = created.id; state.status = 'in_progress'; state.repairIssues = undefined;
         }
       } else {
         const result = await remote('/v1/responses/' + state.remoteId);
         if (result.status === 'completed') {
           state.stageDurationsMs = state.stageDurationsMs || [];
           state.stageDurationsMs[state.stage] = Math.max(0, Date.now() - (state.stageStartedAt || Date.now()));
-          state.results.push(parseStage(state.stage, result));
-          state.stage++;
-          delete state.remoteId;
-          if (state.stage === 3) { state.artifact = finishDecomposition(state.question, state.results, state.decisionContext); state.status = 'completed'; }
-          else { state.status = 'queued'; state.nextAt = 0; }
+          state.repairs = state.repairs || [];
+          let parsed: unknown;
+          try {
+            parsed = parseStage(state.stage, result);
+          } catch (error) {
+            if (error instanceof StructuredOutputError && (state.repairs[state.stage] || 0) < 1) {
+              state.repairs[state.stage] = (state.repairs[state.stage] || 0) + 1;
+              state.repairIssues = error.issues;
+              delete state.remoteId;
+              state.status = 'queued';
+              state.nextAt = 0;
+            } else {
+              throw error;
+            }
+          }
+          if (parsed !== undefined) {
+            state.results.push(parsed);
+            state.stage++;
+            delete state.remoteId;
+            state.repairIssues = undefined;
+            if (state.stage === 3) { state.artifact = finishDecomposition(state.question, state.results, state.decisionContext); state.status = 'completed'; }
+            else { state.status = 'queued'; state.nextAt = 0; }
+          }
         } else if (['failed', 'cancelled', 'incomplete'].includes(result.status)) throw new Error('The backend job failed. Its receipt is retained; no automatic resubmission.');
         else state.status = result.status === 'queued' ? 'queued' : 'in_progress';
       }
@@ -100,12 +120,27 @@ export async function POST(request: Request) {
       // client fall back to the alternate provider.
       state.code = 'backend-unreachable';
       state.error = 'Astra is unreachable; falling back to the alternate provider.';
+    } else if (error instanceof StructuredOutputError) {
+      state.parseFailure = { stage: state.stage, raw: error.raw.slice(0, 4000), issues: error.issues.slice(0, 2000) };
+      state.error = `${stageNames[state.stage]} output did not match its schema after a repair attempt.`;
     } else {
       state.error = error instanceof Error && error.message.startsWith('Backend returned') ? error.message : 'This stage could not complete or validate. The saved run has stopped without retrying the submission.';
     }
   } finally {
+    if (!state.recorded && (state.status === 'completed' || state.status === 'failed')) {
+      state.recorded = true;
+      await recordDecompositionRun(db, {
+        jobId: body.id,
+        outcome: state.status,
+        stage: state.stage,
+        stageMs: state.stageDurationsMs ?? [],
+        attempts: state.attempts ?? [],
+        rateLimits: state.rateLimits ?? 0,
+        effort: state.effort,
+      });
+    }
     await save();
     await db.prepare('UPDATE hosted_decomposition_jobs SET locked_until = 0 WHERE id = ?').bind(body.id).run();
   }
-  return json({ id: body.id, status: state.status, stage: state.stage, stages: stageNames, question: state.question, decisionContext: state.decisionContext || '', error: state.error, code: state.code, artifact: state.artifact, results: state.results, nextAt: state.nextAt, attempts: state.attempts, durationsMs: state.stageDurationsMs, rateLimits: state.rateLimits });
+  return json({ id: body.id, status: state.status, stage: state.stage, stages: stageNames, question: state.question, decisionContext: state.decisionContext || '', error: state.error, code: state.code, parseFailure: state.parseFailure, artifact: state.artifact, results: state.results, nextAt: state.nextAt, attempts: state.attempts, durationsMs: state.stageDurationsMs, rateLimits: state.rateLimits });
 }

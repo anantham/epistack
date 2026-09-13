@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { lyraConfigured, runLyraStage } from "../../../lib/lyra-stage";
+import { lyraConfigured, runLyraStage, isBackendUnreachable, backendUnreachableResponse } from "../../../lib/lyra-stage";
 import {
   recallResponseSchema,
   shareableApplicabilityProfileSchema,
@@ -292,6 +292,10 @@ export async function POST(request: Request) {
     const settled = await Promise.allSettled(tasks);
     let leads = settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 
+    if (!leads.length && settled.some((result) => result.status === "rejected" && isBackendUnreachable(result.reason))) {
+      return backendUnreachableResponse();
+    }
+
     // Dedupe across lanes by URL, preferring the first non-context lane.
     const byUrl = new Map<string, Lead>();
     const laneRank: Record<RecallLane, number> = { "broad-recall": 0, applicability: 1, context: 2 };
@@ -352,6 +356,7 @@ export async function POST(request: Request) {
     });
     return json(response);
   } catch (error) {
+    if (isBackendUnreachable(error)) return backendUnreachableResponse();
     return json({ error: error instanceof Error ? error.message : "Hosted lead discovery failed." }, 502);
   }
 }

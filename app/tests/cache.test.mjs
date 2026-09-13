@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   browserDecompositionCacheLimit,
+  decompositionBackendIsPrimary,
   decompositionCacheEntryKey,
   emptyBrowserDecompositionCache,
   findBrowserDecompositionCacheEntry,
@@ -76,6 +77,16 @@ function cachedDecomposition(caseId) {
     cache: { status: "miss", layer: "d1", createdAt: null, expiresAt: null },
   };
 }
+
+test("fallback results are not cached under the primary backend identity", async () => {
+  assert.equal(decompositionBackendIsPrimary("Astra · GPT 6 · orchestrated specialists"), true);
+  assert.equal(decompositionBackendIsPrimary("OpenRouter · anthropic/claude-opus-4.8 · orchestrated specialists"), false);
+  assert.equal(decompositionBackendIsPrimary("Astra · GPT 6 (Astra fallback)"), false);
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /decompositionBackendIsPrimary\(payload\.model\)/);
+  const inspector = await readFile(new URL("../app/decompose-live/page.tsx", import.meta.url), "utf8");
+  assert.match(inspector, /runHostedDecomposition/);
+});
 
 test("decomposition cache identity canonicalizes insignificant whitespace", async () => {
   const base = {

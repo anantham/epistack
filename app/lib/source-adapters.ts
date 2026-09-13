@@ -20,6 +20,7 @@ import {
   type SourceClass,
 } from "./source-class.ts";
 import type { ResearchClaimFrame } from "./research-brief.ts";
+import { parseStructuredWithRepair, repairInstruction, schemaInstruction } from "./structured-output.ts";
 
 const primaryModel = "Astra · GPT 6";
 const adversaryModel = "Astra · adversarial full-paper reviewer";
@@ -29,6 +30,15 @@ const fetchTimeoutMs = 20_000;
 const minimumVerifiedChars = 800;
 const hostedTextCap = 12_000;
 const userAgent = "Epistack Evidence Lab/0.1 (hosted source adapter)";
+const minimumExtractableChars = 40;
+
+export class InsufficientSourceTextError extends Error {
+  readonly code = "INSUFFICIENT_SOURCE_TEXT";
+  constructor(message: string) {
+    super(message);
+    this.name = "InsufficientSourceTextError";
+  }
+}
 
 // The three-axis model treats a comparison as scoped only when topic,
 // population, and jurisdiction are explicit. Effectiveness/episode datestamps
@@ -282,29 +292,28 @@ export async function acquireSource(input: {
   return cited("The URL could not be fetched or returned too little text; retaining the cited description only.");
 }
 
-function stripMarkdownFences(text: string) {
-  return text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-}
-
-function parseStructured<T>(text: string, schema: z.ZodType<T>): T {
-  return schema.parse(JSON.parse(stripMarkdownFences(text)));
-}
-
 async function runSchemaExtraction<T>(input: {
   schema: z.ZodType<T>;
   instructions: string;
   task: string;
 }): Promise<T> {
   const { runLyraStage } = await import("./lyra-stage.ts");
-  const raw = await runLyraStage({
+  const first = await runLyraStage({
     model: stageModel,
     effort: stageEffort,
-    instructions: input.instructions
-      + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
-      + JSON.stringify(z.toJSONSchema(input.schema)),
+    instructions: input.instructions + schemaInstruction(input.schema),
     input: input.task,
   });
-  return parseStructured(raw, input.schema);
+  return parseStructuredWithRepair({
+    text: first,
+    schema: input.schema,
+    repair: async ({ raw, issues }) => runLyraStage({
+      model: stageModel,
+      effort: stageEffort,
+      instructions: input.instructions + repairInstruction(input.schema, issues),
+      input: `${input.task}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
+    }),
+  });
 }
 
 function claimFramesText(claimFrames: ResearchClaimFrame[]) {
@@ -590,6 +599,14 @@ export async function extractSource(input: ExtractionInput): Promise<{
   payload: unknown;
 }> {
   const role = epistemicRoleForSourceClass(input.sourceClass);
+
+  if (input.acquired.text.trim().length < minimumExtractableChars) {
+    throw new InsufficientSourceTextError(
+      input.acquired.acquisition === "cited-unverified"
+        ? "The source could not be fetched and no citable text was supplied, so there is nothing to extract. Open the source or paste its text, then retry."
+        : "The acquired artifact contained too little text to extract from.",
+    );
+  }
 
   if (role === "causal") {
     if (input.acquisition === "fetched-verified") {

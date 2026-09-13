@@ -28,7 +28,7 @@ export const deepDiveResultSchema = z.object({
 
 export const deepDiveSchema = z.object({
   study: z.object({
-    design: z.string().min(3).max(140),
+    design: z.string().min(3).max(320),
     population: z.string().min(3).max(320),
     exposure: z.string().min(3).max(320),
     comparator: z.string().min(3).max(320),
@@ -73,7 +73,7 @@ function removeUnsupportedProviderConstraints(value: unknown): unknown {
 
 export const deepDiveProviderJsonSchema = removeUnsupportedProviderConstraints(
   z.toJSONSchema(deepDiveSchema),
-) as ReturnType<typeof z.toJSONSchema>;
+) as unknown as Parameters<typeof jsonSchema>[0];
 
 export const deepDiveOutputSchema = jsonSchema<z.infer<typeof deepDiveSchema>>(deepDiveProviderJsonSchema);
 

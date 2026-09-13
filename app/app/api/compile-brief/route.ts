@@ -1,10 +1,11 @@
 import { z } from 'zod';
 // @ts-ignore The Cloudflare runtime module is provided by the Workers build; its ambient types are absent from this tsc project (same pre-existing condition as every other API route).
 import { env } from 'cloudflare:workers';
-import { getD1 } from '../../../db';
+import { getD1, ensureHostedJobTables } from '../../../db';
 import { resolveAgentPrompt, renderAgentPrompt, sanitizeAgentPromptOverrides, type AgentPromptOverrides } from '../../../lib/agent-prompts';
 import { dimensionRoleSchema, researchBriefDraftSchema, researchBriefSchema, normalizeResearchBriefDraft, buildDimensionAssignments, type DimensionRole } from '../../../lib/research-brief';
 import type { DecompositionCluster } from '../../../lib/decomposition';
+import { parseStructured } from '../../../lib/structured-output';
 
 const contextQuestionSchema = z.object({
   id: z.string().min(1),
@@ -54,7 +55,9 @@ type State = {
   nextAt?: number;
   brief?: unknown;
   error?: string;
+  code?: string;
   rateLimits?: number;
+  origin?: string;
 };
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -76,8 +79,7 @@ function extractText(response: unknown) {
 }
 
 function parseDraftText(text: string) {
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-  return researchBriefDraftSchema.parse(JSON.parse(cleaned));
+  return parseStructured(text, researchBriefDraftSchema);
 }
 
 export async function POST(request: Request) {
@@ -95,8 +97,8 @@ export async function POST(request: Request) {
   } catch {
     return json({ error: 'Invalid request.' }, 400);
   }
+  await ensureHostedJobTables();
   const db = getD1();
-  await db.prepare('CREATE TABLE IF NOT EXISTS hosted_brief_jobs (id TEXT PRIMARY KEY, token TEXT NOT NULL, state_json TEXT NOT NULL, created_at INTEGER NOT NULL, locked_until INTEGER NOT NULL DEFAULT 0)').run();
   if (!body.id) {
     const candidate = createInputSchema.safeParse(body);
     if (!candidate.success) {
@@ -117,6 +119,7 @@ export async function POST(request: Request) {
       promptOverrides: sanitizeAgentPromptOverrides(input.promptOverrides),
       status: 'queued',
       remoteId: null,
+      origin: new URL(request.url).origin,
     };
     await db.prepare('INSERT INTO hosted_brief_jobs (id, token, state_json, created_at) VALUES (?, ?, ?, ?)').bind(id, token, JSON.stringify(state), Date.now()).run();
     return json({ id, token, status: 'queued' }, 202);
@@ -130,12 +133,19 @@ export async function POST(request: Request) {
   const state = JSON.parse(row.state_json) as State;
   const save = () => db.prepare('UPDATE hosted_brief_jobs SET state_json = ? WHERE id = ?').bind(JSON.stringify(state), body.id).run();
   async function remote(path: string, payload?: unknown) {
-    const response = await fetch(config.LYRA_PUBLIC_GATEWAY_URL!.replace(/\/$/, '') + path, {
-      method: payload ? 'POST' : 'GET',
-      headers: { Authorization: `Bearer ${config.LYRA_API_KEY}`, 'Content-Type': 'application/json' },
-      ...(payload ? { body: JSON.stringify(payload) } : {}),
-      signal: AbortSignal.timeout(25000),
-    });
+    let response: Response;
+    try {
+      response = await fetch(config.LYRA_PUBLIC_GATEWAY_URL!.replace(/\/$/, '') + path, {
+        method: payload ? 'POST' : 'GET',
+        headers: { Authorization: `Bearer ${config.LYRA_API_KEY}`, 'Content-Type': 'application/json' },
+        ...(payload ? { body: JSON.stringify(payload) } : {}),
+        signal: AbortSignal.timeout(25000),
+      });
+    } catch {
+      const failure = new Error('The Astra backend is unreachable.') as Error & { code?: string };
+      failure.code = 'backend-unreachable';
+      throw failure;
+    }
     if (response.status === 429 || response.status === 503) {
       const delay = Number(response.headers.get('retry-after'));
       state.nextAt = Date.now() + (Number.isFinite(delay) && delay > 0 ? Math.min(delay, 86400) : 60) * 1000;
@@ -143,7 +153,13 @@ export async function POST(request: Request) {
       state.status = 'queued';
       return null;
     }
-    if (!response.ok) throw new Error(`Backend returned HTTP ${response.status}. The saved run has stopped; it will not resubmit automatically.`);
+    if (!response.ok) {
+      const error = new Error(response.status >= 500
+        ? `The Astra backend returned HTTP ${response.status}.`
+        : `Backend returned HTTP ${response.status}. The saved run has stopped; it will not resubmit automatically.`) as Error & { code?: string };
+      if (response.status >= 500) error.code = 'backend-unreachable';
+      throw error;
+    }
     return response.json();
   }
   function compilerRequest(current: State) {
@@ -209,10 +225,15 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     state.status = 'failed';
-    state.error = error instanceof Error ? error.message.slice(0, 500) : 'This stage could not complete or validate. The saved run has stopped without retrying the submission.';
+    if ((error as { code?: string })?.code === 'backend-unreachable' && !state.remoteId) {
+      state.code = 'backend-unreachable';
+      state.error = 'Astra is unreachable.';
+    } else {
+      state.error = error instanceof Error ? error.message.slice(0, 500) : 'This stage could not complete or validate. The saved run has stopped without retrying the submission.';
+    }
   } finally {
     await save();
     await db.prepare('UPDATE hosted_brief_jobs SET locked_until = 0 WHERE id = ?').bind(body.id).run();
   }
-  return json({ id: body.id, status: state.status, brief: state.brief ?? null, error: state.error, nextAt: state.nextAt });
+  return json({ id: body.id, status: state.status, brief: state.brief ?? null, error: state.error, code: state.code, nextAt: state.nextAt });
 }

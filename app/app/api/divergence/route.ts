@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { lyraConfigured } from "../../../lib/lyra-stage";
+import { lyraConfigured, isBackendUnreachable, backendUnreachableResponse } from "../../../lib/lyra-stage";
 import { comparisonScopeSchema, computeDivergence } from "../../../lib/source-divergence.ts";
 
 const requestSchema = z.object({
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
     const divergences = await computeDivergence(parsed.data.items);
     return json({ divergences });
   } catch (error) {
+    if (isBackendUnreachable(error)) return backendUnreachableResponse();
     return json({ error: error instanceof Error ? error.message : "The divergence comparison failed." }, 502);
   }
 }

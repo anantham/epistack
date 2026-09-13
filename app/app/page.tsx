@@ -19,6 +19,7 @@ import {
   decompositionBrowserCacheStorageKey,
   decompositionCacheContract,
   decompositionCacheEntryKey,
+  decompositionBackendIsPrimary,
   findBrowserDecompositionCacheEntry,
   legacyDecompositionBrowserCacheStorageKey,
   normalizeDecompositionText,
@@ -603,7 +604,7 @@ export default function Home() {
       try {
         window.sessionStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
         window.localStorage.setItem(decompositionSessionKey, JSON.stringify(payload));
-        if (payload.mode === "ai") {
+        if (payload.mode === "ai" && decompositionBackendIsPrimary(payload.model)) {
           const savedAt = new Date().toISOString();
           const browserStore = upsertBrowserDecompositionCacheEntry(
             parseBrowserDecompositionCache(window.localStorage.getItem(decompositionBrowserCacheStorageKey)),

@@ -539,7 +539,7 @@ export async function POST(request: Request) {
         sourceType: autoPromotion ? "PMC JATS full text" : "PubMed abstract",
         contentHash: persistedArtifact?.contentHash ?? null,
       },
-      study: { studyId, registrationId, ...candidate.study },
+      study: { studyId, ...candidate.study, registrationId },
       family: {
         familyId,
         label: candidate.evidenceFamily.label,

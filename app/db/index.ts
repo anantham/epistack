@@ -15,7 +15,17 @@ export function getDb() {
   return drizzle(getD1(), { schema });
 }
 
-export async function ensureSnapshotTables() {
+let snapshotTablesEnsured: Promise<void> | null = null;
+
+export function ensureSnapshotTables(): Promise<void> {
+  snapshotTablesEnsured ??= runSnapshotTables().catch((error) => {
+    snapshotTablesEnsured = null;
+    throw error;
+  });
+  return snapshotTablesEnsured;
+}
+
+async function runSnapshotTables() {
   const d1 = getD1();
   await d1.batch([
     d1.prepare(`CREATE TABLE IF NOT EXISTS cases (
@@ -42,7 +52,17 @@ export async function ensureSnapshotTables() {
   ]);
 }
 
-export async function ensureEvidenceGraphTables() {
+let evidenceGraphTablesEnsured: Promise<void> | null = null;
+
+export function ensureEvidenceGraphTables(): Promise<void> {
+  evidenceGraphTablesEnsured ??= runEvidenceGraphTables().catch((error) => {
+    evidenceGraphTablesEnsured = null;
+    throw error;
+  });
+  return evidenceGraphTablesEnsured;
+}
+
+async function runEvidenceGraphTables() {
   await ensureSnapshotTables();
   const d1 = getD1();
   await d1.batch([
@@ -149,7 +169,17 @@ export async function ensureEvidenceGraphTables() {
   ]);
 }
 
-export async function ensureDecisionTables() {
+let decisionTablesEnsured: Promise<void> | null = null;
+
+export function ensureDecisionTables(): Promise<void> {
+  decisionTablesEnsured ??= runDecisionTables().catch((error) => {
+    decisionTablesEnsured = null;
+    throw error;
+  });
+  return decisionTablesEnsured;
+}
+
+async function runDecisionTables() {
   await ensureEvidenceGraphTables();
   const d1 = getD1();
   await d1.batch([
@@ -222,5 +252,49 @@ export async function ensureDecisionTables() {
     )`),
     d1.prepare("CREATE INDEX IF NOT EXISTS update_events_target_idx ON update_events (target_type, target_id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS update_events_review_idx ON update_events (review_status)"),
+  ]);
+}
+
+let hostedJobTablesEnsured: Promise<void> | null = null;
+
+export function ensureHostedJobTables(): Promise<void> {
+  hostedJobTablesEnsured ??= runHostedJobTables().catch((error) => {
+    hostedJobTablesEnsured = null;
+    throw error;
+  });
+  return hostedJobTablesEnsured;
+}
+
+async function runHostedJobTables() {
+  const d1 = getD1();
+  await d1.batch([
+    d1.prepare(`CREATE TABLE IF NOT EXISTS hosted_decomposition_jobs (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL,
+      state_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      locked_until INTEGER NOT NULL DEFAULT 0
+    )`),
+    d1.prepare("CREATE INDEX IF NOT EXISTS hosted_decomposition_jobs_locked_idx ON hosted_decomposition_jobs (locked_until)"),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS hosted_brief_jobs (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL,
+      state_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      locked_until INTEGER NOT NULL DEFAULT 0
+    )`),
+    d1.prepare("CREATE INDEX IF NOT EXISTS hosted_brief_jobs_locked_idx ON hosted_brief_jobs (locked_until)"),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS decomposition_runs (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      stage INTEGER NOT NULL,
+      stage_ms_json TEXT NOT NULL DEFAULT '[]',
+      attempts_json TEXT NOT NULL DEFAULT '[]',
+      rate_limits INTEGER NOT NULL DEFAULT 0,
+      effort TEXT,
+      created_at INTEGER NOT NULL
+    )`),
+    d1.prepare("CREATE INDEX IF NOT EXISTS decomposition_runs_created_idx ON decomposition_runs (created_at)"),
   ]);
 }
