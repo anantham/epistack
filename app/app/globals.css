@@ -279,6 +279,110 @@ main {
   width: 100%;
 }
 
+.settings-health-section {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-health-section-heading,
+.settings-health-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-health-section-heading > span {
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.settings-health-refresh,
+.settings-health-check {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  padding: 5px 8px;
+}
+
+.settings-health-refresh:disabled,
+.settings-health-check:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.settings-health-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+}
+
+.settings-health-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.settings-health-heading strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.settings-health-heading small,
+.settings-health-model,
+.settings-health-note,
+.settings-health-error {
+  color: var(--ink-soft);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.settings-health-card .connection-status {
+  font-size: 9px;
+}
+
+.settings-health-card .connection-status.valid {
+  color: #276047;
+}
+
+.settings-health-card .connection-status.invalid,
+.settings-health-error {
+  color: #8a3f35;
+}
+
+.settings-health-card .connection-status.attention {
+  color: #8a641c;
+}
+
+.settings-health-card .connection-status.unavailable,
+.settings-health-card .connection-status.not-configured {
+  color: #8a3f35;
+}
+
+.settings-health-card .connection-status.healthy i {
+  background: #3d916b;
+}
+
+.settings-health-card .connection-status.attention i {
+  background: #c38a24;
+}
+
+.settings-health-card .connection-status.unavailable i,
+.settings-health-card .connection-status.not-configured i {
+  background: #b24f43;
+}
+
+.settings-health-note,
+.settings-health-error {
+  margin: 0;
+}
+
 .settings-info {
   align-items: center;
   align-self: end;

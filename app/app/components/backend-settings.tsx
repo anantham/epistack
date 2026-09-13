@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 
 export type ThinkingEffort = "instant" | "medium" | "high" | "xhigh" | "pro";
 
@@ -25,6 +26,25 @@ export function normalizeThinkingEffort(value: unknown): ThinkingEffort {
 
 export const preferencesStorageKey = "epistack:preferences:v1";
 
+type ServiceStatus = {
+  state: "healthy" | "attention" | "unavailable" | "not-configured";
+  message: string;
+  model?: string;
+};
+
+type BackendStatus = {
+  checkedAt: string;
+  astra: ServiceStatus;
+  openrouter: ServiceStatus;
+};
+
+const statusLabels: Record<ServiceStatus["state"], string> = {
+  healthy: "Healthy",
+  attention: "Needs attention",
+  unavailable: "Unavailable",
+  "not-configured": "Not configured",
+};
+
 export function readPreferredEffort(): ThinkingEffort {
   try {
     const prefs = JSON.parse(window.localStorage.getItem(preferencesStorageKey) || "{}") as { effort?: unknown };
@@ -43,6 +63,57 @@ export function BackendSettings({
   onEffortChange: (effort: ThinkingEffort) => void;
   onClose: () => void;
 }) {
+  const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null);
+  const [checking, setChecking] = useState<"all" | "astra" | "openrouter" | null>(null);
+  const [statusError, setStatusError] = useState("");
+
+  const checkStatus = useCallback(async () => {
+    setChecking("all");
+    setStatusError("");
+    try {
+      const response = await fetch("/api/backend-status", { cache: "no-store" });
+      const result = await response.json() as BackendStatus & { error?: string };
+      if (!response.ok) throw new Error(result.error || `Status check returned HTTP ${response.status}.`);
+      setBackendStatus(result);
+    } catch (error) {
+      setStatusError(error instanceof Error ? error.message : "The backend status check failed.");
+    } finally {
+      setChecking(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void checkStatus();
+  }, [checkStatus]);
+
+  const renderServiceStatus = (service: "astra" | "openrouter", label: string, description: string) => {
+    const status = backendStatus?.[service];
+    const isChecking = checking === "all" || checking === service;
+    return (
+      <div className="settings-health-card">
+        <div className="settings-health-heading">
+          <div>
+            <strong>{label}</strong>
+            <small>{description}</small>
+          </div>
+          <button
+            type="button"
+            className="settings-health-check"
+            onClick={() => { void checkStatus(); }}
+            disabled={isChecking}
+          >
+            {isChecking ? "Checking" : "Check"}
+          </button>
+        </div>
+        <p className={`connection-status ${isChecking ? "checking" : status ? status.state : ""}`}>
+          <i aria-hidden="true" />
+          <span>{isChecking ? "Checking from the hosted worker…" : status ? `${statusLabels[status.state]} · ${status.message}` : "Not checked yet."}</span>
+        </p>
+        {service === "openrouter" && status?.model && <small className="settings-health-model">Model: {status.model}</small>}
+      </div>
+    );
+  };
+
   return (
     <div className="settings-panel" role="dialog" aria-label="Settings">
       <div className="settings-heading">
@@ -60,6 +131,18 @@ export function BackendSettings({
           spellCheck={false}
         />
       </label>
+      <div className="settings-health-section">
+        <div className="settings-health-section-heading">
+          <span>Live backend status</span>
+          <button type="button" className="settings-health-refresh" onClick={() => { void checkStatus(); }} disabled={checking !== null}>
+            {checking === "all" ? "Checking…" : "Check both"}
+          </button>
+        </div>
+        {renderServiceStatus("astra", "Astra / Lyra gateway", "Primary hosted reasoning backend")}
+        {renderServiceStatus("openrouter", "OpenRouter fallback", "Server-side recovery path")}
+        {statusError && <p className="settings-health-error">{statusError}</p>}
+        <p className="settings-health-note">These checks test reachability, credentials, and model availability. They do not run a full model request.</p>
+      </div>
       <label>
         <span>Thinking effort</span>
         <select
