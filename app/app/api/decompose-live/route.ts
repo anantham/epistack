@@ -6,6 +6,7 @@ import { StructuredOutputError } from '../../../lib/structured-output';
 import { recordDecompositionRun } from '../../../lib/decomposition-runs';
 
 type State = { question: string; decisionContext?: string; promptOverrides?: AgentPromptOverrides; effort?: string; stage: number; results: unknown[]; status: string; remoteId?: string; nextAt?: number; error?: string; code?: string; artifact?: unknown; stageStartedAt?: number; stageDurationsMs?: number[]; attempts?: number[]; rateLimits?: number; repairs?: number[]; repairIssues?: string; parseFailure?: { stage: number; raw: string; issues: string }; origin?: string; recorded?: boolean };
+const DAILY_PREVIEW_LIMIT = 50;
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 export async function POST(request: Request) {
   const origin = request.headers.get('origin');
@@ -26,8 +27,8 @@ export async function POST(request: Request) {
     const effort = normalizeEffort(body.effort);
     const id = crypto.randomUUID(), token = crypto.randomUUID();
     const state: State = { question, decisionContext, promptOverrides, effort, stage: 0, results: [], status: 'queued', origin: new URL(request.url).origin };
-    const row = await db.prepare('INSERT INTO hosted_decomposition_jobs (id, token, state_json, created_at) SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM hosted_decomposition_jobs WHERE created_at > ?) < 10 RETURNING id').bind(id, token, JSON.stringify(state), Date.now(), Date.now() - 86400000).first();
-    if (!row) return json({ error: 'This preview has reached its limit of 10 investigations per day. Existing runs can still finish.' }, 429);
+    const row = await db.prepare('INSERT INTO hosted_decomposition_jobs (id, token, state_json, created_at) SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM hosted_decomposition_jobs WHERE created_at > ?) < ? RETURNING id').bind(id, token, JSON.stringify(state), Date.now(), Date.now() - 86400000, DAILY_PREVIEW_LIMIT).first();
+    if (!row) return json({ error: `This preview has reached its limit of ${DAILY_PREVIEW_LIMIT} investigations per day. Existing runs can still finish.` }, 429);
     return json({ id, token, status: 'queued', stage: 0, stages: stageNames }, 202);
   }
   if (typeof body.id !== 'string' || typeof body.token !== 'string') return json({ error: 'Job credentials required.' }, 400);
