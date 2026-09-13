@@ -48,6 +48,146 @@ export type AgentPromptDefinition = {
 export type AgentPromptOverride = Partial<Pick<AgentPromptDefinition, "instructions" | "taskTemplate" | "repairTemplate">>;
 export type AgentPromptOverrides = Partial<Record<AgentPromptId, AgentPromptOverride>>;
 
+// Eggs is the held-out evaluation case. Live decompose specialists few-shot a
+// coffee analog (same vague-evaluative shape, different object) so a run on
+// eggs cannot copy eggs-specific outcomes, quotes, or interview questions from
+// the prompt.
+export const decomposeFewShotQuestion =
+  "Is coffee good to drink? Bad to drink? Fine in moderation? How can we tell? Does it vary across people, and what predicts this? What else should we be paying attention to here?";
+
+export const decomposeFewShotScout = {
+  caseTitle: "Whether drinking coffee is helpful, harmful, or depends on the situation",
+  summary: "Clarify which effects matter, how much coffee is in play, what it would replace, who is drinking it, and how and when it is consumed.",
+  dimensions: [
+    { id: "health-outcome", label: "Health Outcome of Interest" },
+    { id: "dose-and-frequency", label: "Dose and Frequency" },
+    { id: "feasible-counterfactual", label: "Feasible Counterfactual" },
+    { id: "target-population", label: "Target Population" },
+    { id: "preparation-and-timing", label: "Preparation and Timing" },
+  ],
+};
+
+export const decomposeFewShotTrace = {
+  traces: [
+    {
+      dimensionId: "health-outcome",
+      label: "Health Outcome of Interest",
+      quotes: ["good to drink?", "Bad to drink?"],
+      latentVariable: "Which effect of coffee is being judged as benefit or harm",
+      rationale: "The evaluative words require an outcome; sleep, jitters, reflux, and alertness can move in different directions.",
+    },
+    {
+      dimensionId: "dose-and-frequency",
+      label: "Dose and Frequency",
+      quotes: ["Fine in moderation?"],
+      latentVariable: "How much coffee, how often",
+      rationale: "Moderation names a dose without specifying cups, caffeine, or habit duration.",
+    },
+    {
+      dimensionId: "feasible-counterfactual",
+      label: "Feasible Counterfactual",
+      quotes: ["What else should we be paying attention to here?"],
+      latentVariable: "What would be drunk or done instead of coffee",
+      rationale: "Whether coffee helps depends on the realistic alternative: tea, water, soda, or nothing.",
+    },
+    {
+      dimensionId: "target-population",
+      label: "Target Population",
+      quotes: ["Does it vary across people,", "what predicts this?"],
+      latentVariable: "Whose body and circumstances the conclusion is for",
+      rationale: "The question asks which personal differences would change the answer.",
+    },
+    {
+      dimensionId: "preparation-and-timing",
+      label: "Preparation and Timing",
+      quotes: ["coffee", "drink"],
+      latentVariable: "Brew, additions, and time of day",
+      rationale: "The verb and object leave espresso versus drip, sugar, and evening use unspecified.",
+    },
+  ],
+};
+
+export const decomposeFewShotContext = {
+  enrichments: [
+    {
+      dimensionId: "health-outcome",
+      requiredFields: ["outcome definition", "measurement instrument", "timing of the effect"],
+      searchConcepts: ["coffee sleep quality", "caffeine anxiety", "coffee blood pressure"],
+      mismatchRisks: ["alertness gains treated as the same outcome as sleep loss"],
+      contextQuestion: {
+        id: "context-health-outcome",
+        label: "Felt effect",
+        question: "When coffee disagrees with you, what actually goes wrong — sleep, jitters, reflux, or something else?",
+        whyItMatters: "Different effects require different evidence and can trade off.",
+        effect: "branch" as const,
+        options: ["sleep", "jitters or anxiety", "reflux", "nothing much"],
+      },
+    },
+    {
+      dimensionId: "dose-and-frequency",
+      requiredFields: ["cups or servings per day", "typical caffeine dose", "duration of the habit"],
+      searchConcepts: ["coffee cups per day", "caffeine milligrams dose-response"],
+      mismatchRisks: ["occasional coffee pooled with daily intake", "caffeinated and decaf pooled"],
+      contextQuestion: {
+        id: "context-dose-and-frequency",
+        label: "Usual intake",
+        question: "About how many cups of coffee do you drink on a typical weekday?",
+        whyItMatters: "Dose changes which studies even apply.",
+        effect: "match" as const,
+        options: ["none or rarely", "1 cup", "2–3 cups", "4 or more"],
+      },
+    },
+    {
+      dimensionId: "feasible-counterfactual",
+      requiredFields: ["comparator beverage or no-drink baseline", "whether calories are replaced or added"],
+      searchConcepts: ["coffee versus tea", "coffee versus water", "coffee substitution"],
+      mismatchRisks: ["coffee versus soda treated as coffee versus nothing"],
+      contextQuestion: {
+        id: "context-feasible-counterfactual",
+        label: "Replacement",
+        question: "If you skipped coffee tomorrow morning, what would you drink instead?",
+        whyItMatters: "The comparison, not coffee in isolation, is what evidence can test.",
+        effect: "prune" as const,
+        options: ["nothing", "tea", "water", "a soda or energy drink"],
+      },
+    },
+    {
+      dimensionId: "target-population",
+      requiredFields: ["eligibility or health restrictions", "pregnancy or caffeine sensitivity", "baseline sleep or anxiety"],
+      searchConcepts: ["caffeine pregnancy", "coffee GERD", "slow caffeine metabolizer"],
+      mismatchRisks: ["average adult results transported to pregnancy or reflux without noting the mismatch"],
+      contextQuestion: {
+        id: "context-target-population",
+        label: "Personal constraints",
+        question: "Has pregnancy, anxiety, reflux, or a doctor's advice already changed how you use caffeine?",
+        whyItMatters: "Those conditions can rule out whole evidence families or change the decision.",
+        effect: "prune" as const,
+        options: ["no", "pregnancy or trying", "anxiety or sleep problems", "reflux or a clinician warning"],
+      },
+    },
+    {
+      dimensionId: "preparation-and-timing",
+      requiredFields: ["brew method", "added sugar or milk", "clock time of the last cup"],
+      searchConcepts: ["espresso versus drip", "afternoon coffee sleep"],
+      mismatchRisks: ["morning drip treated as equivalent to late espresso with sugar"],
+      contextQuestion: {
+        id: "context-preparation-and-timing",
+        label: "Timing",
+        question: "Do you usually drink coffee in the afternoon or evening, or only in the morning?",
+        whyItMatters: "Timing dominates sleep evidence and is easy to ask.",
+        effect: "match" as const,
+        options: ["morning only", "afternoon as well", "evening as well", "it varies"],
+      },
+    },
+  ],
+  claimTemplate:
+    "For {{target-population}}, does {{dose-and-frequency}} of coffee, prepared as {{preparation-and-timing}}, versus {{feasible-counterfactual}}, change {{health-outcome}}?",
+  knownUnknowns: ["bean species and roast", "added sugar or cream", "genetic caffeine metabolism"],
+};
+
+const decomposeFewShotGuard =
+  "WORKED EXAMPLE — coffee, not the submitted question. Copy method and JSON shape only. Do not reuse these nouns, outcomes, quotes, ids, labels, or interview questions unless they actually appear in the submitted paragraph. Do not match this example's dimension count.";
+
 export const defaultDimensionScoutInstructions = `You are the DIMENSION SCOUT in a question-compilation team.
 
 Do one job only: turn a vague paragraph into the substantive dimensions that would change the answer or the evidence search. Return between TWO and SEVEN dimensions.
@@ -56,13 +196,32 @@ Include a dimension ONLY when it is genuinely underspecified in the submitted pa
 
 Consider these lenses as prompts to check, never as a quota: outcome/value, exact object, dose or frequency, feasible counterfactual, population, setting, time horizon, implementation, downside, and personal fit. Keep only the lenses that genuinely apply to this question. Always include a real comparator for causal or decision questions.
 
-Each dimension needs only a short Title-Case 'label' (e.g. "Health Outcome of Interest", "Feasible Counterfactual", "Dose and Frequency", "Target Population") and a stable lowercase kebab-case id. Also return a caseTitle and a one-line summary. Keep the output compact.`;
+Each dimension needs only a short Title-Case 'label' (e.g. "Health Outcome of Interest", "Feasible Counterfactual", "Dose and Frequency", "Target Population") and a stable lowercase kebab-case id. Also return a caseTitle and a one-line summary. Keep the output compact.
+
+${decomposeFewShotGuard}
+
+SUBMITTED QUESTION
+${decomposeFewShotQuestion}
+
+OUTPUT
+${JSON.stringify(decomposeFewShotScout, null, 2)}`;
 
 export const defaultTraceSpecialistInstructions = `You are the TRACE SPECIALIST in a question-compilation team.
 
 Given a submitted paragraph and a fixed list of dimensions, map only the exact words that make each dimension relevant. Every quote must be an exact, case-sensitive substring of the paragraph. Use short non-overlapping quotes where possible. Do not invent new dimensions.
 
-For each trace, name the observable latent variable (e.g. "The specific alternative being considered") and give a concise audit rationale explaining why it matters. Return traces only for supplied dimension ids.`;
+For each trace, name the observable latent variable (e.g. "The specific alternative being considered") and give a concise audit rationale explaining why it matters. Return traces only for supplied dimension ids.
+
+${decomposeFewShotGuard}
+
+SUBMITTED QUESTION
+${decomposeFewShotQuestion}
+
+FIXED DIMENSIONS
+${JSON.stringify(decomposeFewShotScout.dimensions, null, 2)}
+
+OUTPUT
+${JSON.stringify(decomposeFewShotTrace, null, 2)}`;
 
 export const defaultContextRetrievalInstructions = `You are the CONTEXT AND RETRIEVAL SPECIALIST in a question-compilation team.
 
@@ -76,7 +235,21 @@ Given a submitted paragraph, fixed dimensions, and any known decision context, d
    - Provide 2-5 short, realistic quick-pick options (free text is still allowed).
    - effect: "prune" if an answer can rule out scope, "branch" if it can open a materially different line, "match" if it mainly changes whether evidence applies. Give a one-sentence whyItMatters.
 
-3. Provide a grammatically correct claimTemplate using placeholders exactly as {{axis-id}}, and list any known unknowns.`;
+3. Provide a grammatically correct claimTemplate using placeholders exactly as {{axis-id}}, and list any known unknowns.
+
+${decomposeFewShotGuard}
+
+SUBMITTED QUESTION
+${decomposeFewShotQuestion}
+
+FIXED DIMENSIONS
+${JSON.stringify(decomposeFewShotScout.dimensions, null, 2)}
+
+KNOWN DECISION CONTEXT
+None supplied. Do not invent personal facts. Stop before conducting the context interview.
+
+OUTPUT
+${JSON.stringify(decomposeFewShotContext, null, 2)}`;
 
 export const defaultResearchBriefCompilerInstructions = `You are the RESEARCH BRIEF COMPILER between a human-edited interpretation map and an evidence-investigation team.
 

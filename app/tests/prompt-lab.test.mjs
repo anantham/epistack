@@ -4,11 +4,20 @@ import test from "node:test";
 import {
   agentPromptDefinitions,
   agentPromptPhases,
+  decomposeFewShotContext,
+  decomposeFewShotQuestion,
+  decomposeFewShotScout,
+  decomposeFewShotTrace,
   promptOverridesSignature,
   renderAgentPrompt,
   resolveAgentPrompt,
   sanitizeAgentPromptOverrides,
 } from "../lib/agent-prompts.ts";
+import {
+  contextAgentSchema,
+  dimensionScoutSchema,
+  traceAgentSchema,
+} from "../lib/decomposition-server.ts";
 
 test("the prompt registry enumerates every live model specialist", () => {
   assert.deepEqual(agentPromptDefinitions.map((prompt) => prompt.id), [
@@ -52,6 +61,23 @@ test("the prompt registry groups every specialist by pipeline phase and runtime"
     agentPromptDefinitions.filter((prompt) => prompt.runtime === "companion").map((prompt) => prompt.id),
     ["research-brief-compiler", "broad-recall-specialist", "full-paper-extractor", "adversarial-reviewer"],
   );
+});
+
+test("decompose specialists few-shot coffee and hold out the eggs evaluation case", () => {
+  assert.deepEqual(dimensionScoutSchema.parse(decomposeFewShotScout), decomposeFewShotScout);
+  assert.deepEqual(traceAgentSchema.parse(decomposeFewShotTrace), decomposeFewShotTrace);
+  assert.deepEqual(contextAgentSchema.parse(decomposeFewShotContext), decomposeFewShotContext);
+  for (const trace of decomposeFewShotTrace.traces) {
+    for (const quote of trace.quotes) {
+      assert.ok(decomposeFewShotQuestion.includes(quote), `trace quote is not a substring: ${quote}`);
+    }
+  }
+  for (const id of ["dimension-scout", "trace-specialist", "context-retrieval"]) {
+    const prompt = resolveAgentPrompt(id);
+    const text = [prompt.instructions, prompt.taskTemplate, prompt.repairTemplate ?? ""].join("\n");
+    assert.match(text, /Is coffee good to drink\?/);
+    assert.doesNotMatch(text, /\beggs?\b/i);
+  }
 });
 
 test("prompt overrides resolve into runtime text and cache identity", () => {
