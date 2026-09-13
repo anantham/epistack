@@ -49,6 +49,7 @@ export function StageNav({ active, estimates }: { active: InvestigationStage; es
             key={stage.id}
             aria-current={stage.id === active ? "page" : undefined}
             aria-label={`Stage ${index + 1}: ${stage.label}`}
+            data-loading-label={`Loading ${stage.label}…`}
           >
             <b>{index + 1}</b>
             <span className="stage-tooltip" aria-hidden="true">{estimate ? `${stage.tooltip} · ${estimate}` : stage.tooltip}</span>

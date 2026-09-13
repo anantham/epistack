@@ -917,6 +917,49 @@ main {
   backdrop-filter: blur(16px);
 }
 
+.navigation-progress {
+  align-items: center;
+  background: rgba(245, 242, 233, 0.96);
+  border-bottom: 1px solid rgba(168, 175, 168, 0.45);
+  color: var(--green);
+  display: flex;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  gap: 10px;
+  left: 0;
+  letter-spacing: 0.08em;
+  padding: 7px clamp(20px, 4vw, 64px);
+  position: fixed;
+  right: 0;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 100;
+}
+
+.navigation-progress-rail {
+  background: rgba(36, 104, 79, 0.14);
+  border-radius: 999px;
+  height: 3px;
+  overflow: hidden;
+  width: 54px;
+}
+
+.navigation-progress-rail i {
+  animation: navigation-progress-sweep 1.1s ease-in-out infinite;
+  background: var(--green);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transform: translateX(-100%);
+  width: 70%;
+}
+
+@keyframes navigation-progress-sweep {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(45%); }
+  100% { transform: translateX(145%); }
+}
+
 .wordmark {
   align-items: center;
   color: var(--ink);
