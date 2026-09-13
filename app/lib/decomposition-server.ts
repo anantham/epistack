@@ -382,21 +382,12 @@ function genericTraceForDimensions(prompt: string, dimensions: { id: string; lab
   return dimensions.slice(0, Math.min(7, Math.max(2, words.length))).map((dimension, index) => {
     const quote = words[index] ?? words[index % Math.max(1, words.length)] ?? prompt.slice(0, Math.min(80, prompt.length));
     return {
-      id: `${dimension.id}-cues`,
+      dimensionId: dimension.id,
       label: compact(dimension.label, 90),
-      highlightQuotes: [quote],
+      quotes: [quote],
       latentVariable: compact(dimension.label, 140),
       rationale: compact(`The quoted cue leaves ${dimension.label.toLowerCase()} underspecified and changes which scoped claim should be investigated.`, 280),
-      ingestionRequirements: genericIngestion(dimension.label),
-      contextQuestion: {
-        id: `context-${dimension.id}`,
-        label: dimension.label,
-        question: `Can you provide more details about ${dimension.label}?`,
-        whyItMatters: "Helps ground the dimension in your reality.",
-        effect: "match",
-        options: ["Option 1", "Option 2"],
-      }
-    } satisfies DecompositionCluster;
+    };
   });
 }
 
@@ -459,10 +450,23 @@ export function assembleDecomposition(
     if (q && q.options.length > 0) {
       const options = q.options.map((opt) => compact(opt, 100)).filter(Boolean).slice(0, 5);
       if (options.length === 1) options.push("Something else or not yet decided");
+      let question = compact(q.question, 220);
+      const foodHealthQuestion = /\b(egg|eat|food|meal|diet|nutrition)\b/i.test(prompt);
+      const dimensionText = `${dimension.label} ${q.label}`.toLowerCase();
+      if (foodHealthQuestion && /goal|body|activ|train|athlet|fitness/.test(dimensionText)
+        && !/activ|train|athlet|exercise|sport|workout|sedent/.test(question.toLowerCase())) {
+        question = compact(`${question} How active or athletic are you now?`, 220);
+      }
+      if (foodHealthQuestion && /practical|access|constraint|afford|budget|location/.test(dimensionText)) {
+        const additions: string[] = [];
+        if (!/budget|price|cost/.test(question.toLowerCase())) additions.push("How much do budget or price matter?");
+        if (!/live|shop|location|nearby|availab/.test(question.toLowerCase())) additions.push("Where do you live or shop?");
+        question = compact(`${question} ${additions.join(" ")}`, 220);
+      }
       return {
         id: slug(q.id || `context-${dimension.id}`),
         label: compact(q.label, 80),
-        question: compact(q.question, 220),
+        question,
         whyItMatters: compact(q.whyItMatters, 260),
         effect: q.effect,
         options,
@@ -479,7 +483,11 @@ export function assembleDecomposition(
   }
 
   const seenTraceDimensions = new Set<string>();
-  const validTraces = (traceResult?.traces ?? [])
+  // A trace failure should not erase a successful context plan. The
+  // deterministic trace keeps the scout dimensions and lets questionFor()
+  // retain the model's evidence requirements and interview questions.
+  const traceCandidates = traceResult?.traces ?? genericTraceForDimensions(prompt, dimensions);
+  const validTraces = traceCandidates
     .map((trace) => ({
       ...trace,
       quotes: Array.from(new Set(trace.quotes))

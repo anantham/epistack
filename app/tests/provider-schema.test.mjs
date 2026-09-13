@@ -11,6 +11,7 @@ import {
 } from "../lib/decomposition-server.ts";
 import { readFile } from "node:fs/promises";
 import { decisionSynthesisOutputSchema } from "../lib/decision-synthesis.ts";
+import { defaultContextRetrievalInstructions, defaultDimensionScoutInstructions } from "../lib/agent-prompts.ts";
 
 const unsupportedStructuredOutputKeywords = new Set([
   "minLength", "maxLength", "pattern", "format",
@@ -105,4 +106,14 @@ test("context elicitation offers concrete answer handles", async () => {
   ]);
   assert.match(serverSource, /options: z\.array/);
   assert.match(typeSource, /options: string\[\]/);
+});
+
+test("personal decision prompts require practical and lifestyle context", () => {
+  for (const prompt of [defaultDimensionScoutInstructions, defaultContextRetrievalInstructions]) {
+    assert.match(prompt, /budget/i);
+    assert.match(prompt, /location/i);
+    assert.match(prompt, /body[- ]composition/i);
+    assert.match(prompt, /activity/i);
+    assert.match(prompt, /food access/i);
+  }
 });
