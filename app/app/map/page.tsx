@@ -242,6 +242,11 @@ export default function ContextualizeMap() {
   }, []);
 
   useEffect(() => {
+    if (!clusters.length) return;
+    setElicitationIndex((index) => Math.min(Math.max(0, index), clusters.length - 1));
+  }, [clusters.length]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
         window.sessionStorage.setItem(
@@ -305,7 +310,7 @@ export default function ContextualizeMap() {
     }
   }
 
-  const currentCluster = clusters[elicitationIndex] ?? null;
+  const currentCluster = clusters[Math.min(Math.max(0, elicitationIndex), Math.max(0, clusters.length - 1))] ?? null;
   const currentContextQuestion = currentCluster?.contextQuestion ?? null;
 
   function toggleContextOption(questionId: string, option: string) {
