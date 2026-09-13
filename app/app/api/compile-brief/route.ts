@@ -7,7 +7,7 @@ import { getD1, ensureHostedJobTables } from '../../../db';
 import { resolveAgentPrompt, renderAgentPrompt, sanitizeAgentPromptOverrides, type AgentPromptOverrides } from '../../../lib/agent-prompts';
 import { dimensionRoleSchema, researchBriefDraftSchema, researchBriefSchema, normalizeResearchBriefDraft, buildDimensionAssignments, type DimensionRole } from '../../../lib/research-brief';
 import type { DecompositionCluster } from '../../../lib/decomposition';
-import { parseStructured } from '../../../lib/structured-output';
+import { parseStructured, repairInstruction, StructuredOutputError } from '../../../lib/structured-output';
 import { openRouterFailureFromThrown } from '../../../lib/openrouter-errors';
 
 const defaultOpenRouterModel = 'anthropic/claude-opus-4.8';
@@ -65,6 +65,10 @@ type State = {
   rateLimits?: number;
   origin?: string;
   compiledBy?: string;
+  repairAttempts?: number;
+  repairing?: boolean;
+  repairRaw?: string;
+  repairIssues?: string;
 };
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -194,6 +198,17 @@ export async function POST(request: Request) {
       metadata: { client_job: 'epistack-hosted-research-brief-compiler' },
     };
   }
+  function compilerRepairRequest(current: State, raw: string, issues: string) {
+    const agent = resolveAgentPrompt('research-brief-compiler', current.promptOverrides);
+    return {
+      model: 'lyra-chatgpt-pro',
+      background: true,
+      reasoning: { effort: 'medium' },
+      instructions: agent.instructions + repairInstruction(researchBriefDraftSchema, issues),
+      input: `Repair the previous research brief response below. Preserve its substantive claims where possible, but return a complete valid JSON object.\n\nPREVIOUS RESPONSE\n${raw.slice(0, 40_000)}`,
+      metadata: { client_job: 'epistack-hosted-research-brief-compiler-repair' },
+    };
+  }
   async function openRouterCompilerRequest(current: State) {
     const apiKey = config.OPENROUTER_API_KEY;
     if (!apiKey) throw new Error('Astra is unreachable and the hosted fallback is not configured.');
@@ -244,7 +259,10 @@ export async function POST(request: Request) {
         await save();
         let created: { id?: string } | null;
         try {
-          created = await remote('/v1/responses', compilerRequest(state)) as { id?: string } | null;
+          const payload = state.repairing && state.repairRaw
+            ? compilerRepairRequest(state, state.repairRaw, state.repairIssues || 'The previous response was not valid JSON.')
+            : compilerRequest(state);
+          created = await remote('/v1/responses', payload) as { id?: string } | null;
         } catch (error) {
           if ((error as { code?: string })?.code !== 'backend-unreachable' || !config.OPENROUTER_API_KEY) throw error;
           const fallback = await openRouterCompilerRequest(state);
@@ -277,25 +295,39 @@ export async function POST(request: Request) {
       } else {
         const result = await remote('/v1/responses/' + state.remoteId) as { status?: string } | null;
         if (result && result.status === 'completed') {
-          const draft = parseDraftText(extractText(result));
-          const normalized = normalizeResearchBriefDraft(draft, state.clusters.map((cluster) => cluster.id));
-          state.brief = researchBriefSchema.parse({
-            ...normalized,
-            schemaVersion: '0.2.0',
-            briefId: `brief-${state.caseId.slice(0, 60)}-${shortHash(state.caseId + state.compiledQuestion)}`,
-            caseId: state.caseId,
-            originalQuestion: state.originalQuestion,
-            compiledQuestion: state.compiledQuestion,
-            decisionContext: state.decisionContext,
-            dimensionAssignments: buildDimensionAssignments({ clusters: state.clusters, dimensionRoles: state.dimensionRoles }),
-            privacy: {
-              localContextPolicy: 'The full decision context stays in this device-local brief and is used only to compile the research contract; it is not sent to PubMed.',
-              outboundQueryPolicy: "Only each claim's compact searchQuery and publication filters leave the workflow during discovery.",
-            },
-            generatedAt: new Date().toISOString(),
-            compiledBy: state.compiledBy || 'Astra · GPT 6',
-          });
-          state.status = 'completed';
+          const resultText = extractText(result);
+          try {
+            const draft = parseDraftText(resultText);
+            const normalized = normalizeResearchBriefDraft(draft, state.clusters.map((cluster) => cluster.id));
+            state.brief = researchBriefSchema.parse({
+              ...normalized,
+              schemaVersion: '0.2.0',
+              briefId: `brief-${state.caseId.slice(0, 60)}-${shortHash(state.caseId + state.compiledQuestion)}`,
+              caseId: state.caseId,
+              originalQuestion: state.originalQuestion,
+              compiledQuestion: state.compiledQuestion,
+              decisionContext: state.decisionContext,
+              dimensionAssignments: buildDimensionAssignments({ clusters: state.clusters, dimensionRoles: state.dimensionRoles }),
+              privacy: {
+                localContextPolicy: 'The full decision context stays in this device-local brief and is used only to compile the research contract; it is not sent to PubMed.',
+                outboundQueryPolicy: "Only each claim's compact searchQuery and publication filters leave the workflow during discovery.",
+              },
+              generatedAt: new Date().toISOString(),
+              compiledBy: state.compiledBy || 'Astra · GPT 6',
+            });
+            state.repairing = false;
+            state.repairRaw = undefined;
+            state.repairIssues = undefined;
+            state.status = 'completed';
+          } catch (error) {
+            if (!(error instanceof StructuredOutputError) || (state.repairAttempts || 0) >= 1) throw error;
+            state.repairAttempts = (state.repairAttempts || 0) + 1;
+            state.repairing = true;
+            state.repairRaw = resultText;
+            state.repairIssues = error.issues;
+            state.remoteId = null;
+            state.status = 'queued';
+          }
         } else if (result && ['failed', 'cancelled', 'incomplete'].includes(result.status || '')) {
           throw new Error('The backend job failed. Its receipt is retained; no automatic resubmission.');
         } else if (result) {
