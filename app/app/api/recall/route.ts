@@ -1,4 +1,6 @@
 import { z } from "zod";
+// @ts-ignore The Cloudflare runtime module is provided by the Workers build; its ambient types are absent from this tsc project (same pre-existing condition as every other API route).
+import { env } from "cloudflare:workers";
 import { lyraConfigured, runLyraStage, isBackendUnreachable, backendUnreachableResponse } from "../../../lib/lyra-stage";
 import {
   recallResponseSchema,
@@ -27,6 +29,88 @@ const hostedRecallRequestSchema = z.object({
 
 type HostedRecallRequest = z.infer<typeof hostedRecallRequestSchema>;
 type HostedRecallClaim = z.infer<typeof hostedRecallClaimSchema>;
+
+type RecallEnvironment = {
+  OPENROUTER_API_KEY?: string;
+  EPISTACK_OPENROUTER_RECALL_MODEL?: string;
+  EPISTACK_OPENROUTER_MODEL?: string;
+};
+
+type SearchProvider = "Astra" | "OpenRouter";
+
+type OpenRouterMessage = {
+  content?: string | Array<{ type?: string; text?: string }>;
+  annotations?: Array<{ type?: string; url_citation?: { url?: string; title?: string } }>;
+};
+
+function recallEnvironment() {
+  return env as unknown as RecallEnvironment;
+}
+
+function openRouterRecallModel() {
+  const current = recallEnvironment();
+  return current.EPISTACK_OPENROUTER_RECALL_MODEL || current.EPISTACK_OPENROUTER_MODEL || "openai/gpt-4o-mini";
+}
+
+function openRouterRecallConfigured() {
+  return Boolean(recallEnvironment().OPENROUTER_API_KEY);
+}
+
+function openRouterMessageText(message: OpenRouterMessage) {
+  if (typeof message.content === "string") return message.content;
+  return (message.content || []).map((part) => part.text || "").join("\n");
+}
+
+async function openRouterChat(input: string, instructions: string, useWebSearch: boolean) {
+  const apiKey = recallEnvironment().OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OpenRouter fallback is not configured.");
+  let response: Response;
+  try {
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://epistack.adityaarpitha.com",
+        "X-OpenRouter-Title": "Epistack Evidence Lab",
+        "X-OpenRouter-Metadata": "enabled",
+      },
+      body: JSON.stringify({
+        model: openRouterRecallModel(),
+        messages: [
+          { role: "system", content: instructions },
+          { role: "user", content: input },
+        ],
+        ...(useWebSearch ? { tools: [{ type: "openrouter:web_search" }] } : {}),
+        temperature: 0,
+        max_tokens: useWebSearch ? 3_500 : 2_000,
+      }),
+      signal: AbortSignal.timeout(useWebSearch ? 90_000 : 30_000),
+    });
+  } catch {
+    throw new Error("OpenRouter fallback could not be reached.");
+  }
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const payload = await response.json() as { error?: { message?: string } };
+      detail = payload.error?.message || "";
+    } catch {
+      // Keep the fallback error bounded when the provider sends no JSON.
+    }
+    throw new Error(`OpenRouter fallback returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : "."}`);
+  }
+  const payload = await response.json() as { choices?: Array<{ message?: OpenRouterMessage }> };
+  const message = payload.choices?.[0]?.message;
+  if (!message) throw new Error("OpenRouter fallback returned no message.");
+  const text = openRouterMessageText(message);
+  const citations = (message.annotations || [])
+    .map((annotation) => annotation.url_citation)
+    .filter((citation): citation is { url: string; title?: string } => Boolean(citation?.url))
+    .map((citation) => `[${citation.title || new URL(citation.url).host}](${citation.url})`)
+    .join("\n");
+  return { text: [text, citations].filter(Boolean).join("\n\n"), model: openRouterRecallModel() };
+}
 
 const emptyApplicabilityProfile = shareableApplicabilityProfileSchema.parse({});
 
@@ -170,16 +254,16 @@ type Lead = {
   };
 };
 
-function buildLeads(lane: RecallLane, links: Array<{ url: string; title: string }>, claimIds: string[]) {
+function buildLeads(lane: RecallLane, links: Array<{ url: string; title: string }>, claimIds: string[], provider: SearchProvider) {
   const reportedQuery = bounded(claimIds.length ? `scoped lane ${lane}` : "scoped lane", 3, 600);
   return links.slice(0, 12).map((link) => ({
     id: `lead-${lane}-${shortHash(link.url).slice(0, 10)}`,
     lane,
     claimIds: claimIds.length ? claimIds : ["claim"],
     source: { url: link.url, title: link.title, type: "other" as const },
-    whyRelevant: `Discovered by the hosted ${lane} Astra web-search lane.`,
+    whyRelevant: `Discovered by the hosted ${lane} ${provider} web-search lane.`,
     disconfirming: false,
-    limitation: "Model-reported discovery from Astra's cited web-search synthesis; the underlying page was not fetched or verified.",
+    limitation: `Model-reported discovery from ${provider}'s cited web-search synthesis; the underlying page was not fetched or verified.`,
     status: "lead-only" as const,
     discovery: {
       reportedQuery,
@@ -226,7 +310,17 @@ async function classifyLeads(leads: Lead[]) {
     "Return only JSON matching this schema. No markdown fences.",
     JSON.stringify(z.toJSONSchema(classificationPromptSchema)),
   ].join("\n");
-  const raw = await runLyraStage({ model: "lyra-chatgpt-pro", effort: "instant", instructions, input: JSON.stringify(list) });
+  let raw: string;
+  if (lyraConfigured()) {
+    try {
+      raw = await runLyraStage({ model: "lyra-chatgpt-pro", effort: "instant", instructions, input: JSON.stringify(list) });
+    } catch (error) {
+      if (!isBackendUnreachable(error) || !openRouterRecallConfigured()) throw error;
+      raw = (await openRouterChat(JSON.stringify(list), instructions, false)).text;
+    }
+  } else {
+    raw = (await openRouterChat(JSON.stringify(list), instructions, false)).text;
+  }
   const envelope = classificationEnvelopeSchema.parse(JSON.parse(stripFences(raw)));
   const classifications = envelope.classifications.flatMap((candidate) => {
     const parsed = classificationItemSchema.safeParse(candidate);
@@ -250,7 +344,7 @@ const json = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 
 export async function POST(request: Request) {
-  if (!lyraConfigured()) {
+  if (!lyraConfigured() && !openRouterRecallConfigured()) {
     return json({ error: "Hosted lead discovery is not configured yet.", code: "hosted-not-configured" }, 503);
   }
   let body: unknown;
@@ -274,25 +368,42 @@ export async function POST(request: Request) {
     applicabilityProfile: profile,
   }))}`;
 
+  type SearchLaneResult = {
+    leads: Lead[];
+    provider: SearchProvider;
+    model: string;
+  };
+
   async function searchLane(lane: RecallLane, claims: HostedRecallClaim[]) {
-    const markdown = await runLyraStage({
-      model: "lyra-web-search",
-      input: buildLanePrompt(lane, input, profile, claims),
-    });
-    return buildLeads(lane, extractLinks(markdown), claims.map((claim) => claim.id));
+    const lanePrompt = buildLanePrompt(lane, input, profile, claims);
+    if (lyraConfigured()) {
+      try {
+        const markdown = await runLyraStage({ model: "lyra-web-search", input: lanePrompt });
+        return { leads: buildLeads(lane, extractLinks(markdown), claims.map((claim) => claim.id), "Astra"), provider: "Astra" as const, model: "Astra · web search" } satisfies SearchLaneResult;
+      } catch (error) {
+        if (!isBackendUnreachable(error) || !openRouterRecallConfigured()) throw error;
+      }
+    }
+    const fallback = await openRouterChat(lanePrompt, "You are a careful web-research lead generator. Return a short Markdown report with every source as a Markdown link. Keep all results lead-only: discovery is not evidence, and do not claim that a source has been acquired or verified.", true);
+    return {
+      leads: buildLeads(lane, extractLinks(fallback.text), claims.map((claim) => claim.id), "OpenRouter"),
+      provider: "OpenRouter",
+      model: `OpenRouter · ${fallback.model} (Astra fallback · web search)`,
+    } satisfies SearchLaneResult;
   }
 
   try {
-    const tasks: Array<Promise<Lead[]>> = [
+    const tasks: Array<Promise<SearchLaneResult>> = [
       // One broad-recall agent per claim: more scoped agents, not one broad sweep.
       ...input.claims.map((claim) => searchLane("broad-recall", [claim])),
       searchLane("applicability", input.claims),
       searchLane("context", input.claims),
     ];
     const settled = await Promise.allSettled(tasks);
-    let leads = settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+    const successful = settled.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+    let leads = successful.flatMap((result) => result.leads);
 
-    if (!leads.length && settled.some((result) => result.status === "rejected" && isBackendUnreachable(result.reason))) {
+    if (!leads.length && settled.length > 0 && settled.every((result) => result.status === "rejected" && isBackendUnreachable(result.reason))) {
       return backendUnreachableResponse();
     }
 
@@ -318,15 +429,22 @@ export async function POST(request: Request) {
     }
 
     const laneOrder: RecallLane[] = ["broad-recall", "applicability", "context"];
+    const providers = new Set(successful.map((result) => result.provider));
+    const model = successful.length === 1
+      ? successful[0].model
+      : providers.size > 1
+        ? "Astra + OpenRouter · web search fallback"
+        : successful[0]?.model || "Astra · web search";
+    const providerLabel = providers.size > 1 ? "Astra + OpenRouter" : successful[0]?.provider || "Astra";
     const laneResults = laneOrder.map((lane) => {
       const laneLeads = leads.filter((lead) => lead.lane === lane);
       return {
         lane,
         searchSummary: lane === "broad-recall"
-          ? `Hosted Astra broad-recall returned ${laneLeads.length} candidate source${laneLeads.length === 1 ? "" : "s"} across ${input.claims.length} claim lane${input.claims.length === 1 ? "" : "s"}.`
+          ? `Hosted ${providerLabel} broad-recall returned ${laneLeads.length} candidate source${laneLeads.length === 1 ? "" : "s"} across ${input.claims.length} claim lane${input.claims.length === 1 ? "" : "s"}.`
           : lane === "context"
-            ? `Hosted Astra context lane returned ${laneLeads.length} signal${laneLeads.length === 1 ? "" : "s"} (context only; cannot promote to evidence).`
-            : `Hosted Astra applicability lane returned ${laneLeads.length} candidate source${laneLeads.length === 1 ? "" : "s"}.`,
+            ? `Hosted ${providerLabel} context lane returned ${laneLeads.length} signal${laneLeads.length === 1 ? "" : "s"} (context only; cannot promote to evidence).`
+            : `Hosted ${providerLabel} applicability lane returned ${laneLeads.length} candidate source${laneLeads.length === 1 ? "" : "s"}.`,
         unsearchedBoundaries: [] as string[],
         leadIds: (laneLeads.length ? laneLeads : leads.filter((lead) => lead.lane === "broad-recall")).map((lead) => lead.id),
       };
@@ -339,14 +457,14 @@ export async function POST(request: Request) {
       question: input.question,
       compiledQuestion,
       generatedAt: new Date().toISOString(),
-      model: "Astra · web search",
+      model,
       lanes: presentLaneResults.slice(0, 12),
       leads: leads.slice(0, 24),
       toolTrace: [],
       observability: {
         mode: "model-reported-only",
         capturedToolEvents: 0,
-        boundary: "Astra web search returns cited synthesis, not a verifiable WebSearch/WebFetch trace; leads are model-reported discovery only.",
+        boundary: "Web search returns cited synthesis, not a verifiable WebSearch/WebFetch trace; leads are model-reported discovery only. Acquisition, extraction, and promotion remain separate gates.",
       },
       cache: {
         status: input.refresh ? "bypass" : "miss",

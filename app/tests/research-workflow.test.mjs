@@ -48,13 +48,14 @@ test("the capability rail explains placeholder capabilities as planned", async (
 });
 
 test("research route keeps discovery separate from evidence promotion", async () => {
-  const [dashboard, api, deepDiveApi, promoteApi, database, decision] = await Promise.all([
+  const [dashboard, api, deepDiveApi, promoteApi, database, decision, recallApi] = await Promise.all([
     readFile(new URL("../app/research/research-dashboard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/research/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/deep-dive/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/promote/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/synthesis/decision-workbench.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/recall/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(dashboard, /Search rank is not evidential weight/);
   assert.doesNotMatch(dashboard, /Promise\.all\(researchLanes\.map/);
@@ -89,6 +90,8 @@ test("research route keeps discovery separate from evidence promotion", async ()
   assert.match(dashboard, /Launch both agents/);
   assert.match(dashboard, /Recall layer · Lead-only/);
   assert.match(dashboard, /Use query in PubMed lane/);
+  assert.match(recallApi, /openrouter:web_search/);
+  assert.match(recallApi, /Astra fallback · web search/);
 });
 
 test("abstract extraction keeps provider constraints separate from semantic validation", () => {
