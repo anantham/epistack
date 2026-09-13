@@ -197,7 +197,10 @@ export async function POST(request: Request) {
     return {
       model: 'lyra-chatgpt-pro',
       background: true,
-      reasoning: { effort: 'high' },
+      // Brief compilation is an interactive stage. Medium effort keeps the
+      // hosted browser lane responsive; malformed output still goes through
+      // the strict OpenRouter repair/fallback path below.
+      reasoning: { effort: 'medium' },
       instructions: agent.instructions + '\nReturn only one JSON object matching this schema. No markdown fences.\n' + JSON.stringify(z.toJSONSchema(researchBriefDraftSchema)),
       input: renderAgentPrompt(agent.taskTemplate, values),
       metadata: { client_job: 'epistack-hosted-research-brief-compiler' },
@@ -208,7 +211,7 @@ export async function POST(request: Request) {
     return {
       model: 'lyra-chatgpt-pro',
       background: true,
-      reasoning: { effort: 'high' },
+      reasoning: { effort: 'medium' },
       instructions: agent.instructions + repairInstruction(researchBriefDraftSchema, issues),
       input: `Repair the previous research brief response below. Preserve its substantive claims where possible, but return a complete valid JSON object.\n\nPREVIOUS RESPONSE\n${raw.slice(0, 40_000)}`,
       metadata: { client_job: 'epistack-hosted-research-brief-compiler-repair' },
