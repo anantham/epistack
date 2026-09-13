@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { env } from "cloudflare:workers";
 import { renderAgentPrompt, resolveAgentPrompt, sanitizeAgentPromptOverrides, type AgentPromptOverrides } from "../../../lib/agent-prompts";
 import {
   adversarialReviewSchema,
@@ -20,6 +21,85 @@ const primaryModel = "Astra · GPT 6";
 // differ, and Astra exposes one general chat model.
 const adversaryModel = "Astra · adversarial full-paper reviewer";
 const hostedTextCap = 55_000;
+
+type InvestigateEnvironment = {
+  OPENROUTER_API_KEY?: string;
+  EPISTACK_OPENROUTER_MODEL?: string;
+  EPISTACK_OPENROUTER_REPAIR_MODEL?: string;
+};
+
+type OpenRouterMessage = {
+  content?: string | Array<{ type?: string; text?: string }>;
+};
+
+function investigateEnvironment() {
+  return env as unknown as InvestigateEnvironment;
+}
+
+function openRouterModel(role: "extractor" | "reviewer") {
+  const current = investigateEnvironment();
+  return role === "extractor"
+    ? current.EPISTACK_OPENROUTER_MODEL || "deepseek/deepseek-v4.1-flash"
+    : current.EPISTACK_OPENROUTER_REPAIR_MODEL || "openai/gpt-4o-mini";
+}
+
+function openRouterConfigured() {
+  return Boolean(investigateEnvironment().OPENROUTER_API_KEY);
+}
+
+function openRouterMessageText(message: OpenRouterMessage) {
+  if (typeof message.content === "string") return message.content;
+  return (message.content || []).map((part) => part.text || "").join("\n");
+}
+
+async function runOpenRouterStructured(input: string, instructions: string, role: "extractor" | "reviewer") {
+  const apiKey = investigateEnvironment().OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("The hosted OpenRouter investigation fallback is not configured.");
+  const model = openRouterModel(role);
+  let response: Response;
+  try {
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://epistack.adityaarpitha.com",
+        "X-OpenRouter-Title": "Epistack Evidence Lab",
+        "X-OpenRouter-Metadata": "enabled",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: instructions },
+          { role: "user", content: input },
+        ],
+        response_format: { type: "json_object" },
+        reasoning: { effort: "none" },
+        temperature: 0,
+        max_tokens: 7_000,
+      }),
+      signal: AbortSignal.timeout(90_000),
+    });
+  } catch {
+    throw new Error("The hosted OpenRouter investigation fallback could not be reached.");
+  }
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const payload = await response.json() as { error?: { message?: string } };
+      detail = payload.error?.message || "";
+    } catch {
+      // Keep provider failures bounded and free of response-body surprises.
+    }
+    throw new Error(`The hosted OpenRouter investigation fallback returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : "."}`);
+  }
+  const payload = await response.json() as { choices?: Array<{ message?: OpenRouterMessage }> };
+  const message = payload.choices?.[0]?.message;
+  if (!message) throw new Error("The hosted OpenRouter investigation fallback returned no message.");
+  const text = openRouterMessageText(message).trim();
+  if (!text) throw new Error("The hosted OpenRouter investigation fallback returned an empty response.");
+  return { text, model };
+}
 
 const json = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
@@ -258,7 +338,7 @@ export async function POST(request: Request) {
   if (origin && origin !== new URL(request.url).origin) {
     return json({ error: "Use this site to run a hosted full-text review." }, 403);
   }
-  if (!lyraConfigured()) {
+  if (!lyraConfigured() && !openRouterConfigured()) {
     return json({ error: "Hosted full-text review is not configured yet.", code: "hosted-not-configured" }, 503);
   }
 
@@ -334,23 +414,38 @@ export async function POST(request: Request) {
 
     const extractorAgent = resolveAgentPrompt("full-paper-extractor", promptOverrides);
     const extractorTask = renderAgentPrompt(extractorAgent.taskTemplate, commonValues);
-    const primaryRaw = await runLyraStage({
-      model: "lyra-chatgpt-pro",
-      effort: "medium",
-      instructions: extractorAgent.instructions
-        + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
-        + JSON.stringify(z.toJSONSchema(fullPaperExtractionSchema)),
-      input: extractorTask,
-    });
+    async function structuredStage(input: string, instructions: string, role: "extractor" | "reviewer") {
+      if (lyraConfigured()) {
+        try {
+          const text = await runLyraStage({
+            model: "lyra-chatgpt-pro",
+            effort: "medium",
+            instructions,
+            input,
+          });
+          return { text, model: role === "extractor" ? primaryModel : adversaryModel };
+        } catch (error) {
+          if (!isBackendUnreachable(error) || !openRouterConfigured()) throw error;
+        }
+      }
+      return {
+        ...await runOpenRouterStructured(input, instructions, role),
+        model: `OpenRouter · ${openRouterModel(role)} · ${role === "extractor" ? "extractor" : "adversarial reviewer"}`,
+      };
+    }
+
+    const extractorInstructions = extractorAgent.instructions
+      + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
+      + JSON.stringify(z.toJSONSchema(fullPaperExtractionSchema));
+    const primaryStage = await structuredStage(extractorTask, extractorInstructions, "extractor");
     const primary = await parseStructuredWithRepair({
-      text: primaryRaw,
+      text: primaryStage.text,
       schema: fullPaperExtractionSchema,
-      repair: async ({ raw, issues }) => runLyraStage({
-        model: "lyra-chatgpt-pro",
-        effort: "medium",
-        instructions: extractorAgent.instructions + repairInstruction(fullPaperExtractionSchema, issues),
-        input: `${extractorTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
-      }),
+      repair: async ({ raw, issues }) => (await structuredStage(
+        `${extractorTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
+        extractorAgent.instructions + repairInstruction(fullPaperExtractionSchema, issues),
+        "extractor",
+      )).text,
     });
 
     const indexedCandidate = primary.results.map((result, resultIndex) => ({ resultIndex, ...result }));
@@ -359,23 +454,18 @@ export async function POST(request: Request) {
       ...commonValues,
       candidateJson: JSON.stringify({ ...primary, results: indexedCandidate }, null, 2),
     });
-    const reviewRaw = await runLyraStage({
-      model: "lyra-chatgpt-pro",
-      effort: "medium",
-      instructions: reviewerAgent.instructions
-        + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
-        + JSON.stringify(z.toJSONSchema(adversarialReviewSchema)),
-      input: reviewerTask,
-    });
+    const reviewerInstructions = reviewerAgent.instructions
+      + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
+      + JSON.stringify(z.toJSONSchema(adversarialReviewSchema));
+    const reviewStage = await structuredStage(reviewerTask, reviewerInstructions, "reviewer");
     const review = await parseStructuredWithRepair({
-      text: reviewRaw,
+      text: reviewStage.text,
       schema: adversarialReviewSchema,
-      repair: async ({ raw, issues }) => runLyraStage({
-        model: "lyra-chatgpt-pro",
-        effort: "medium",
-        instructions: reviewerAgent.instructions + repairInstruction(adversarialReviewSchema, issues),
-        input: `${reviewerTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
-      }),
+      repair: async ({ raw, issues }) => (await structuredStage(
+        `${reviewerTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
+        reviewerAgent.instructions + repairInstruction(adversarialReviewSchema, issues),
+        "reviewer",
+      )).text,
     });
 
     const adjudicated = adjudicateDualReview({
@@ -383,8 +473,8 @@ export async function POST(request: Request) {
       review,
       fullText: plainText,
       artifact,
-      primaryModel,
-      adversaryModel,
+      primaryModel: primaryStage.model,
+      adversaryModel: reviewStage.model,
     });
     const cacheKey = `investigate-${(await sha256(JSON.stringify({
       pmid,
@@ -409,7 +499,7 @@ export async function POST(request: Request) {
         rejectedCount: adjudicated.rejectedCount,
         reasons: adjudicated.reasons,
       },
-      models: { primary: primaryModel, adversary: adversaryModel },
+      models: { primary: primaryStage.model, adversary: reviewStage.model },
       verificationStatus: "ai-cross-checked-full-text",
       cache: { status: refresh ? "bypass" : "miss", key: cacheKey, createdAt: new Date().toISOString() },
     };

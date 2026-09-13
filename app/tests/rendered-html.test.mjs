@@ -168,6 +168,21 @@ test("brief compilation keeps a fast OpenRouter model available when the primary
   assert.match(map, /function backToInterview\(\) \{\s*window\.localStorage\.removeItem\(briefCompileStorageKey\);/);
 });
 
+test("hosted investigation and recall survive an Astra outage with strict provider labels", async () => {
+  const [investigate, recall, dashboard] = await Promise.all([
+    readFile(new URL("app/api/investigate/route.ts", root), "utf8"),
+    readFile(new URL("app/api/recall/route.ts", root), "utf8"),
+    readFile(new URL("app/research/research-dashboard.tsx", root), "utf8"),
+  ]);
+  assert.match(investigate, /runOpenRouterStructured/);
+  assert.match(investigate, /response_format: \{ type: "json_object" \}/);
+  assert.match(investigate, /OpenRouter · \$\{openRouterModel\(role\)\}/);
+  assert.match(recall, /parseStructuredWithRepair/);
+  assert.match(recall, /openRouterJson/);
+  assert.match(dashboard, /Hosted evidence backend/);
+  assert.doesNotMatch(dashboard, /Local Claude companion/);
+});
+
 test("settings validate the key, credits, and model with distinct failures", async () => {
   const [frame, validation, failures, api] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),

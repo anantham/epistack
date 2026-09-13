@@ -316,7 +316,7 @@ export function ResearchDashboard() {
   });
   const [sourceReviews, setSourceReviews] = useState<Record<string, SourceReviewRun>>({});
   const [storageReady, setStorageReady] = useState(false);
-  const [companion, setCompanion] = useState<CompanionHealth>({ status: "checking", models: null, detail: "Checking the local Claude companion…" });
+  const [companion, setCompanion] = useState<CompanionHealth>({ status: "checking", models: null, detail: "Checking the hosted evidence backend…" });
 
   const activeCount = useMemo(
     () => Object.values(runs).filter((run) => run.status === "running").length,
@@ -344,9 +344,9 @@ export function ResearchDashboard() {
     // fetch from this page — a hosted run keeps the browser off the Local
     // Network Access permission prompt.
     setCompanion({
-      status: "online",
-      models: { primary: "Astra · GPT 6", adversary: "Astra · adversarial reviewer" },
-      detail: "Lead discovery, full-text extraction, adversarial review, and synthesis run on Astra.",
+      status: "hosted",
+      models: { primary: "Astra · GPT 6 → OpenRouter fallback", adversary: "Astra · adversarial reviewer → OpenRouter fallback" },
+      detail: "Lead discovery, full-text extraction, adversarial review, and synthesis run on hosted backends. The browser never contacts a local companion.",
     });
   }
 
@@ -900,7 +900,7 @@ export function ResearchDashboard() {
   async function investigateFullText(record: PubmedDiscovery, refresh = false) {
     setDeepDives((current) => ({
       ...current,
-      [record.pmid]: { status: "reviewing", payload: null, checked: false, error: "", progress: "Acquiring and cross-checking the full paper on Astra", fallbackAvailable: false },
+      [record.pmid]: { status: "reviewing", payload: null, checked: false, error: "", progress: "Acquiring and cross-checking the full paper on the hosted evidence backend", fallbackAvailable: false },
     }));
     try {
       const workspace = currentWorkspace();
@@ -938,7 +938,7 @@ export function ResearchDashboard() {
     }
   }
 
-  const localAgentControlsAvailable = companion.status === "online";
+  const localAgentControlsAvailable = companion.status === "online" || companion.status === "hosted";
   const artifactHref = caseId ? `/artifact?caseId=${encodeURIComponent(caseId)}` : "/artifact";
   const refreshInvestigation = () => {
     if (!brief || activeLanes.length === 0 || activeCount > 0 || recall.status === "running") return;
@@ -1006,7 +1006,7 @@ export function ResearchDashboard() {
           <div className="eyebrow">Investigation cockpit · Compiled research contract</div>
           <h1>Direct the search. Let independent agents do the first audit.</h1>
           <p className="lede">
-            Each lane is traced to the human-edited scope, runs a real editable PubMed sweep, and keeps personal context local for applicability checks. A local Claude companion preserves full text, extracts atomic results, and attacks them with a different model.
+            Each lane is traced to the human-edited scope, runs a real editable PubMed sweep, and keeps personal context local for applicability checks. Hosted extraction preserves the full text, produces atomic results, and runs an independent adversarial pass.
           </p>
         </div>
             <button className="primary-button run-all" onClick={() => void runAll(false)} disabled={activeCount > 0 || activeLanes.length === 0}>
@@ -1056,9 +1056,9 @@ export function ResearchDashboard() {
         </p>
       </section>
 
-      <section className={`local-companion-status ${companion.status}`} aria-label="Local Claude companion status">
+      <section className={`local-companion-status ${companion.status}`} aria-label="Hosted evidence backend status">
         <div><i aria-hidden="true" /><span>{companion.status}</span></div>
-        <p><strong>Local Claude companion</strong>{companion.models ? ` · ${companion.models.primary} extracts, ${companion.models.adversary} challenges` : ""}</p>
+        <p><strong>Hosted evidence backend</strong>{companion.models ? ` · ${companion.models.primary} extracts, ${companion.models.adversary} challenges` : ""}</p>
         <small>{companion.detail}</small>
         <button type="button" onClick={() => void checkCompanion()} disabled={companion.status === "checking"}>{companion.status === "checking" ? "Checking…" : "Check again"}</button>
       </section>
@@ -1075,7 +1075,7 @@ export function ResearchDashboard() {
               className="primary-button"
               onClick={() => void runRecall(false)}
               disabled={!localAgentControlsAvailable || recallSelectedClaimIds.length === 0 || recall.status === "running"}
-              title={localAgentControlsAvailable ? "Launch both local recall agents." : companion.detail}
+              title={localAgentControlsAvailable ? "Launch both hosted recall agents." : companion.detail}
             >
               {recall.status === "running" ? "Agents searching…" : "Launch both agents"}
             </button>
@@ -1404,7 +1404,7 @@ export function ResearchDashboard() {
                                 <button
                                   onClick={() => investigateFullText(record)}
                                   disabled={!localAgentControlsAvailable || agentBusy || deepDive.status === "persisted"}
-                                  title={localAgentControlsAvailable ? "Acquire and cross-check the full paper with the local companion." : companion.detail}
+                                  title={localAgentControlsAvailable ? "Acquire and cross-check the full paper with the hosted evidence backend." : companion.detail}
                                 >
                                   {actionLabel}
                                 </button>
@@ -1428,7 +1428,7 @@ export function ResearchDashboard() {
                                       <strong>{dualPayload.promotion.acceptedCount} promoted · {dualPayload.promotion.rejectedCount} rejected</strong>
                                     </div>
                                     <div className="candidate-cache-meta">
-                                      <em>{dualPayload.cache.status === "hit" ? "reused local agent cache" : dualPayload.cache.status === "bypass" ? "recomputed locally" : "fresh local run"}</em>
+                                      <em>{dualPayload.cache.status === "hit" ? "reused hosted operation cache" : dualPayload.cache.status === "bypass" ? "recomputed live" : "fresh hosted run"}</em>
                                       <small>{dualPayload.models.primary} → {dualPayload.models.adversary}</small>
                                     </div>
                                   </header>
@@ -1570,7 +1570,7 @@ export function ResearchDashboard() {
             ))}
           </div>
         ) : (
-          <p>No live discovery has crossed the gate in this case yet. Run a local full-paper cross-check, or explicitly inspect and promote an abstract-only fallback, to create the first provenance-bearing record.</p>
+          <p>No live discovery has crossed the gate in this case yet. Run a hosted full-paper cross-check, or explicitly inspect and promote an abstract-only fallback, to create the first provenance-bearing record.</p>
         )}
       </section>
 

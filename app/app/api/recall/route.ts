@@ -2,6 +2,7 @@ import { z } from "zod";
 // @ts-ignore The Cloudflare runtime module is provided by the Workers build; its ambient types are absent from this tsc project (same pre-existing condition as every other API route).
 import { env } from "cloudflare:workers";
 import { lyraConfigured, runLyraStage, isBackendUnreachable, backendUnreachableResponse } from "../../../lib/lyra-stage";
+import { parseStructuredWithRepair, repairInstruction } from "../../../lib/structured-output";
 import {
   recallResponseSchema,
   shareableApplicabilityProfileSchema,
@@ -110,6 +111,52 @@ async function openRouterChat(input: string, instructions: string, useWebSearch:
     .map((citation) => `[${citation.title || new URL(citation.url).host}](${citation.url})`)
     .join("\n");
   return { text: [text, citations].filter(Boolean).join("\n\n"), model: openRouterRecallModel() };
+}
+
+async function openRouterJson(input: string, instructions: string) {
+  const apiKey = recallEnvironment().OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OpenRouter fallback is not configured.");
+  let response: Response;
+  try {
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://epistack.adityaarpitha.com",
+        "X-OpenRouter-Title": "Epistack Evidence Lab",
+        "X-OpenRouter-Metadata": "enabled",
+      },
+      body: JSON.stringify({
+        model: openRouterRecallModel(),
+        messages: [
+          { role: "system", content: instructions },
+          { role: "user", content: input },
+        ],
+        response_format: { type: "json_object" },
+        reasoning: { effort: "none" },
+        temperature: 0,
+        max_tokens: 4_000,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch {
+    throw new Error("OpenRouter fallback could not be reached.");
+  }
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const payload = await response.json() as { error?: { message?: string } };
+      detail = payload.error?.message || "";
+    } catch {
+      // Keep provider failures bounded and free of response-body surprises.
+    }
+    throw new Error(`OpenRouter fallback returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : "."}`);
+  }
+  const payload = await response.json() as { choices?: Array<{ message?: OpenRouterMessage }> };
+  const message = payload.choices?.[0]?.message;
+  if (!message) throw new Error("OpenRouter fallback returned no message.");
+  return { text: openRouterMessageText(message), model: openRouterRecallModel() };
 }
 
 const emptyApplicabilityProfile = shareableApplicabilityProfileSchema.parse({});
@@ -231,10 +278,6 @@ function extractLinks(markdown: string) {
   return found;
 }
 
-function stripFences(value: string) {
-  return value.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-}
-
 type Lead = {
   id: string;
   lane: RecallLane;
@@ -316,12 +359,27 @@ async function classifyLeads(leads: Lead[]) {
       raw = await runLyraStage({ model: "lyra-chatgpt-pro", effort: "instant", instructions, input: JSON.stringify(list) });
     } catch (error) {
       if (!isBackendUnreachable(error) || !openRouterRecallConfigured()) throw error;
-      raw = (await openRouterChat(JSON.stringify(list), instructions, false)).text;
+      raw = (await openRouterJson(JSON.stringify(list), instructions)).text;
     }
   } else {
-    raw = (await openRouterChat(JSON.stringify(list), instructions, false)).text;
+    raw = (await openRouterJson(JSON.stringify(list), instructions)).text;
   }
-  const envelope = classificationEnvelopeSchema.parse(JSON.parse(stripFences(raw)));
+  let envelope: z.infer<typeof classificationEnvelopeSchema>;
+  try {
+    envelope = await parseStructuredWithRepair({
+      text: raw,
+      schema: classificationEnvelopeSchema,
+      repair: async ({ raw: previous, issues }) => (await openRouterJson(
+        JSON.stringify(list),
+        instructions + repairInstruction(classificationEnvelopeSchema, issues)
+          + `\nPREVIOUS ATTEMPT:\n${previous.slice(0, 12_000)}`,
+      )).text,
+    });
+  } catch {
+    // Classification is an enhancement. If a provider cannot classify this
+    // batch, the leads remain visible with their explicit `other` class.
+    envelope = classificationEnvelopeSchema.parse({ classifications: [] });
+  }
   const classifications = envelope.classifications.flatMap((candidate) => {
     const parsed = classificationItemSchema.safeParse(candidate);
     return parsed.success ? [parsed.data] : [];
