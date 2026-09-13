@@ -446,7 +446,7 @@ export async function POST(request: Request) {
             ? `Hosted ${providerLabel} context lane returned ${laneLeads.length} signal${laneLeads.length === 1 ? "" : "s"} (context only; cannot promote to evidence).`
             : `Hosted ${providerLabel} applicability lane returned ${laneLeads.length} candidate source${laneLeads.length === 1 ? "" : "s"}.`,
         unsearchedBoundaries: [] as string[],
-        leadIds: (laneLeads.length ? laneLeads : leads.filter((lead) => lead.lane === "broad-recall")).map((lead) => lead.id),
+        leadIds: (laneLeads.length ? laneLeads : leads.filter((lead) => lead.lane === "broad-recall")).map((lead) => lead.id).slice(0, 12),
       };
     });
     const presentLaneResults = laneResults.filter((lane) => lane.leadIds.length > 0);

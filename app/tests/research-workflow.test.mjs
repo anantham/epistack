@@ -92,6 +92,7 @@ test("research route keeps discovery separate from evidence promotion", async ()
   assert.match(dashboard, /Use query in PubMed lane/);
   assert.match(recallApi, /openrouter:web_search/);
   assert.match(recallApi, /Astra fallback · web search/);
+  assert.match(recallApi, /map\(\(lead\) => lead\.id\)\.slice\(0, 12\)/);
 });
 
 test("abstract extraction keeps provider constraints separate from semantic validation", () => {
