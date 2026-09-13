@@ -246,6 +246,7 @@ export async function POST(request: Request) {
         prompt: renderAgentPrompt(agent.taskTemplate, values),
         maxOutputTokens: agent.maxOutputTokens,
         temperature: agent.temperature,
+        abortSignal: AbortSignal.timeout(30000),
       });
       return { draft: result.output, model: modelId };
     } catch (error) {
@@ -279,6 +280,7 @@ export async function POST(request: Request) {
         prompt: `Repair this malformed research brief response. Preserve its substantive content and return only the complete JSON object.\n\n${raw.slice(0, 40_000)}`,
         maxOutputTokens: agent.maxOutputTokens,
         temperature: 0,
+        abortSignal: AbortSignal.timeout(30000),
       });
       return { draft: result.output, model: modelId };
     } catch (error) {
