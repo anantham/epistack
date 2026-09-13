@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { createOpenAI } from '@ai-sdk/openai';
+import { generateText, Output } from 'ai';
 // @ts-ignore The Cloudflare runtime module is provided by the Workers build; its ambient types are absent from this tsc project (same pre-existing condition as every other API route).
 import { env } from 'cloudflare:workers';
 import { getD1, ensureHostedJobTables } from '../../../db';
@@ -6,6 +8,10 @@ import { resolveAgentPrompt, renderAgentPrompt, sanitizeAgentPromptOverrides, ty
 import { dimensionRoleSchema, researchBriefDraftSchema, researchBriefSchema, normalizeResearchBriefDraft, buildDimensionAssignments, type DimensionRole } from '../../../lib/research-brief';
 import type { DecompositionCluster } from '../../../lib/decomposition';
 import { parseStructured } from '../../../lib/structured-output';
+import { openRouterFailureFromThrown } from '../../../lib/openrouter-errors';
+
+const defaultOpenRouterModel = 'anthropic/claude-opus-4.8';
+const openRouterBaseURL = 'https://openrouter.ai/api/v1';
 
 const contextQuestionSchema = z.object({
   id: z.string().min(1),
@@ -58,6 +64,7 @@ type State = {
   code?: string;
   rateLimits?: number;
   origin?: string;
+  compiledBy?: string;
 };
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -85,7 +92,12 @@ function parseDraftText(text: string) {
 export async function POST(request: Request) {
   const origin = request.headers.get('origin');
   if (origin && origin !== new URL(request.url).origin) return json({ error: 'Use this site to compile a research brief.' }, 403);
-  const config = env as unknown as { LYRA_PUBLIC_GATEWAY_URL?: string; LYRA_API_KEY?: string };
+  const config = env as unknown as {
+    LYRA_PUBLIC_GATEWAY_URL?: string;
+    LYRA_API_KEY?: string;
+    OPENROUTER_API_KEY?: string;
+    EPISTACK_OPENROUTER_MODEL?: string;
+  };
   if (!config.LYRA_PUBLIC_GATEWAY_URL || !config.LYRA_API_KEY) return json({ error: 'Hosted brief compilation is not configured yet.', code: 'hosted-not-configured' }, 503);
   let body: Record<string, unknown>;
   try {
@@ -182,13 +194,81 @@ export async function POST(request: Request) {
       metadata: { client_job: 'epistack-hosted-research-brief-compiler' },
     };
   }
+  async function openRouterCompilerRequest(current: State) {
+    const apiKey = config.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error('Astra is unreachable and the hosted fallback is not configured.');
+    const modelId = config.EPISTACK_OPENROUTER_MODEL || defaultOpenRouterModel;
+    const agent = resolveAgentPrompt('research-brief-compiler', current.promptOverrides);
+    const dimensionAssignments = buildDimensionAssignments({ clusters: current.clusters, dimensionRoles: current.dimensionRoles });
+    const values = {
+      question: current.originalQuestion,
+      compiledQuestion: current.compiledQuestion,
+      decisionContext: current.decisionContext || 'No personal context supplied. Preserve this as an explicit limitation.',
+      dimensionAssignmentsJson: JSON.stringify(dimensionAssignments, null, 2),
+      axesJson: JSON.stringify(current.clusters.map((cluster) => ({ id: cluster.id, label: cluster.label })), null, 2),
+      knownUnknownsJson: JSON.stringify(current.knownUnknowns, null, 2),
+    };
+    const openRouter = createOpenAI({
+      apiKey,
+      baseURL: openRouterBaseURL,
+      headers: {
+        'HTTP-Referer': new URL(request.url).origin,
+        'X-OpenRouter-Title': 'Epistack Evidence Lab',
+        'X-OpenRouter-Metadata': 'enabled',
+      },
+    });
+    try {
+      const result = await generateText({
+        model: openRouter(modelId),
+        output: Output.object({
+          name: 'research_brief',
+          description: 'A validated research contract with claim frames for a decision question.',
+          schema: researchBriefDraftSchema,
+        }),
+        system: agent.instructions,
+        prompt: renderAgentPrompt(agent.taskTemplate, values),
+        maxOutputTokens: agent.maxOutputTokens,
+        temperature: agent.temperature,
+      });
+      return { draft: result.output, model: modelId };
+    } catch (error) {
+      const failure = openRouterFailureFromThrown(error);
+      throw new Error(failure.message);
+    }
+  }
   try {
     if (state.status === 'submitting') throw new Error('Submission was interrupted before its receipt was saved. Stopped to avoid consuming another job; owner review is needed.');
     if (!['completed', 'failed'].includes(state.status) && Date.now() >= (state.nextAt || 0)) {
       if (!state.remoteId) {
         state.status = 'submitting';
         await save();
-        const created = await remote('/v1/responses', compilerRequest(state)) as { id?: string } | null;
+        let created: { id?: string } | null;
+        try {
+          created = await remote('/v1/responses', compilerRequest(state)) as { id?: string } | null;
+        } catch (error) {
+          if ((error as { code?: string })?.code !== 'backend-unreachable' || !config.OPENROUTER_API_KEY) throw error;
+          const fallback = await openRouterCompilerRequest(state);
+          const normalized = normalizeResearchBriefDraft(fallback.draft, state.clusters.map((cluster) => cluster.id));
+          state.brief = researchBriefSchema.parse({
+            ...normalized,
+            schemaVersion: '0.2.0',
+            briefId: `brief-${state.caseId.slice(0, 60)}-${shortHash(state.caseId + state.compiledQuestion)}`,
+            caseId: state.caseId,
+            originalQuestion: state.originalQuestion,
+            compiledQuestion: state.compiledQuestion,
+            decisionContext: state.decisionContext,
+            dimensionAssignments: buildDimensionAssignments({ clusters: state.clusters, dimensionRoles: state.dimensionRoles }),
+            privacy: {
+              localContextPolicy: 'The full decision context stays in this device-local brief and is used only to compile the research contract; it is not sent to PubMed.',
+              outboundQueryPolicy: "Only each claim's compact searchQuery and publication filters leave the workflow during discovery.",
+            },
+            generatedAt: new Date().toISOString(),
+            compiledBy: `OpenRouter · ${fallback.model} (Astra fallback)`,
+          });
+          state.compiledBy = `OpenRouter · ${fallback.model} (Astra fallback)`;
+          state.status = 'completed';
+          created = null;
+        }
         if (created) {
           if (!/^job_[a-zA-Z0-9_-]+$/.test(created.id || '')) throw new Error('Backend did not return a durable job receipt.');
           state.remoteId = created.id;
@@ -213,7 +293,7 @@ export async function POST(request: Request) {
               outboundQueryPolicy: "Only each claim's compact searchQuery and publication filters leave the workflow during discovery.",
             },
             generatedAt: new Date().toISOString(),
-            compiledBy: 'Astra · GPT 6',
+            compiledBy: state.compiledBy || 'Astra · GPT 6',
           });
           state.status = 'completed';
         } else if (result && ['failed', 'cancelled', 'incomplete'].includes(result.status || '')) {
