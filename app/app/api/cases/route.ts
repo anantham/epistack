@@ -1,9 +1,11 @@
 import { ensureSnapshotTables, getD1 } from "../../../db";
+import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
 
 type ArtifactPayload = {
   caseId?: string;
   originalPrompt?: string;
   compiledClaim?: { statement?: string } | null;
+  claims?: unknown;
 };
 
 function routeError(error: unknown) {
@@ -27,8 +29,15 @@ export async function POST(request: Request) {
     const activeQuestion = artifact.compiledClaim?.statement?.trim() || null;
     const title = originalPrompt.replace(/\s+/g, " ").slice(0, 120);
     const slug = `case-${caseId.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+    const parsedClaims = artifact.claims === undefined
+      ? { success: true as const, data: [] as ResearchClaimFrame[] }
+      : researchClaimFrameSchema.array().min(3).max(7).safeParse(artifact.claims);
+    if (!parsedClaims.success) {
+      return Response.json({ error: "The shareable claim contract is incomplete or invalid." }, { status: 400 });
+    }
+    const claims = parsedClaims.data;
 
-    await d1.batch([
+    const statements = [
       d1
         .prepare(`INSERT INTO cases (
           id, slug, title, original_prompt, active_question, status, created_at, updated_at
@@ -52,9 +61,38 @@ export async function POST(request: Request) {
           id, case_id, parent_id, actor, operation, artifact_json, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?)`)
         .bind(snapshotId, caseId, null, "human-ai-workflow", "save-snapshot", JSON.stringify(artifact), now),
-    ]);
+      ...claims.map((claim) => d1.prepare(`INSERT INTO claim_frames (
+        id, case_id, statement, population_json, exposure_json, comparator_json, outcome_json,
+        time_horizon, modality, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        case_id = excluded.case_id,
+        statement = excluded.statement,
+        population_json = excluded.population_json,
+        exposure_json = excluded.exposure_json,
+        comparator_json = excluded.comparator_json,
+        outcome_json = excluded.outcome_json,
+        time_horizon = excluded.time_horizon,
+        modality = excluded.modality,
+        status = excluded.status,
+        updated_at = excluded.updated_at`).bind(
+        `${caseId}-${claim.id}`,
+        caseId,
+        claim.statement,
+        JSON.stringify({ description: claim.population }),
+        JSON.stringify({ description: claim.exposure }),
+        JSON.stringify({ description: claim.comparator }),
+        JSON.stringify({ description: claim.outcome }),
+        claim.timeHorizon,
+        claim.modality,
+        "proposed",
+        now,
+        now,
+      )),
+    ];
+    await d1.batch(statements);
 
-    return Response.json({ caseId, snapshotId, savedAt: now }, { status: 201 });
+    return Response.json({ caseId, snapshotId, savedAt: now, claimCount: claims.length }, { status: 201 });
   } catch (error) {
     return routeError(error);
   }

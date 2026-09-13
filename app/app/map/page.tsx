@@ -104,6 +104,7 @@ export default function ContextualizeMap() {
   const [compileState, setCompileState] = useState<"idle" | "compiling" | "review" | "error">("idle");
   const [compileProgress, setCompileProgress] = useState("");
   const [compileError, setCompileError] = useState("");
+  const [savingContract, setSavingContract] = useState(false);
   const [compiledBrief, setCompiledBrief] = useState<ResearchBrief | null>(null);
   const [editedClaims, setEditedClaims] = useState<ResearchClaimFrame[]>([]);
   const [recomputing, setRecomputing] = useState(false);
@@ -424,13 +425,35 @@ export default function ContextualizeMap() {
   }
 
   function confirmAndStartResearch() {
-    if (!compiledBrief) return;
+    if (!compiledBrief || savingContract) return;
     const brief: ResearchBrief = { ...compiledBrief, claims: editedClaims };
-    window.localStorage.setItem(researchBriefStorageKey, JSON.stringify(brief));
-    window.localStorage.removeItem(briefCompileStorageKey);
-    window.localStorage.removeItem("epistack:research-ui-cache:v1");
-    window.localStorage.removeItem("epistack:research-ui-cache:v2");
-    router.push("/research");
+    setCompileError("");
+    setSavingContract(true);
+    void (async () => {
+      try {
+        const response = await fetch("/api/cases", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            caseId: brief.caseId,
+            originalPrompt: brief.originalQuestion,
+            compiledClaim: { statement: brief.compiledQuestion },
+            claims: brief.claims,
+          }),
+        });
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        if (!response.ok) throw new Error(payload?.error || "The shareable research contract could not be saved.");
+        window.localStorage.setItem(researchBriefStorageKey, JSON.stringify(brief));
+        window.localStorage.removeItem(briefCompileStorageKey);
+        window.localStorage.removeItem("epistack:research-ui-cache:v1");
+        window.localStorage.removeItem("epistack:research-ui-cache:v2");
+        router.push("/research");
+      } catch (error) {
+        setCompileError(error instanceof Error ? error.message : "The shareable research contract could not be saved.");
+      } finally {
+        setSavingContract(false);
+      }
+    })();
   }
 
   function backToInterview() {
@@ -641,8 +664,11 @@ export default function ContextualizeMap() {
                 ))}
                 <div className="elicitation-actions" style={{ gridTemplateColumns: "1fr auto", gap: 12 }}>
                   <button type="button" className="icon-button" style={{ width: "auto", padding: "0 18px" }} onClick={backToInterview}>Back</button>
-                  <button type="button" className="primary-button" onClick={confirmAndStartResearch}>Confirm and start research</button>
+                  <button type="button" className="primary-button" onClick={confirmAndStartResearch} disabled={savingContract} aria-busy={savingContract}>
+                    {savingContract ? "Saving research contract…" : "Confirm and start research"}
+                  </button>
                 </div>
+                {compileError && <p className="error-text" style={{ color: "red", marginTop: 14 }}>{compileError}</p>}
               </div>
             </section>
           )}
