@@ -2,7 +2,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, Output } from "ai";
 import { env } from "cloudflare:workers";
 import { operationCacheKey, readOperationCache, writeOperationCache } from "../../../db/cache";
-import type { DecompositionResponse } from "../../../lib/decomposition";
+import type { DecompositionResponse, DecompositionProvenance } from "../../../lib/decomposition";
 import {
   assembleDecomposition,
   contextAgentOutputSchema,
@@ -67,6 +67,30 @@ const modelIdPattern = /^[a-z0-9._-]+\/[a-z0-9._:-]+$/i;
 
 function issueSummary(issues: Array<{ path: PropertyKey[]; message: string }>) {
   return issues.slice(0, 5).map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`).join("; ");
+}
+
+function specialistFailureReason(label: string, error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (/timeout|timed out|abort/i.test(message)) return `${label} timed out before returning a usable object.`;
+  if (/length|token|truncat/i.test(message)) return `${label} was truncated before it returned a complete structured object.`;
+  return `${label} did not return schema-valid structured output after its bounded attempts.`;
+}
+
+function openRouterProvenance(model: string, traceUsed: boolean, contextUsed: boolean, traceReason?: string, contextReason?: string): DecompositionProvenance {
+  return {
+    path: "openrouter-fallback",
+    provider: "OpenRouter",
+    model,
+    stages: [
+      { stage: "dimension-scout", provider: "OpenRouter", model, status: "used" },
+      traceUsed
+        ? { stage: "trace-specialist", provider: "OpenRouter", model, status: "used" }
+        : { stage: "trace-specialist", provider: "deterministic", model: "submitted-language mapping", status: "fallback", reason: traceReason },
+      contextUsed
+        ? { stage: "context-retrieval", provider: "OpenRouter", model, status: "used" }
+        : { stage: "context-retrieval", provider: "deterministic", model: "domain-general retrieval fields", status: "fallback", reason: contextReason },
+    ],
+  };
 }
 
 export async function POST(request: Request) {
@@ -201,8 +225,20 @@ export async function POST(request: Request) {
     const payload: CachedDecomposition = {
       caseId: crypto.randomUUID(),
       mode: "local-fallback",
-      model: `Local scaffold after ${openRouterModel}`,
-      warning: "The dimension specialist did not return a usable compact object, so Epistack kept the workflow moving with an editable domain-general scaffold. This fallback was not added to the shared cache.",
+      model: "Deterministic scaffold",
+      provenance: {
+        path: "deterministic-fallback",
+        provider: "deterministic",
+        model: "domain-general scaffold",
+        stages: [{
+          stage: "dimension-scout",
+          provider: "deterministic",
+          model: "domain-general scaffold",
+          status: "fallback",
+          reason: specialistFailureReason("The dimension specialist", scoutFailure),
+        }],
+      },
+      warning: `${specialistFailureReason("The dimension specialist", scoutFailure)} Epistack kept the workflow moving with an editable domain-general scaffold. This fallback was not added to the shared cache.`,
       prompt,
       decisionContext,
       decomposition: createFallbackDecomposition(prompt, decisionContext),
@@ -276,9 +312,13 @@ export async function POST(request: Request) {
   const [traceSettled, contextSettled] = await Promise.allSettled([tracePromise, contextPromise]);
   const traceResult = traceSettled.status === "fulfilled" ? traceSettled.value : null;
   const contextResult = contextSettled.status === "fulfilled" ? contextSettled.value : null;
+  const traceFailure = traceSettled.status === "rejected" ? traceSettled.reason : null;
+  const contextFailure = contextSettled.status === "rejected" ? contextSettled.reason : null;
   const warnings: string[] = [];
-  if (!traceResult) warnings.push("The trace specialist fell back to deterministic submitted-language mapping.");
-  if (!contextResult) warnings.push("The context specialist fell back to domain-general retrieval fields and interview questions.");
+  const traceReason = traceResult ? undefined : specialistFailureReason("The trace specialist", traceFailure);
+  const contextReason = contextResult ? undefined : specialistFailureReason("The context specialist", contextFailure);
+  if (traceReason) warnings.push(`${traceReason} It fell back to deterministic submitted-language mapping.`);
+  if (contextReason) warnings.push(`${contextReason} It fell back to domain-general retrieval fields and interview questions.`);
   const decomposition = assembleDecomposition(scout, traceResult, contextResult, prompt, decisionContext);
   const validated = decompositionSchema.safeParse(decomposition);
   if (!validated.success) {
@@ -288,6 +328,7 @@ export async function POST(request: Request) {
     caseId: crypto.randomUUID(),
     mode: validated.success ? "ai" : "local-fallback",
     model: `OpenRouter · ${openRouterModel} · orchestrated specialists`,
+    provenance: openRouterProvenance(openRouterModel, Boolean(traceResult), Boolean(contextResult), traceReason, contextReason),
     warning: warnings.length ? warnings.join(" ") : null,
     prompt,
     decisionContext,

@@ -2,6 +2,8 @@
 
 **Turn a vague question into a contextualized investigation and an inspectable basis for a decision.**
 
+[Open the production site](https://epistack.adityaarpitha.com/). The repository is the canonical source; hosted deployments are published separately and should be reported with their commit and verification results.
+
 Epistack helps someone start with “Are eggs good to eat?”, discover what that depends on, supply the details of their own situation, and direct agents to gather and examine relevant information. The eventual artifact should help them decide what to do, see why, and understand what would change the answer.
 
 The broader ambition is a reliable supply chain for knowledge: conclusions connected to sources, methods, assumptions, disagreements, and revisions. The practical starting point is a person with an imperfectly specified question. They should not have to write a research protocol before asking it.
@@ -15,7 +17,7 @@ Vague question
   → 1. Decompose: what could matter?
   → 2. Contextualize: what matters for this person?
   → Research brief: scoped claims, feasible choices, constraints, and gaps
-  → 3. Investigate: agents gather and examine relevant information
+  → 3. Investigate: hosted agents gather and examine relevant information
   → Artifact: options, evidence, uncertainty, and reasons to reconsider
 ```
 
@@ -62,17 +64,23 @@ Purchasing is a separate subdecision when requested: compare actual cost, access
 
 The underlying package preserves claims, exact source material, assessments, dependencies, and revisions. Reports and decision views are projections of that package. Repeated publications of one study should not count as independent votes, and changing a load-bearing source should make affected conclusions reviewable.
 
+## Live runtime boundary
+
+The production site runs the browser interface and same-origin API routes on the Sites worker. Provider credentials stay in hosted server secrets; the browser does not receive the Lyra, Astra, or OpenRouter keys and does not call a local companion. Astra/Lyra is the primary hosted path, with server-side OpenRouter recovery when the hosted gateway is unavailable. Local development can still run the Claude companion and the explicit OpenRouter routes for inspection and comparison.
+
+Hosted decomposition jobs persist their receipts and three specialist stages in D1. The browser polls for fast progress, while the worker has a scheduled recovery sweep and a guarded manual tick endpoint. Run telemetry is available through the guarded jobs stats route. Research discovery remains lead-only until acquisition, typed extraction, review, and promotion checks succeed.
+
 ## Current code and remaining gaps
 
-Source inspection baseline: `1a7ca13` (2026-09-13). This describes the local implementation, not a claim that these commits are deployed or that live provider calls pass.
+This describes the tracked implementation in `main`. A commit being present here is not by itself proof that it is deployed or that live provider calls pass; use the release record and live verification for that distinction.
 
 | Area | Present in this checkout | Still needed to meet the vision |
 |---|---|---|
-| Decompose | Three hosted specialists for dimensions, phrase traces, and interview/evidence requirements; editable review | Preserve inferred dimensions without an exact phrase trace; replace generic fallback interview options |
+| Decompose | Three hosted specialists for dimensions, phrase traces, and interview/evidence requirements; editable review; server-side OpenRouter recovery and explicit deterministic trace fallback | Preserve inferred dimensions without an exact phrase trace; replace generic fallback interview options |
 | Contextualize | Persisted interview selections and text, hosted brief compilation, scoped claim review | Validate answer retention and unresolved fields; `compiledQuestion` is currently copied from the original prompt |
-| Recall | One broad agent per selected claim, plus one shared applicability agent and one shared context agent; best-effort source classification | Full scoped fields in agent prompts; per-task progress and failure reporting; claim/lane provenance preserved during deduplication; fair result limits |
+| Recall | One broad agent per selected claim, plus shared applicability and context lanes; hosted fallback; best-effort source classification | Full scoped fields in agent prompts; per-task progress and failure reporting; claim/lane provenance preserved during deduplication; fair result limits |
 | Source examination | PMC acquisition, public URL acquisition, a ClinicalTrials.gov adapter, typed recommendation/statistic/registry/context payloads, study extraction and adversarial review | Source-class labels and a successful fetch are not validation of completeness or causal validity; generalized artifact identity still needs work |
-| Research display | Classified leads and typed source-review cards | Persist and connect non-study findings to the Artifact and decision view under their own roles |
+| Research display | Classified leads, typed source-review cards, backend health status, and hosted/local provenance fields | Persist and connect non-study findings to the Artifact and decision view under their own roles; expose live lane progress and final provider provenance consistently |
 | Artifact and synthesis | Accepted-result graph, provenance and dependence views, graph-grounded decision infrastructure | Demonstrate the complete flow on current code, including empty/failed runs and useful multi-source decisions |
 
 The newer multi-source work is visible in `6c8983c`, `a80f84c`, `0fcd9c9`, and `357b0a2`; the Phase 1–3 hardening (structured-output repair, backend-unreachable handling, cron job driver, persistent telemetry, `tsc` gate) is in `1a7ca13`. It extends the previous PubMed-centered workflow; it does not establish end-to-end completion by itself.
@@ -84,6 +92,8 @@ The newer multi-source work is visible in `6c8983c`, `a80f84c`, `0fcd9c9`, and `
 3. **Use the full scoped contract.** The browser sends population, exposure, comparator, outcome, and horizon, but recall's prompt builder currently renders only claim ID, statement, decision relevance, and query. Include the explicit fields and relevant permitted context.
 4. **Keep discovery accounting truthful.** Deduplicate source identity while retaining every claim/lane link. A failed or empty lane should stay failed or empty; it should not inherit another lane's sources. Allocate result limits across tasks so early broad results cannot crowd out context and applicability.
 5. **Measure useful coverage.** Show which claims have usable findings, contradictions, missing context, and failed checks. Source totals and agent totals alone do not measure research quality.
+
+The current implementation also needs a consistent provider record at every user-facing stage. A fallback should say which provider and model actually answered, why the primary path was unavailable, and when a deterministic safety fallback supplied structure rather than model reasoning.
 
 ## How we judge progress
 
@@ -120,4 +130,5 @@ Use the [app README](./app/README.md) for configuration, commands, route ownersh
 - [Reference case studies](./case-studies.md) — motivating methods and the failure modes they expose.
 - [App README](./app/README.md) — current source structure and development entry point.
 - [Engineering issues](./issues.md) — backlog; verify historical entries against current code before picking up work.
+- [Task queue](./TASKS.md) — the ordered work queue for deployment, documentation, provenance, and product follow-ups.
 - [Curated eggs corpus](./app/data/eggs-weight-corpus.ts) — reference material, distinct from newly investigated live evidence.

@@ -19,7 +19,8 @@ test("question compiler stages AI reading before the editable map", async () => 
     readFile(new URL("package.json", root), "utf8"),
   ]);
 
-  assert.match(styles, /\.brand-intro\.is-docked/);
+  assert.doesNotMatch(styles, /\.intro-surface\s*\{[^}]*visibility:\s*hidden/);
+  assert.doesNotMatch(frame, /aria-hidden=\{!introComplete\}/);
   assert.doesNotMatch(styles, /font-size 1700ms/);
   assert.doesNotMatch(styles, /left 1700ms/);
   assert.doesNotMatch(styles, /@keyframes brand-arrive/);
@@ -35,6 +36,9 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(api, /https:\/\/openrouter\.ai\/api\/v1/);
   assert.match(api, /OpenRouter ·/);
   assert.match(api, /openRouterFailureFromThrown/);
+  assert.match(api, /openRouterProvenance/);
+  assert.match(api, /specialistFailureReason/);
+  assert.match(frame, /Decomposition provider and model provenance/);
   assert.match(api, /anthropic\/claude-opus-4\.8/);
   assert.match(promptRegistry, /maxOutputTokens: 5000/);
   assert.match(promptRegistry, /maxOutputTokens: 3500/);
@@ -55,7 +59,7 @@ test("starter preview has been removed", async () => {
   ]);
 
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview|Your site is taking shape/);
-  assert.match(layout, /Epistack · Question Compiler/);
+  assert.match(layout, /template: "%s · Epistack"/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
 

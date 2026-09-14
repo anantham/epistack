@@ -39,10 +39,26 @@ export type DecompositionArtifact = {
   knownUnknowns: string[];
 };
 
+export type DecompositionStageProvenance = {
+  stage: string;
+  provider: string;
+  model: string;
+  status: "used" | "fallback";
+  reason?: string;
+};
+
+export type DecompositionProvenance = {
+  path: "hosted-primary" | "openrouter-fallback" | "deterministic-fallback";
+  provider: string;
+  model: string;
+  stages: DecompositionStageProvenance[];
+};
+
 export type DecompositionResponse = {
   caseId: string;
   mode: "ai" | "local-fallback";
   model: string;
+  provenance?: DecompositionProvenance;
   warning: string | null;
   prompt: string;
   decisionContext: string;

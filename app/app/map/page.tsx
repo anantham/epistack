@@ -505,9 +505,14 @@ export default function ContextualizeMap() {
     return (
       <main className="case-layout map-layout">
         <CaseHeader active="contextualize" actions={mapActions} />
-        <div className="case-bounds">
-          <p>No clusters found. Please go back and decompose your question first.</p>
-        </div>
+        <section className="stage-empty" aria-labelledby="map-empty-title">
+          <h1 id="map-empty-title">Nothing to contextualize yet</h1>
+          <p>
+            Contextualize asks about your situation, one dimension at a time. It starts from a decomposed
+            question, and none is saved in this browser.
+          </p>
+          <Link className="primary-button" href="/">Start with a question</Link>
+        </section>
       </main>
     );
   }
@@ -515,13 +520,13 @@ export default function ContextualizeMap() {
     return (
       <main className="case-layout map-layout">
         <CaseHeader active="contextualize" actions={mapActions} />
-        <div className="case-bounds">
+        <section className="stage-empty" aria-labelledby="map-legacy-title">
+          <h1 id="map-legacy-title">This decomposition has no interview questions</h1>
           <p>
-            This saved decomposition has no interview questions — it was created before the Contextualize
-            step existed. Go back and re-decompose your question to generate them.
+            It was saved before the Contextualize step existed. Decompose the question again to generate them.
           </p>
-          <a className="primary-button" href="/">Back to decomposition</a>
-        </div>
+          <Link className="primary-button" href="/">Back to decomposition</Link>
+        </section>
       </main>
     );
   }
@@ -629,7 +634,7 @@ export default function ContextualizeMap() {
                       {editableClaimFields.map((field) => (
                         <label
                           key={field}
-                          style={{ display: "grid", gap: 4, color: "var(--green)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}
+                          style={{ display: "grid", gap: 6, color: "var(--green)", fontSize: "var(--type-label)", fontWeight: 600 }}
                         >
                           {claimFieldLabels[field]}
                           {field === "modality" ? (

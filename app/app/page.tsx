@@ -68,7 +68,6 @@ const decompositionStages = [
 const provisionalDecompositionMs = 120_000;
 
 type AnalysisPhase = "idle" | "analyzing" | "eliciting" | "review" | "transitioning" | "error";
-type IntroPhase = "typing" | "holding" | "docking" | "ready";
 type PersistedPreferences = { effort?: string };
 type PersistedWorkspace = {
   prompt?: string;
@@ -148,6 +147,7 @@ function EditableStringList({ title, items, onChange }: { title: string; items: 
         <div className="inline-edit-row" key={index}>
           <input
             className="inline-edit-input"
+            aria-label={`${title}, item ${index + 1}`}
             value={item}
             spellCheck={false}
             onChange={(event) => onChange(items.map((value, i) => (i === index ? event.target.value : value)))}
@@ -164,7 +164,6 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [decisionContext, setDecisionContext] = useState("");
   const [selectedEffort, setSelectedEffort] = useState<ThinkingEffort>(defaultEffort);
-  const [introPhase, setIntroPhase] = useState<IntroPhase>("typing");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [phase, setPhase] = useState<AnalysisPhase>("idle");
   const [result, setResult] = useState<DecompositionResponse | null>(null);
@@ -177,6 +176,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [editingClusterId, setEditingClusterId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<any>(null);
+  const [removedDimension, setRemovedDimension] = useState<{ cluster: DecompositionResponse["decomposition"]["clusters"][number]; index: number } | null>(null);
   const [hostedProgress, setHostedProgress] = useState<HostedProgress | null>(null);
   const [analysisElapsed, setAnalysisElapsed] = useState(0);
   const [analysisPass, setAnalysisPass] = useState<DecompositionPass>("initial");
@@ -196,8 +196,7 @@ export default function Home() {
   );
   const currentContextQuestion = null;
   const busy = requestPending || phase === "analyzing" || phase === "transitioning";
-  const introComplete = introPhase === "ready";
-  const brandDocked = introPhase === "docking" || introComplete;
+  const showComposerHint = prompt.trim().length > 0 && prompt.trim().length < 12;
 
   const telemetrySummary = useMemo(() => summarizeDecompositionTelemetry(telemetry), [telemetry]);
   const activeStage = Math.min(Math.max(hostedProgress?.stage ?? 0, 0), decompositionStages.length - 1);
@@ -215,23 +214,6 @@ export default function Home() {
     ? `Stage attempt ${stageAttempts}${hostedProgress?.rateLimits ? ` · ${hostedProgress.rateLimits} rate-limit pause${hostedProgress.rateLimits > 1 ? "s" : ""}` : ""}`
     : "";
   const railProgress = ((activeStage + (hostedProgress?.status === "in_progress" ? 0.55 : 0.12)) / decompositionStages.length) * 100;
-
-  useEffect(() => {
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) {
-      const reducedMotionTimer = setTimeout(() => setIntroPhase("ready"), 0);
-      return () => window.clearTimeout(reducedMotionTimer);
-    }
-
-    const holdTimer = setTimeout(() => setIntroPhase("holding"), 1300);
-    const dockTimer = setTimeout(() => setIntroPhase("docking"), 2600);
-    const readyTimer = setTimeout(() => setIntroPhase("ready"), 4800);
-    return () => {
-      window.clearTimeout(holdTimer);
-      window.clearTimeout(dockTimer);
-      window.clearTimeout(readyTimer);
-    };
-  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -342,7 +324,7 @@ export default function Home() {
     if (!input) return;
     input.style.height = "auto";
     input.style.height = `${Math.max(210, input.scrollHeight)}px`;
-  }, [prompt, introComplete, phase]);
+  }, [prompt, phase]);
 
   async function animateStoryClusterFlight(payload: DecompositionResponse, clusterIndex: number, reducedMotion: boolean) {
     const cluster = payload.decomposition.clusters[clusterIndex];
@@ -457,6 +439,30 @@ export default function Home() {
     setEditDraft(null);
   }
 
+  function removeCluster(clusterId: string) {
+    if (!result) return;
+    const index = result.decomposition.clusters.findIndex((cluster) => cluster.id === clusterId);
+    if (index < 0) return;
+    setRemovedDimension({ cluster: result.decomposition.clusters[index], index });
+    setResult({
+      ...result,
+      decomposition: {
+        ...result.decomposition,
+        clusters: result.decomposition.clusters.filter((cluster) => cluster.id !== clusterId),
+      },
+    });
+    setEditingClusterId(null);
+    setEditDraft(null);
+  }
+
+  function undoRemoveCluster() {
+    if (!result || !removedDimension) return;
+    const clusters = [...result.decomposition.clusters];
+    clusters.splice(Math.min(removedDimension.index, clusters.length), 0, removedDimension.cluster);
+    setResult({ ...result, decomposition: { ...result.decomposition, clusters } });
+    setRemovedDimension(null);
+  }
+
   async function analyze(contextOverride?: string, skipElicitation = false, refresh = false) {
     if (!prompt.trim() || busy || analysisInFlightRef.current) return;
     analysisInFlightRef.current = true;
@@ -491,6 +497,7 @@ export default function Home() {
     setActiveTraceStep(0);
     setElicitationIndex(0);
     setRevealedClusters([]);
+    setRemovedDimension(null);
     setAnalysisPass(skipElicitation && Boolean(contextOverride) ? "refine" : "initial");
     setAnalysisElapsed(0);
     if (!skipElicitation) {
@@ -710,13 +717,13 @@ export default function Home() {
 
   return (
     <main className="intro-root">
-      <div className={`brand-intro ${brandDocked ? "is-docked" : ""}`} data-phase={introPhase} aria-label="Epistack">
+      <div className="brand-intro" role="img" aria-label="Epistack">
         {brandCharacters.map((character, index) => (
           <span key={`${character}-${index}`} style={{ animationDelay: `${index * 110}ms` }} aria-hidden="true">{character}</span>
         ))}
       </div>
 
-      <div className={`intro-surface ${introComplete ? "is-ready" : ""}`} aria-hidden={!introComplete}>
+      <div className="intro-surface">
         <header className="minimal-topbar">
           <StageNav active="decompose" estimates={stageEstimates} onHome={returnToEditor} />
           <>
@@ -760,7 +767,8 @@ export default function Home() {
 
         <section className={`analysis-shell clean-shell ${phase === "transitioning" ? "leaving" : ""}`}>
           {(phase === "idle" || phase === "error") && (
-            <section className="minimal-composer" aria-label="Question composer">
+            <section className="minimal-composer" aria-labelledby="composer-title">
+              <h1 id="composer-title" className="sr-only">Ask a question to decompose</h1>
               <div className="question-composer">
                 <textarea
                   ref={composerInputRef}
@@ -771,6 +779,7 @@ export default function Home() {
                   maxLength={5000}
                   placeholder="what is your question?"
                   aria-label="Research question"
+                  aria-describedby={showComposerHint ? "composer-hint" : undefined}
                   onKeyDown={(event) => {
                     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                       event.preventDefault();
@@ -782,6 +791,7 @@ export default function Home() {
                   type="button"
                   className="composer-submit"
                   aria-label="Decompose question"
+                  aria-describedby={showComposerHint ? "composer-hint" : undefined}
                   data-tooltip={prompt.trim().length < 12 ? "Write a fuller question" : "Decompose into testable claims · ⌘↵"}
                   disabled={busy || prompt.trim().length < 12}
                   onClick={() => void analyze()}
@@ -789,21 +799,27 @@ export default function Home() {
                   <span className="decompose-icon" aria-hidden="true"><i /><i /><i /><i /></span>
                 </button>
                 {error && <p className="composer-error" role="alert">{error}</p>}
+                {!error && showComposerHint && (
+                  <p id="composer-hint" className="composer-hint">Add a little more detail so the question can be decomposed (at least 12 characters).</p>
+                )}
               </div>
             </section>
           )}
 
           {phase === "analyzing" && (
-            <section className="phase-screen" aria-live="polite">
+            <section className="phase-screen" aria-labelledby="loading-title">
+              <p className="sr-only" role="status">
+                {`${analysisPass === "refine" ? "Refining with your context" : "Decomposing your question"}: ${hostedProgress ? decompositionStages[activeStage].label : "connecting to the research service"}, stage ${activeStage + 1} of ${decompositionStages.length}.`}
+              </p>
               <div className="ai-orb thinking" aria-hidden="true"><span /></div>
               <div className="loading-copy">
-                <p className="loading-pass">{analysisPass === "refine" ? "Refining with your context" : "Decomposing your question"}</p>
+                <p className="loading-pass" id="loading-title">{analysisPass === "refine" ? "Refining with your context" : "Decomposing your question"}</p>
                 <p className="loading-operation">{hostedProgress ? `${decompositionStages[activeStage].label}…` : "Connecting to the research service…"}</p>
                 <ol className="loading-stages">
                   {decompositionStages.map((stage, index) => (
                     <li key={stage.label} className={index < activeStage ? "done" : index === activeStage ? "active" : "pending"}>
                       <span className="stage-marker" aria-hidden="true">{index < activeStage ? "✓" : index + 1}</span>
-                      <span className="stage-text"><strong>{stage.label}</strong><small>{stage.detail}</small></span>
+                      <span className="stage-text"><strong><span className="sr-only">{index < activeStage ? "Done: " : index === activeStage ? "In progress: " : "Pending: "}</span>{stage.label}</strong><small>{stage.detail}</small></span>
                     </li>
                   ))}
                 </ol>
@@ -823,13 +839,29 @@ export default function Home() {
           <section className="story-board" aria-labelledby="trace-title">
             <div className="story-heading">
               <div className="story-heading-title">
-                <h2 id="trace-title">Decomposition</h2>
+                <h1 id="trace-title">Decomposition</h1>
                 {result.warning && <p className="decomposition-warning">{result.warning}</p>}
+              </div>
+              <div className="story-heading-meta" aria-label="Decomposition provider and model provenance">
+                <span>{result.model}</span>
+                <small>{decompositionCacheLabel(result)}</small>
+                {result.provenance?.stages.map((stage) => (
+                  <small key={stage.stage}>
+                    {stage.stage.replaceAll("-", " ")} · {stage.provider} · {stage.model} · {stage.status}
+                  </small>
+                ))}
               </div>
             </div>
 
+            {removedDimension && (
+              <div className="dimension-undo" role="status">
+                <span>Removed “{removedDimension.cluster.label}”.</span>
+                <button type="button" className="quiet-button" onClick={undoRemoveCluster}>Undo</button>
+              </div>
+            )}
+
             <div className="scroll-invitation" aria-hidden="true">
-              <span>Scroll slowly to reveal the inference chain</span>
+              <span>Scroll to follow each dimension from your words to the evidence it needs</span>
               <i>↓</i>
             </div>
 
@@ -847,7 +879,6 @@ export default function Home() {
                         type="button"
                         className={`pinned-cue cluster-tone-${Math.max(0, clusterIndex) % 5} ${revealed ? "revealed" : ""} ${active ? "active" : ""}`}
                         key={index}
-                        disabled={!revealed}
                         onClick={() => inspectCluster(clusterIndex, true)}
                         ref={(node) => {
                           if (node) storyCueRefs.current.set(segment.highlightIndex as number, node);
@@ -859,13 +890,14 @@ export default function Home() {
                     );
                   })}
                 </div>
-                <nav aria-label="Semantic clusters">
+                <nav aria-label="Dimensions">
                 {result.decomposition.clusters.map((cluster, index) => (
                   <button
+                    type="button"
                     className={`${index === activeCluster ? "active" : ""} ${revealedClusters.includes(index) ? "revealed" : ""} cluster-tone-${index % 5}`}
                     key={cluster.id}
                     onClick={() => inspectCluster(index, true)}
-                    aria-pressed={index === activeCluster}
+                    aria-current={index === activeCluster ? "step" : undefined}
                   >
                     <span>{String(index + 1).padStart(2, "0")}</span>
                     <strong>{cluster.label}</strong>
@@ -873,7 +905,7 @@ export default function Home() {
                   </button>
                 ))}
                 </nav>
-                <p>{activeCluster < 0 ? "Scroll to activate the first cluster" : `Active step ${activeTraceStep + 1} of 4`}</p>
+                <p>{activeCluster < 0 ? "Scroll to follow the first dimension" : `Step ${Math.min(activeTraceStep + 1, 3)} of 3`}</p>
               </aside>
 
               <div className="story-stream">
@@ -886,7 +918,7 @@ export default function Home() {
                       data-cluster-index={clusterIndex}
                     >
                                             <header>
-                        <span>Cluster {String(clusterIndex + 1).padStart(2, "0")}</span>
+                        <span>Dimension {String(clusterIndex + 1).padStart(2, "0")}</span>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <h3>{cluster.label}</h3>
                           {editingClusterId !== cluster.id && (
@@ -926,7 +958,7 @@ export default function Home() {
                         <div className="story-flow cluster-edit-flow" aria-label={`Edit ${cluster.label}`}>
                           <section className="story-step" data-step-index="0">
                             <span><b>01</b> Dimension label</span>
-                            <textarea className="inline-edit-title" rows={2} value={editDraft.label} onChange={(e) => setEditDraft({ ...editDraft, label: e.target.value })} />
+                            <textarea className="inline-edit-title" aria-label="Dimension label" rows={2} value={editDraft.label} onChange={(e) => setEditDraft({ ...editDraft, label: e.target.value })} />
                           </section>
                           <div className="story-connector"><span>licensed by these literal cues</span><i>↓</i></div>
                           <section className="story-step" data-step-index="1">
@@ -936,8 +968,8 @@ export default function Home() {
                           <div className="story-connector"><span>grouped because they imply</span><i>↓</i></div>
                           <section className="story-step" data-step-index="2">
                             <span><b>03</b> Hidden variable</span>
-                            <textarea className="inline-edit-h4" rows={2} value={editDraft.latentVariable} onChange={(e) => setEditDraft({ ...editDraft, latentVariable: e.target.value })} />
-                            <textarea className="inline-edit-p" rows={4} value={editDraft.rationale} onChange={(e) => setEditDraft({ ...editDraft, rationale: e.target.value })} />
+                            <textarea className="inline-edit-h4" aria-label="Hidden variable" rows={2} value={editDraft.latentVariable} onChange={(e) => setEditDraft({ ...editDraft, latentVariable: e.target.value })} />
+                            <textarea className="inline-edit-p" aria-label="Why this variable matters" rows={4} value={editDraft.rationale} onChange={(e) => setEditDraft({ ...editDraft, rationale: e.target.value })} />
                           </section>
                           <div className="story-connector"><span>constrains what evidence may count</span><i>↓</i></div>
                           <section className="story-step evidence-story-step" data-step-index="3">
@@ -951,11 +983,7 @@ export default function Home() {
                           <div className="cluster-edit-actions">
                             <button type="button" className="primary-button" onClick={saveClusterEdit}>Save dimension</button>
                             <button type="button" className="quiet-button" onClick={() => { setEditingClusterId(null); setEditDraft(null); }}>Cancel</button>
-                            <button type="button" className="quiet-button danger" onClick={() => {
-                              setResult({ ...result, decomposition: { ...result.decomposition, clusters: result.decomposition.clusters.filter((c) => c.id !== cluster.id) } });
-                              setEditingClusterId(null);
-                              setEditDraft(null);
-                            }}>Delete dimension</button>
+                            <button type="button" className="quiet-button danger" onClick={() => removeCluster(cluster.id)}>Remove dimension</button>
                           </div>
                         </div>
                       ) : (

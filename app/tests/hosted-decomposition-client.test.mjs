@@ -9,12 +9,13 @@ function harness(replies, entries = new Map()) {
  return { calls, entries, deps: { storage: { getItem: k => entries.get(k) || null, setItem: (k,v) => entries.set(k,v), removeItem: k => entries.delete(k) }, now: () => now, sleep: async ms => { now += ms; }, fetch: async (url, options) => { calls.push({ url, body: JSON.parse(options.body) }); const reply = replies.shift(); if (reply instanceof Error) throw reply; return new Response(JSON.stringify(reply), {status:200}); } } };
 }
 test('homepage submits context once, polls receipts, and returns the existing UI contract', async()=>{
- const h=harness([{id:'run-1',token:'owned'}, {status:'in_progress',stage:0}, {status:'completed',stage:3,artifact,question:input.question,decisionContext:input.decisionContext}]);
+ const h=harness([{id:'run-1',token:'owned'}, {status:'in_progress',stage:0}, {status:'completed',stage:3,artifact,question:input.question,decisionContext:input.decisionContext,model:'Astra/Lyra · lyra-chatgpt-pro · orchestrated specialists',provenance:{path:'hosted-primary',provider:'Astra/Lyra',model:'lyra-chatgpt-pro',stages:[]}}]);
  const progress=[]; const result=await runHostedDecomposition(input,'identity',false,p=>progress.push(p),h.deps);
  assert.ok(h.calls.every(c=>c.url==='/api/decompose-live'));
  assert.deepEqual(h.calls[0].body,input);
  assert.deepEqual(h.calls[1].body,{id:'run-1',token:'owned'});
  assert.equal(result.decisionContext,input.decisionContext); assert.equal(result.caseId,'run-1'); assert.equal(result.mode,'ai');
+ assert.equal(result.model,'Astra/Lyra · lyra-chatgpt-pro · orchestrated specialists'); assert.equal(result.provenance.provider,'Astra/Lyra');
  assert.equal(progress.length,2); assert.ok(!JSON.stringify(h.calls).includes('openRouterApiKey'));
 });
 test('a connection interruption retains the receipt and resumes without another submission',async()=>{
@@ -77,4 +78,13 @@ test('the hosted route relies on retry-after rather than a hardcoded cooldown',a
  const source=await readFile(new URL('../app/api/decompose-live/route.ts',import.meta.url),'utf8');
  assert.doesNotMatch(source,/61000/);
  assert.match(source,/retry-after/);
+});
+
+test('the hosted client uses returned provider provenance instead of a hard-coded model label',async()=>{
+ const h=harness([{id:'run-provenance',token:'owned'},{status:'completed',stage:3,artifact,model:'Astra/Lyra · reported-model · orchestrated specialists',provenance:{path:'hosted-primary',provider:'Astra/Lyra',model:'reported-model',stages:[]}}]);
+ const result=await runHostedDecomposition(input,'provenance',false,()=>{},h.deps);
+ assert.equal(result.model,'Astra/Lyra · reported-model · orchestrated specialists');
+ assert.equal(result.provenance.model,'reported-model');
+ const source=await readFile(new URL('../lib/hosted-decomposition-client.ts',import.meta.url),'utf8');
+ assert.doesNotMatch(source,/Astra · GPT 6/);
 });

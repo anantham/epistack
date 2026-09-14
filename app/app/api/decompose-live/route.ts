@@ -4,10 +4,43 @@ import { getD1, ensureHostedJobTables } from '../../../db';
 import { stageRequest, parseStage, finishDecomposition, stageNames, normalizeEffort } from '../../../lib/hosted-decomposition';
 import { StructuredOutputError } from '../../../lib/structured-output';
 import { recordDecompositionRun } from '../../../lib/decomposition-runs';
+import type { DecompositionProvenance } from '../../../lib/decomposition';
 
-type State = { question: string; decisionContext?: string; promptOverrides?: AgentPromptOverrides; effort?: string; stage: number; results: unknown[]; status: string; remoteId?: string; nextAt?: number; error?: string; code?: string; artifact?: unknown; stageStartedAt?: number; stageDurationsMs?: number[]; attempts?: number[]; rateLimits?: number; repairs?: number[]; repairIssues?: string; parseFailure?: { stage: number; raw: string; issues: string }; origin?: string; recorded?: boolean };
+type State = { question: string; decisionContext?: string; promptOverrides?: AgentPromptOverrides; effort?: string; stage: number; results: unknown[]; status: string; remoteId?: string; nextAt?: number; error?: string; code?: string; artifact?: unknown; stageStartedAt?: number; stageDurationsMs?: number[]; attempts?: number[]; rateLimits?: number; repairs?: number[]; repairIssues?: string; parseFailure?: { stage: number; raw: string; issues: string }; origin?: string; recorded?: boolean; stageModels?: string[]; stageModelSources?: Array<'reported' | 'requested'> };
 const DAILY_PREVIEW_LIMIT = 50;
+const requestedHostedModel = 'lyra-chatgpt-pro';
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
+
+function noteRemoteModel(state: State, payload: unknown) {
+  const reported = typeof payload === 'object' && payload !== null && typeof (payload as { model?: unknown }).model === 'string'
+    ? (payload as { model: string }).model.trim()
+    : '';
+  state.stageModels = state.stageModels || [];
+  state.stageModelSources = state.stageModelSources || [];
+  state.stageModels[state.stage] = reported || state.stageModels[state.stage] || requestedHostedModel;
+  state.stageModelSources[state.stage] = reported ? 'reported' : state.stageModelSources[state.stage] || 'requested';
+}
+
+function hostedProvenance(state: State): DecompositionProvenance {
+  const stages = stageNames.map((stage, index) => {
+    const model = state.stageModels?.[index] || requestedHostedModel;
+    const source = state.stageModelSources?.[index] || 'requested';
+    return {
+      stage,
+      provider: 'Astra/Lyra',
+      model,
+      status: 'used' as const,
+      ...(source === 'requested' ? { reason: 'The gateway did not report a concrete model; this is the model requested by the app.' } : {}),
+    };
+  });
+  const distinctModels = Array.from(new Set(stages.map((stage) => stage.model)));
+  return {
+    path: 'hosted-primary',
+    provider: 'Astra/Lyra',
+    model: distinctModels.length === 1 ? distinctModels[0] : 'stage-reported models',
+    stages,
+  };
+}
 export async function POST(request: Request) {
   const origin = request.headers.get('origin');
   if (origin && origin !== new URL(request.url).origin) return json({ error: 'Use this site to submit a question.' }, 403);
@@ -78,11 +111,13 @@ export async function POST(request: Request) {
         await save();
         const created = await remote('/v1/responses', stageRequest(state.stage, state.question, state.results, state.decisionContext, state.promptOverrides, state.effort, state.repairIssues));
         if (created) {
+          noteRemoteModel(state, created);
           if (!/^job_[a-zA-Z0-9_-]+$/.test(created.id || '')) throw new Error('Backend did not return a durable job receipt.');
           state.remoteId = created.id; state.status = 'in_progress'; state.repairIssues = undefined;
         }
       } else {
         const result = await remote('/v1/responses/' + state.remoteId);
+        noteRemoteModel(state, result);
         if (result.status === 'completed') {
           state.stageDurationsMs = state.stageDurationsMs || [];
           state.stageDurationsMs[state.stage] = Math.max(0, Date.now() - (state.stageStartedAt || Date.now()));
@@ -151,5 +186,5 @@ export async function POST(request: Request) {
     await save();
     await db.prepare('UPDATE hosted_decomposition_jobs SET locked_until = 0 WHERE id = ?').bind(body.id).run();
   }
-  return json({ id: body.id, status: state.status, stage: state.stage, stages: stageNames, question: state.question, decisionContext: state.decisionContext || '', error: state.error, code: state.code, parseFailure: state.parseFailure, artifact: state.artifact, results: state.results, nextAt: state.nextAt, attempts: state.attempts, durationsMs: state.stageDurationsMs, rateLimits: state.rateLimits });
+  return json({ id: body.id, status: state.status, stage: state.stage, stages: stageNames, question: state.question, decisionContext: state.decisionContext || '', error: state.error, code: state.code, parseFailure: state.parseFailure, artifact: state.artifact, results: state.results, nextAt: state.nextAt, attempts: state.attempts, durationsMs: state.stageDurationsMs, rateLimits: state.rateLimits, ...(state.status === 'completed' ? { model: `Astra/Lyra · ${hostedProvenance(state).model} · orchestrated specialists`, provenance: hostedProvenance(state) } : {}) });
 }

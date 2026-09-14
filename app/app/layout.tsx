@@ -8,22 +8,22 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const origin = new URL(`${protocol}://${host}`);
-  const title = "Epistack · Question Compiler";
+  const siteTitle = "Epistack";
   const description = "A human–AI workspace for turning vague questions into inspectable claims and auditable evidence.";
 
   return {
     metadataBase: origin,
-    title,
+    title: { default: "Decompose · Epistack", template: "%s · Epistack" },
     description,
     openGraph: {
-      title,
+      title: siteTitle,
       description,
       type: "website",
       images: [{ url: new URL("/og.png", origin), width: 1536, height: 1024, alt: "Epistack evidence graph" }],
     },
     twitter: {
       card: "summary_large_image",
-      title,
+      title: siteTitle,
       description,
       images: [new URL("/og.png", origin)],
     },
