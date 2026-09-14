@@ -9,6 +9,17 @@ import {
   type RecallLane,
 } from "../../../lib/broad-recall";
 import { sourceClassSchema, sourceClassPromptList, type SourceClass } from "../../../lib/source-class";
+import {
+  addResearchUsage,
+  emptyResearchUsage,
+  normalizeModelId,
+  normalizeResearchEffortStep,
+  researchBudgetProfiles,
+  researchRunCapUsd,
+  usageFromOpenRouter,
+  type ResearchBudgetProfile,
+  type ResearchUsage,
+} from "../../../lib/research-budget";
 
 const hostedRecallClaimSchema = z.object({
   id: z.string().trim().min(2).max(80),
@@ -26,6 +37,9 @@ const hostedRecallRequestSchema = z.object({
   applicabilityProfile: shareableApplicabilityProfileSchema.optional(),
   promptOverrides: z.unknown().optional(),
   refresh: z.boolean().optional().default(false),
+  effort: z.string().optional(),
+  models: z.object({ search: z.string().optional() }).optional(),
+  budgetRemainingUsd: z.number().min(0).optional(),
 });
 
 type HostedRecallRequest = z.infer<typeof hostedRecallRequestSchema>;
@@ -62,7 +76,12 @@ function openRouterMessageText(message: OpenRouterMessage) {
   return (message.content || []).map((part) => part.text || "").join("\n");
 }
 
-async function openRouterChat(input: string, instructions: string, useWebSearch: boolean) {
+type RecallCallOptions = {
+  model: string;
+  profile: ResearchBudgetProfile;
+};
+
+async function openRouterChat(input: string, instructions: string, useWebSearch: boolean, options: RecallCallOptions) {
   const apiKey = recallEnvironment().OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OpenRouter fallback is not configured.");
   let response: Response;
@@ -77,14 +96,15 @@ async function openRouterChat(input: string, instructions: string, useWebSearch:
         "X-OpenRouter-Metadata": "enabled",
       },
       body: JSON.stringify({
-        model: openRouterRecallModel(),
+        model: options.model,
         messages: [
           { role: "system", content: instructions },
           { role: "user", content: input },
         ],
-        ...(useWebSearch ? { tools: [{ type: "openrouter:web_search" }] } : {}),
+        // Uncapped, the model decides how often to search: up to 30 searches in one request.
+        ...(useWebSearch ? { tools: [{ type: "openrouter:web_search", parameters: options.profile.webSearch }] } : {}),
         temperature: 0,
-        max_tokens: useWebSearch ? 3_500 : 2_000,
+        max_tokens: useWebSearch ? options.profile.searchMaxTokens : 2_000,
       }),
       signal: AbortSignal.timeout(useWebSearch ? 90_000 : 30_000),
     });
@@ -101,7 +121,7 @@ async function openRouterChat(input: string, instructions: string, useWebSearch:
     }
     throw new Error(`OpenRouter fallback returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : "."}`);
   }
-  const payload = await response.json() as { choices?: Array<{ message?: OpenRouterMessage }> };
+  const payload = await response.json() as { choices?: Array<{ message?: OpenRouterMessage }>; usage?: unknown };
   const message = payload.choices?.[0]?.message;
   if (!message) throw new Error("OpenRouter fallback returned no message.");
   const text = openRouterMessageText(message);
@@ -110,10 +130,10 @@ async function openRouterChat(input: string, instructions: string, useWebSearch:
     .filter((citation): citation is { url: string; title?: string } => Boolean(citation?.url))
     .map((citation) => `[${citation.title || new URL(citation.url).host}](${citation.url})`)
     .join("\n");
-  return { text: [text, citations].filter(Boolean).join("\n\n"), model: openRouterRecallModel() };
+  return { text: [text, citations].filter(Boolean).join("\n\n"), model: options.model, usage: usageFromOpenRouter(payload.usage) };
 }
 
-async function openRouterJson(input: string, instructions: string) {
+async function openRouterJson(input: string, instructions: string, model: string) {
   const apiKey = recallEnvironment().OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OpenRouter fallback is not configured.");
   let response: Response;
@@ -128,7 +148,7 @@ async function openRouterJson(input: string, instructions: string) {
         "X-OpenRouter-Metadata": "enabled",
       },
       body: JSON.stringify({
-        model: openRouterRecallModel(),
+        model,
         messages: [
           { role: "system", content: instructions },
           { role: "user", content: input },
@@ -153,10 +173,10 @@ async function openRouterJson(input: string, instructions: string) {
     }
     throw new Error(`OpenRouter fallback returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : "."}`);
   }
-  const payload = await response.json() as { choices?: Array<{ message?: OpenRouterMessage }> };
+  const payload = await response.json() as { choices?: Array<{ message?: OpenRouterMessage }>; usage?: unknown };
   const message = payload.choices?.[0]?.message;
   if (!message) throw new Error("OpenRouter fallback returned no message.");
-  return { text: openRouterMessageText(message), model: openRouterRecallModel() };
+  return { text: openRouterMessageText(message), model, usage: usageFromOpenRouter(payload.usage) };
 }
 
 const emptyApplicabilityProfile = shareableApplicabilityProfileSchema.parse({});
@@ -340,10 +360,11 @@ function canonicalUrl(raw: string) {
   }
 }
 
-async function classifyLeads(leads: Lead[]) {
+async function classifyLeads(leads: Lead[], model: string): Promise<ResearchUsage> {
+  let usage = emptyResearchUsage;
   const unique = new Map<string, string>();
   for (const lead of leads) unique.set(lead.source.url, lead.source.title);
-  if (!unique.size) return;
+  if (!unique.size) return usage;
   const list = [...unique.entries()].map(([url, title]) => ({ url, title }));
   const instructions = [
     "You classify web sources by their source class. For each item return its exact url and one sourceClass.",
@@ -353,27 +374,32 @@ async function classifyLeads(leads: Lead[]) {
     "Return only JSON matching this schema. No markdown fences.",
     JSON.stringify(z.toJSONSchema(classificationPromptSchema)),
   ].join("\n");
+  const classifyWithOpenRouter = async (input: string, prompt: string) => {
+    const result = await openRouterJson(input, prompt, model);
+    usage = addResearchUsage(usage, result.usage);
+    return result.text;
+  };
   let raw: string;
   if (lyraConfigured()) {
     try {
       raw = await runLyraStage({ model: "lyra-chatgpt-pro", effort: "instant", instructions, input: JSON.stringify(list) });
     } catch (error) {
       if (!isBackendUnreachable(error) || !openRouterRecallConfigured()) throw error;
-      raw = (await openRouterJson(JSON.stringify(list), instructions)).text;
+      raw = await classifyWithOpenRouter(JSON.stringify(list), instructions);
     }
   } else {
-    raw = (await openRouterJson(JSON.stringify(list), instructions)).text;
+    raw = await classifyWithOpenRouter(JSON.stringify(list), instructions);
   }
   let envelope: z.infer<typeof classificationEnvelopeSchema>;
   try {
     envelope = await parseStructuredWithRepair({
       text: raw,
       schema: classificationEnvelopeSchema,
-      repair: async ({ raw: previous, issues }) => (await openRouterJson(
+      repair: async ({ raw: previous, issues }) => classifyWithOpenRouter(
         JSON.stringify(list),
         instructions + repairInstruction(classificationEnvelopeSchema, issues)
           + `\nPREVIOUS ATTEMPT:\n${previous.slice(0, 12_000)}`,
-      )).text,
+      ),
     });
   } catch {
     // Classification is an enhancement. If a provider cannot classify this
@@ -396,6 +422,7 @@ async function classifyLeads(leads: Lead[]) {
       ?? byCanonical.get(canonicalUrl(byLeadTitle.get(lead.source.title.trim().toLowerCase()) ?? ""))
       ?? byTitle.get(lead.source.title.trim().toLowerCase());
   }
+  return usage;
 }
 
 const json = (value: unknown, status = 200) =>
@@ -417,19 +444,31 @@ export async function POST(request: Request) {
     return json({ error: issue ? `${issue.path.join(".") || "body"}: ${issue.message}` : "Invalid lead-discovery request." }, 400);
   }
   const input = parsed.data;
+  if (input.budgetRemainingUsd !== undefined && input.budgetRemainingUsd <= 0) {
+    return json({ error: `This run has reached its $${researchRunCapUsd} cap. Start a new run to search again.`, code: "run-budget-exhausted" }, 409);
+  }
+  if (input.models?.search && !normalizeModelId(input.models.search)) {
+    return json({ error: "Use an OpenRouter model id in provider/model form for the search model." }, 400);
+  }
   const profile = input.applicabilityProfile ?? emptyApplicabilityProfile;
   const compiledQuestion = input.compiledQuestion || input.question;
+  const effort = normalizeResearchEffortStep(input.effort);
+  const budget = researchBudgetProfiles[effort];
+  const searchModel = normalizeModelId(input.models?.search) || openRouterRecallModel();
   const cacheKey = `recall-${shortHash(JSON.stringify({
     question: input.question,
     compiledQuestion,
     claims: input.claims,
     applicabilityProfile: profile,
+    effort,
+    searchModel,
   }))}`;
 
   type SearchLaneResult = {
     leads: Lead[];
     provider: SearchProvider;
     model: string;
+    usage: ResearchUsage;
   };
 
   async function searchLane(lane: RecallLane, claims: HostedRecallClaim[]) {
@@ -437,16 +476,17 @@ export async function POST(request: Request) {
     if (lyraConfigured()) {
       try {
         const markdown = await runLyraStage({ model: "lyra-web-search", input: lanePrompt });
-        return { leads: buildLeads(lane, extractLinks(markdown), claims.map((claim) => claim.id), "Astra"), provider: "Astra" as const, model: "Astra · web search" } satisfies SearchLaneResult;
+        return { leads: buildLeads(lane, extractLinks(markdown), claims.map((claim) => claim.id), "Astra"), provider: "Astra" as const, model: "Astra · web search", usage: emptyResearchUsage } satisfies SearchLaneResult;
       } catch (error) {
         if (!isBackendUnreachable(error) || !openRouterRecallConfigured()) throw error;
       }
     }
-    const fallback = await openRouterChat(lanePrompt, "You are a careful web-research lead generator. Return a short Markdown report with every source as a Markdown link. Keep all results lead-only: discovery is not evidence, and do not claim that a source has been acquired or verified.", true);
+    const fallback = await openRouterChat(lanePrompt, "You are a careful web-research lead generator. Return a short Markdown report with every source as a Markdown link. Keep all results lead-only: discovery is not evidence, and do not claim that a source has been acquired or verified.", true, { model: searchModel, profile: budget });
     return {
       leads: buildLeads(lane, extractLinks(fallback.text), claims.map((claim) => claim.id), "OpenRouter"),
       provider: "OpenRouter",
       model: `OpenRouter · ${fallback.model} (Astra fallback · web search)`,
+      usage: fallback.usage,
     } satisfies SearchLaneResult;
   }
 
@@ -478,8 +518,9 @@ export async function POST(request: Request) {
       return json({ error: "Hosted lead discovery returned no usable source links." }, 502);
     }
 
+    let classificationUsage = emptyResearchUsage;
     try {
-      await classifyLeads(leads);
+      classificationUsage = await classifyLeads(leads, searchModel);
     } catch (error) {
       // Classification is an enhancement; unclassified leads stay valid — but
       // never hide the failure: a silent miss leaves every lead "other".
@@ -530,7 +571,8 @@ export async function POST(request: Request) {
         createdAt: new Date().toISOString(),
       },
     });
-    return json(response);
+    const usage = successful.reduce((total, result) => addResearchUsage(total, result.usage), classificationUsage);
+    return json({ ...response, effort, usage });
   } catch (error) {
     if (isBackendUnreachable(error)) return backendUnreachableResponse();
     return json({ error: error instanceof Error ? error.message : "Hosted lead discovery failed." }, 502);

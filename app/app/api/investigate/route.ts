@@ -14,6 +14,16 @@ import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/
 import { acquireSource, extractSource, InsufficientSourceTextError, type SourceReviewResponse } from "../../../lib/source-adapters";
 import { isPreliminarySourceClass, sourceClassSchema } from "../../../lib/source-class";
 import { extractJsonSlice, parseStructuredWithRepair, repairInstruction } from "../../../lib/structured-output";
+import {
+  addResearchUsage,
+  emptyResearchUsage,
+  normalizeModelId,
+  normalizeResearchEffortStep,
+  researchBudgetProfiles,
+  researchRunCapUsd,
+  usageFromOpenRouter,
+  type ResearchUsage,
+} from "../../../lib/research-budget";
 
 const primaryModel = "Astra · GPT 6";
 // A distinct role label: the adversarial pass is an independent full-text read
@@ -39,11 +49,13 @@ function investigateEnvironment() {
   return env as unknown as InvestigateEnvironment;
 }
 
-function openRouterModel(role: "extractor" | "reviewer" | "repair") {
+type RoleModels = { reader?: string; reviewer?: string };
+
+function openRouterModel(role: "extractor" | "reviewer" | "repair", overrides: RoleModels = {}) {
   const current = investigateEnvironment();
-  return role === "extractor"
-    ? current.EPISTACK_OPENROUTER_MODEL || "deepseek/deepseek-v4.1-flash"
-    : current.EPISTACK_OPENROUTER_REPAIR_MODEL || "openai/gpt-4o-mini";
+  if (role === "extractor") return overrides.reader || current.EPISTACK_OPENROUTER_MODEL || "deepseek/deepseek-v4.1-flash";
+  if (role === "reviewer") return overrides.reviewer || current.EPISTACK_OPENROUTER_REPAIR_MODEL || "openai/gpt-4o-mini";
+  return current.EPISTACK_OPENROUTER_REPAIR_MODEL || "openai/gpt-4o-mini";
 }
 
 function openRouterConfigured() {
@@ -145,14 +157,22 @@ function normalizeInvestigationJson(text: string) {
   }
 }
 
+type StructuredCallOptions = {
+  models: RoleModels;
+  reasoning: "none" | "medium";
+  extractorMaxTokens: number;
+};
+
 async function runOpenRouterStructured(
   input: string,
   instructions: string,
   role: "extractor" | "reviewer" | "repair",
+  options: StructuredCallOptions,
 ) {
   const apiKey = investigateEnvironment().OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("The hosted OpenRouter investigation fallback is not configured.");
-  const model = openRouterModel(role);
+  const model = openRouterModel(role, options.models);
+  const reasoning = role === "extractor" ? options.reasoning : "none";
   let response: Response;
   try {
     response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -171,11 +191,11 @@ async function runOpenRouterStructured(
           { role: "user", content: input },
         ],
         response_format: { type: "json_object" },
-        reasoning: { effort: "none" },
+        reasoning: { effort: reasoning },
         temperature: 0,
-        max_tokens: role === "extractor" ? 4_500 : 3_500,
+        max_tokens: role === "extractor" ? options.extractorMaxTokens : 3_500,
       }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(reasoning === "none" ? 60_000 : 120_000),
     });
   } catch {
     throw new Error("The hosted OpenRouter investigation fallback could not be reached.");
@@ -190,12 +210,12 @@ async function runOpenRouterStructured(
     }
     throw new Error(`The hosted OpenRouter investigation fallback returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : "."}`);
   }
-  const payload = await response.json() as { choices?: Array<{ message?: OpenRouterMessage }> };
+  const payload = await response.json() as { choices?: Array<{ message?: OpenRouterMessage }>; usage?: unknown };
   const message = payload.choices?.[0]?.message;
   if (!message) throw new Error("The hosted OpenRouter investigation fallback returned no message.");
   const text = openRouterMessageText(message).trim();
   if (!text) throw new Error("The hosted OpenRouter investigation fallback returned an empty response.");
-  return { text, model };
+  return { text, model, usage: usageFromOpenRouter(payload.usage) };
 }
 
 const json = (value: unknown, status = 200) =>
@@ -232,6 +252,9 @@ type InvestigateRequest = {
   applicabilityProfile?: unknown;
   promptOverrides?: unknown;
   refresh?: unknown;
+  models?: unknown;
+  effort?: unknown;
+  budgetRemainingUsd?: unknown;
 };
 
 type NormalizedRecord = {
@@ -469,6 +492,28 @@ export async function POST(request: Request) {
     : "No structured applicability profile supplied.";
   const promptOverrides = sanitizeAgentPromptOverrides(body.promptOverrides);
   const refresh = body.refresh === true;
+  if (typeof body.budgetRemainingUsd === "number" && body.budgetRemainingUsd <= 0) {
+    return json({ error: `This run has reached its $${researchRunCapUsd} cap. Start a new run to read more papers.`, code: "run-budget-exhausted" }, 409);
+  }
+  const requestedModels = body.models && typeof body.models === "object" ? body.models as Record<string, unknown> : {};
+  for (const role of ["reader", "reviewer"] as const) {
+    const requested = requestedModels[role];
+    if (requested !== undefined && requested !== "" && !normalizeModelId(requested)) {
+      return json({ error: `Use an OpenRouter model id in provider/model form for the ${role} model.` }, 400);
+    }
+  }
+  const roleModels: RoleModels = {
+    reader: normalizeModelId(requestedModels.reader),
+    reviewer: normalizeModelId(requestedModels.reviewer),
+  };
+  const effort = normalizeResearchEffortStep(body.effort);
+  const budget = researchBudgetProfiles[effort];
+  const structuredOptions: StructuredCallOptions = {
+    models: roleModels,
+    reasoning: budget.readerReasoning,
+    extractorMaxTokens: budget.readerMaxTokens,
+  };
+  let usage: ResearchUsage = emptyResearchUsage;
 
   if (body.source && typeof body.source === "object") {
     return await investigateSource({
@@ -530,20 +575,22 @@ export async function POST(request: Request) {
         }
       }
       try {
-        const result = await runOpenRouterStructured(input, instructions, role);
+        const result = await runOpenRouterStructured(input, instructions, role, structuredOptions);
+        usage = addResearchUsage(usage, result.usage);
         return {
-          ...result,
-          model: `OpenRouter · ${openRouterModel(role)} · ${role === "extractor" ? "extractor" : role === "reviewer" ? "adversarial reviewer" : "JSON repair"}`,
+          text: result.text,
+          model: `OpenRouter · ${openRouterModel(role, roleModels)} · ${role === "extractor" ? "extractor" : role === "reviewer" ? "adversarial reviewer" : "JSON repair"}`,
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const canUseCheapFallback = role === "extractor"
-          && openRouterModel(role) !== openRouterModel("repair")
+          && openRouterModel(role, roleModels) !== openRouterModel("repair")
           && /could not be reached|HTTP (408|429|5\d\d)/.test(message);
         if (!canUseCheapFallback) throw error;
-        const fallback = await runOpenRouterStructured(input, instructions, "repair");
+        const fallback = await runOpenRouterStructured(input, instructions, "repair", structuredOptions);
+        usage = addResearchUsage(usage, fallback.usage);
         return {
-          ...fallback,
+          text: fallback.text,
           model: `OpenRouter · ${openRouterModel("repair")} · extractor timeout fallback`,
         };
       }
@@ -601,6 +648,8 @@ export async function POST(request: Request) {
       claimFrames,
       applicabilityProfile,
       promptOverrides,
+      effort,
+      roleModels,
     }))).slice(0, 32)}`;
     const response: DualReviewResponse = {
       source: sourceFor(normalizedRecord, artifact),
@@ -620,7 +669,7 @@ export async function POST(request: Request) {
       verificationStatus: "ai-cross-checked-full-text",
       cache: { status: refresh ? "bypass" : "miss", key: cacheKey, createdAt: new Date().toISOString() },
     };
-    return json(response);
+    return json({ ...response, effort, usage });
   } catch (error) {
     if (isBackendUnreachable(error)) return backendUnreachableResponse();
     if (error instanceof FullTextUnavailableError) {

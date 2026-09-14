@@ -23,6 +23,29 @@ import {
   type ResearchBrief,
   type ResearchClaimFrame,
 } from "../../lib/research-brief";
+import {
+  addResearchUsage,
+  emptyResearchUsage,
+  formatUsd,
+  normalizeResearchUsage,
+  parseResearchPreferences,
+  remainingRunBudgetUsd,
+  researchBudgetProfiles,
+  researchPreferencesStorageKey,
+  researchRunCapUsd,
+  runBudgetExhausted,
+  type ResearchPreferences,
+  type ResearchUsage,
+} from "../../lib/research-budget";
+import {
+  appendResearchTelemetrySample,
+  emptyResearchTelemetry,
+  parseResearchTelemetry,
+  researchStageEstimate,
+  researchTelemetryStorageKey,
+  type ResearchStage,
+} from "../../lib/research-telemetry";
+import { formatDuration } from "../../lib/decomposition-telemetry";
 
 type LaneRun = {
   status: "ready" | "running" | "complete" | "error";
@@ -90,6 +113,25 @@ type CachedDashboardState = {
 };
 
 const dashboardCacheKey = "epistack:research-ui-cache:v2";
+const researchRunStorageKey = "epistack:research-run:v1";
+
+type ResearchRunLedger = {
+  briefId: string;
+  startedAt: string;
+  usage: ResearchUsage;
+};
+
+function readRunLedger(briefId: string): ResearchRunLedger {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(researchRunStorageKey) || "null") as Partial<ResearchRunLedger> | null;
+    if (saved && saved.briefId === briefId && typeof saved.startedAt === "string") {
+      return { briefId, startedAt: saved.startedAt, usage: normalizeResearchUsage(saved.usage) };
+    }
+  } catch {
+    // A missing or unreadable ledger starts a fresh run.
+  }
+  return { briefId, startedAt: new Date().toISOString(), usage: emptyResearchUsage };
+}
 
 function isDualReviewPayload(payload: DeepDiveResponse | DualReviewResponse): payload is DualReviewResponse {
   return payload.verificationStatus === "ai-cross-checked-full-text";
@@ -317,14 +359,76 @@ export function ResearchDashboard() {
   const [sourceReviews, setSourceReviews] = useState<Record<string, SourceReviewRun>>({});
   const [storageReady, setStorageReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionHealth>({ status: "checking", models: null, detail: "Checking the hosted evidence backend…" });
+  const [runLedger, setRunLedger] = useState<ResearchRunLedger>({ briefId: "", startedAt: "", usage: emptyResearchUsage });
+  const [researchTelemetry, setResearchTelemetry] = useState(emptyResearchTelemetry);
+  const [recallStartedAt, setRecallStartedAt] = useState(0);
+  const [recallElapsedMs, setRecallElapsedMs] = useState(0);
 
   const activeCount = useMemo(
     () => Object.values(runs).filter((run) => run.status === "running").length,
     [runs],
   );
 
+  useEffect(() => {
+    if (recall.status !== "running" || !recallStartedAt) return;
+    const timer = window.setInterval(() => setRecallElapsedMs(Date.now() - recallStartedAt), 1_000);
+    return () => window.clearInterval(timer);
+  }, [recall.status, recallStartedAt]);
+
   function currentCaseId() {
     return caseId || brief?.caseId || "";
+  }
+
+  function researchPreferences(): ResearchPreferences {
+    try {
+      return parseResearchPreferences(window.localStorage.getItem(researchPreferencesStorageKey));
+    } catch {
+      return parseResearchPreferences(null);
+    }
+  }
+
+  function runBudgetRemaining() {
+    return remainingRunBudgetUsd(runLedger.usage.costUsd);
+  }
+
+  function recordResearchCall(stage: ResearchStage, startedAt: number, model: string, usageValue: unknown) {
+    const usage = normalizeResearchUsage(usageValue);
+    const effort = researchPreferences().effort;
+    setRunLedger((current) => {
+      const next = { ...current, usage: addResearchUsage(current.usage, usage) };
+      try {
+        window.localStorage.setItem(researchRunStorageKey, JSON.stringify(next));
+      } catch {
+        // The in-page ledger still enforces the cap until reload.
+      }
+      return next;
+    });
+    setResearchTelemetry((current) => {
+      const next = appendResearchTelemetrySample(current, {
+        stage,
+        effort,
+        model,
+        totalMs: Date.now() - startedAt,
+        costUsd: usage.costUsd,
+        at: new Date().toISOString(),
+      });
+      try {
+        window.localStorage.setItem(researchTelemetryStorageKey, JSON.stringify(next));
+      } catch {
+        // Estimates fall back to provisional timings.
+      }
+      return next;
+    });
+  }
+
+  function startNewRun() {
+    const next = { briefId: brief?.briefId ?? "", startedAt: new Date().toISOString(), usage: emptyResearchUsage };
+    setRunLedger(next);
+    try {
+      window.localStorage.setItem(researchRunStorageKey, JSON.stringify(next));
+    } catch {
+      // A fresh in-page ledger still applies.
+    }
   }
 
   function currentWorkspace() {
@@ -389,6 +493,8 @@ export function ResearchDashboard() {
       setRuns(freshRuns(lanes));
       setOpenLane(lanes[0]?.id ?? "");
       setRecallSelectedClaimIds(loadedBrief?.claims.map((claim) => claim.id) ?? []);
+      setRunLedger(readRunLedger(loadedBrief?.briefId ?? ""));
+      setResearchTelemetry(parseResearchTelemetry(window.localStorage.getItem(researchTelemetryStorageKey)));
 
       const raw = window.localStorage.getItem(dashboardCacheKey);
       if (!raw) return;
@@ -545,7 +651,7 @@ export function ResearchDashboard() {
       const response = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: queries[lane.id], filters, maxResults: 6, refresh }),
+        body: JSON.stringify({ query: queries[lane.id], filters, maxResults: researchBudgetProfiles[researchPreferences().effort].pubmedMaxResults, refresh }),
       });
       const payload = await response.json() as ResearchResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "The live discovery sweep failed.");
@@ -614,6 +720,16 @@ export function ResearchDashboard() {
       }));
       return;
     }
+    if (runBudgetExhausted(runLedger.usage.costUsd)) {
+      setRecall((current) => ({
+        ...current,
+        status: "error",
+        error: `This run has spent its $${researchRunCapUsd} cap. Start a new run to search again.`,
+      }));
+      return;
+    }
+    const preferences = researchPreferences();
+    const startedAt = Date.now();
     const claims = brief.claims
       .filter((claim) => recallSelectedClaimIds.includes(claim.id))
       .map((claim) => ({
@@ -635,6 +751,8 @@ export function ResearchDashboard() {
       progress: "Launching broad-recall and applicability specialists in parallel…",
       liveTrace: [],
     });
+    setRecallStartedAt(startedAt);
+    setRecallElapsedMs(0);
     try {
       const response = await fetch("/api/recall", {
         method: "POST",
@@ -646,10 +764,14 @@ export function ResearchDashboard() {
           applicabilityProfile: shareableRecallProfile(),
           promptOverrides: promptOverrides(),
           refresh,
+          effort: preferences.effort,
+          models: { search: preferences.models.search },
+          budgetRemainingUsd: runBudgetRemaining(),
         }),
       });
-      const payload = await response.json() as RecallResponse & { error?: string };
+      const payload = await response.json() as RecallResponse & { error?: string; usage?: unknown };
       if (!response.ok) throw new Error(payload.error || "The hosted lead-discovery sweep failed.");
+      recordResearchCall("recall", startedAt, payload.model, payload.usage);
       setRecall({
         status: "complete",
         response: payload,
@@ -674,6 +796,18 @@ export function ResearchDashboard() {
   async function investigateRecallLead(lead: RecallResponse["leads"][number]) {
     const sourceClass = lead.sourceClass;
     if (!sourceClass) return;
+    if (runBudgetExhausted(runLedger.usage.costUsd)) {
+      setSourceReviews((current) => ({
+        ...current,
+        [lead.id]: {
+          status: "error",
+          response: current[lead.id]?.response ?? null,
+          error: `This run has spent its $${researchRunCapUsd} cap. Start a new run to read more sources.`,
+        },
+      }));
+      return;
+    }
+    const preferences = researchPreferences();
     setSourceReviews((current) => ({
       ...current,
       [lead.id]: { status: "loading", response: current[lead.id]?.response ?? null, error: "" },
@@ -693,6 +827,9 @@ export function ResearchDashboard() {
           claimFrames: compiledClaimFrames(),
           applicabilityProfile: localApplicabilityProfile(),
           promptOverrides: promptOverrides(),
+          effort: preferences.effort,
+          models: { reader: preferences.models.reader, reviewer: preferences.models.reviewer },
+          budgetRemainingUsd: runBudgetRemaining(),
         }),
       });
       const payload = await response.json() as SourceReviewResponse & { error?: string };
@@ -794,7 +931,7 @@ export function ResearchDashboard() {
           claimFrames: compiledClaimFrames(),
           applicabilityProfile: outboundApplicabilityProfile(),
           openRouterApiKey: preferences.apiKey,
-          openRouterModel: preferences.model,
+          openRouterModel: researchPreferences().models.reader || preferences.model,
           promptOverrides: promptOverrides(),
           refresh,
         }),
@@ -898,6 +1035,22 @@ export function ResearchDashboard() {
   }
 
   async function investigateFullText(record: PubmedDiscovery, refresh = false) {
+    if (runBudgetExhausted(runLedger.usage.costUsd)) {
+      setDeepDives((current) => ({
+        ...current,
+        [record.pmid]: {
+          status: "error",
+          payload: current[record.pmid]?.payload ?? null,
+          checked: false,
+          error: `This run has spent its $${researchRunCapUsd} cap. Start a new run to read more papers.`,
+          progress: "Run cap reached",
+          fallbackAvailable: false,
+        },
+      }));
+      return;
+    }
+    const preferences = researchPreferences();
+    const startedAt = Date.now();
     setDeepDives((current) => ({
       ...current,
       [record.pmid]: { status: "reviewing", payload: null, checked: false, error: "", progress: "Acquiring and cross-checking the full paper on the hosted evidence backend", fallbackAvailable: false },
@@ -915,12 +1068,16 @@ export function ResearchDashboard() {
           applicabilityProfile: localApplicabilityProfile(),
           promptOverrides: promptOverrides(),
           refresh,
+          effort: preferences.effort,
+          models: { reader: preferences.models.reader, reviewer: preferences.models.reviewer },
+          budgetRemainingUsd: runBudgetRemaining(),
         }),
       });
-      const completed = await response.json() as DualReviewResponse & { error?: string; code?: string };
+      const completed = await response.json() as DualReviewResponse & { error?: string; code?: string; usage?: unknown };
       if (!response.ok || completed.error) {
         throw Object.assign(new Error(completed.error || "The hosted full-text investigation failed."), { code: completed.code });
       }
+      recordResearchCall("full-text", startedAt, completed.models.primary, completed.usage);
       await autoPromoteDualReview(record, completed);
     } catch (error) {
       const code = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "";
@@ -955,6 +1112,15 @@ export function ResearchDashboard() {
     // The handler intentionally closes over the current phase state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCount, activeLanes.length, brief, recall.status, storageReady]);
+
+  const displayEffort = storageReady ? researchPreferences().effort : "standard";
+  const recallEstimate = researchStageEstimate(researchTelemetry, "recall", displayEffort);
+  const spendExhausted = runBudgetExhausted(runLedger.usage.costUsd);
+  const recallEstimateLabel = recallEstimate.provisional
+    ? recallEstimate.samples === 0 && researchTelemetry.samples.every((sample) => sample.stage !== "recall")
+      ? `No timed searches yet; allow up to ${formatDuration(recallEstimate.estimateMs)}`
+      : `A search takes about ${formatDuration(recallEstimate.estimateMs)} (sharper after 3 timed runs)`
+    : `A search takes about ${formatDuration(recallEstimate.estimateMs)} (median of ${recallEstimate.samples} runs)`;
 
   if (!storageReady) {
     return (
@@ -1123,6 +1289,34 @@ export function ResearchDashboard() {
             {recall.status === "running" ? "Finding sources…" : recall.error || recall.progress}
           </span>
           {recall.response && <small>{recall.response.cache.status === "hit" ? "exact local run reused" : recall.response.cache.status === "bypass" ? "recomputed live" : "fresh local run"} · {recall.response.model}</small>}
+        </div>
+
+        <div className="research-budget">
+          <p className={`research-budget-line ${spendExhausted ? "exhausted" : ""}`}>
+            <span><strong>{researchBudgetProfiles[displayEffort].label}</strong> effort</span>
+            <span>Spent <strong>{formatUsd(runLedger.usage.costUsd)}</strong> of ${researchRunCapUsd} this run</span>
+            {runLedger.usage.webSearchRequests > 0 && <span>{runLedger.usage.webSearchRequests} web searches</span>}
+            {recall.status !== "running" && <span>{recallEstimateLabel}</span>}
+            {(runLedger.usage.calls > 0 || spendExhausted) && recall.status !== "running" && (
+              <button type="button" onClick={startNewRun}>Start a new run</button>
+            )}
+          </p>
+          {recall.status === "running" && (
+            <>
+              <div className="research-eta-rail" aria-hidden="true">
+                <span style={{ transform: `scaleX(${Math.min(1, recallElapsedMs / recallEstimate.estimateMs)})` }} />
+              </div>
+              <p className="research-budget-line">
+                <span>{formatDuration(recallElapsedMs)} elapsed</span>
+                <span>
+                  {recallElapsedMs < recallEstimate.estimateMs
+                    ? `about ${formatDuration(recallEstimate.estimateMs - recallElapsedMs)} left`
+                    : "taking longer than usual"}
+                  {recallEstimate.provisional ? " (provisional estimate)" : ""}
+                </span>
+              </p>
+            </>
+          )}
         </div>
 
         {recall.status === "complete" && recall.response && (
