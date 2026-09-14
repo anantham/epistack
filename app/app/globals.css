@@ -10541,3 +10541,112 @@ button.primary-link:disabled {
 .research-advanced-body > section {
   margin-bottom: 0;
 }
+
+/* Overturning a reviewer reject */
+.adversarial-decisions article:has(.reject-overturn[open]) {
+  grid-column: 1 / -1;
+}
+
+.adversarial-decisions article.overturned {
+  border-color: #8fb8a0;
+}
+
+.adversarial-decisions article.overturned > div span {
+  color: var(--green);
+}
+
+.reject-overturn {
+  margin-top: 8px;
+}
+
+.reject-overturn > summary {
+  align-items: center;
+  color: var(--green);
+  cursor: pointer;
+  display: flex;
+  font-size: var(--type-meta);
+  font-weight: 600;
+  list-style: none;
+  min-height: 32px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.reject-overturn > summary::-webkit-details-marker {
+  display: none;
+}
+
+.reject-overturn > div {
+  display: grid;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.reject-overturn-result {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.reject-overturn-result > div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reject-overturn-result blockquote {
+  border-left: 2px solid var(--line-dark);
+  color: var(--ink-soft);
+  font-size: var(--type-meta);
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 10px;
+}
+
+.reject-overturn-result small,
+.reject-overturn-blocked,
+.reject-overturn-note > span {
+  color: var(--ink-soft);
+  font-size: var(--type-meta);
+}
+
+.reject-overturn-saved {
+  color: var(--green);
+  font-size: var(--type-meta);
+  font-weight: 600;
+}
+
+.reject-overturn .human-promotion-check {
+  margin-bottom: 0;
+}
+
+.reject-overturn-note {
+  display: grid;
+  gap: 4px;
+}
+
+.reject-overturn-note textarea {
+  background: #fbfaf6;
+  border: 1px solid var(--line-dark);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 8px 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+@media (pointer: coarse) {
+  .reject-overturn > summary {
+    min-height: 44px;
+  }
+}
+
+.reject-overturn-note > span small {
+  margin-left: 6px;
+}

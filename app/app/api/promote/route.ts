@@ -17,6 +17,14 @@ import {
   sourceClassSchema,
 } from "../../../lib/source-class";
 import { promotedResultSemanticKey, stableSemanticId } from "../../../lib/stable-record-id";
+import {
+  checkHumanOverturn,
+  humanOverturnAssessor,
+  humanOverturnRelationStatus,
+  humanOverturnReviewMode,
+  humanOverturnSnapshotOperation,
+  humanVerifiedResultStatus,
+} from "../../../lib/reject-overturn";
 
 type PromoteRequest = {
   caseId?: unknown;
@@ -34,6 +42,7 @@ type PromoteRequest = {
   sourceClass?: unknown;
   acquisition?: unknown;
   preliminary?: unknown;
+  overturn?: unknown;
 };
 
 function safeId(value: string) {
@@ -268,6 +277,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Source provenance is incomplete." }, { status: 400 });
   }
   const autoRequested = body.reviewMode === "adversarial-auto";
+  const overturnRequested = body.reviewMode === humanOverturnReviewMode;
   const rawArtifact = body.artifact as Partial<SourceArtifact> | null;
   const reviewEnvelope = body.adversarialReview as {
     policyId?: unknown;
@@ -315,6 +325,22 @@ export async function POST(request: Request) {
     && body.model.trim() === primaryModel
     && reviewSupportsDecisions
     && candidateMatchesAccepted;
+
+  // A person's overturn of a reviewer reject is a separate, explicitly human path.
+  const humanOverturnCheck = overturnRequested
+    ? checkHumanOverturn({
+      humanChecked: body.humanChecked,
+      overturn: body.overturn,
+      adversarialReview: body.adversarialReview,
+      artifact: body.artifact,
+      model: body.model,
+      candidateResults: parsed.data.results,
+    })
+    : null;
+  if (humanOverturnCheck && !humanOverturnCheck.ok) {
+    return Response.json({ error: humanOverturnCheck.error, code: humanOverturnCheck.code }, { status: 422 });
+  }
+  const humanOverturn = humanOverturnCheck && humanOverturnCheck.ok ? humanOverturnCheck : null;
 
   // Hard three-axis guard. Legacy PubMed records neither declare a source class
   // nor an acquisition, so they keep their existing causal behavior. Any record
@@ -370,7 +396,7 @@ export async function POST(request: Request) {
   }
 
   let serverVerifiedArtifact: PersistedPmcArtifact | null = null;
-  if (autoGatePasses && rawArtifact) {
+  if ((autoGatePasses || humanOverturn) && rawArtifact) {
     try {
       serverVerifiedArtifact = await independentlyVerifyPmcArtifact({
         pmid,
@@ -408,10 +434,17 @@ export async function POST(request: Request) {
     const familyReason = `[${dependenceBasis}] ${candidate.evidenceFamily.reason}`;
     const model = typeof body.model === "string" ? body.model : "unspecified-model";
     const autoPromotion = autoGatePasses;
-    const verificationStatus = autoPromotion ? "ai-cross-checked-full-text" : "abstract-only";
-    const relationAssessor = autoPromotion ? `${primaryModel}+${adversaryModel}` : "human-checked-ai-extraction";
-    const relationStatus = autoPromotion ? "accepted-by-dual-model-review" : "provisional-pending-full-text";
-    if (!autoPromotion) {
+    const fullTextReview = autoPromotion || humanOverturn !== null;
+    const verificationStatus = autoPromotion
+      ? "ai-cross-checked-full-text"
+      : humanOverturn ? humanVerifiedResultStatus : "abstract-only";
+    const relationAssessor = autoPromotion
+      ? `${primaryModel}+${adversaryModel}`
+      : humanOverturn ? humanOverturnAssessor : "human-checked-ai-extraction";
+    const relationStatus = autoPromotion
+      ? "accepted-by-dual-model-review"
+      : humanOverturn ? humanOverturnRelationStatus : "provisional-pending-full-text";
+    if (!fullTextReview) {
       const acceptedFullText = await d1.prepare(`SELECT er.id
         FROM evidence_relations er
         JOIN result_records rr ON rr.id = er.result_id
@@ -420,7 +453,7 @@ export async function POST(request: Request) {
         WHERE er.case_id = ?
           AND st.source_id = ?
           AND er.status LIKE 'accepted%'
-          AND rr.verification_status = 'ai-cross-checked-full-text'
+          AND rr.verification_status IN ('ai-cross-checked-full-text', 'human-verified-full-text')
         LIMIT 1`)
         .bind(caseId, sourceId)
         .first<{ id: string }>();
@@ -512,11 +545,18 @@ export async function POST(request: Request) {
     }
     const atomicResults = [...atomicById.values()].sort((left, right) => left.resultId.localeCompare(right.resultId));
     const relationRecords = [...relationById.values()].sort((left, right) => left.relationId.localeCompare(right.relationId));
-    const persistedArtifact = autoPromotion ? serverVerifiedArtifact : null;
+    const persistedArtifact = fullTextReview ? serverVerifiedArtifact : null;
     const resultPayload = (record: typeof atomicResults[number]) => ({
       extractionModel: model,
-      adversarialModel: autoPromotion ? adversaryModel : null,
-      policyId: autoPromotion ? dualReviewPolicyId : null,
+      adversarialModel: autoPromotion ? adversaryModel : humanOverturn?.models.adversary ?? null,
+      policyId: fullTextReview ? dualReviewPolicyId : null,
+      ...(humanOverturn ? {
+        humanOverturn: {
+          overturnedReviewerVerdict: humanOverturn.decision.reviewerVerdict,
+          reviewerRationale: humanOverturn.decision.rationale,
+          note: humanOverturn.note || null,
+        },
+      } : {}),
       sourceArtifact: persistedArtifact,
       extractionCaveat: candidate.extractionCaveat,
       applicability: record.result.applicability,
@@ -536,7 +576,7 @@ export async function POST(request: Request) {
         authors: (rawSource.authors || "").split(",").map((name) => name.trim()).filter(Boolean),
         published: rawSource.published ?? null,
         journal: rawSource.journal ?? null,
-        sourceType: autoPromotion ? "PMC JATS full text" : "PubMed abstract",
+        sourceType: fullTextReview ? "PMC JATS full text" : "PubMed abstract",
         contentHash: persistedArtifact?.contentHash ?? null,
       },
       study: { studyId, ...candidate.study, registrationId },
@@ -593,7 +633,7 @@ export async function POST(request: Request) {
           json_extract(artifact_json, '$.graphFingerprint') AS graph_fingerprint
         FROM snapshots
         WHERE case_id = ?
-          AND operation IN ('autopromote-full-text-results', 'record-provisional-abstract-results')
+          AND operation IN ('autopromote-full-text-results', 'record-provisional-abstract-results', 'human-overturn-reviewer-reject')
           AND json_extract(artifact_json, '$.sourceId') = ?
         ORDER BY created_at DESC, id DESC
         LIMIT 1`)
@@ -636,7 +676,7 @@ export async function POST(request: Request) {
           JSON.stringify((rawSource.authors || "").split(",").map((name) => name.trim()).filter(Boolean)),
           rawSource.published ?? null,
           rawSource.journal ?? null,
-          autoPromotion ? "PMC JATS full text" : "PubMed abstract",
+          fullTextReview ? "PMC JATS full text" : "PubMed abstract",
           JSON.stringify({ title: rawSource.title, DOI: rawSource.doi, PMID: pmid }),
           persistedArtifact?.contentHash ?? null,
           now,
@@ -720,7 +760,9 @@ export async function POST(request: Request) {
             result.timeHorizon,
             null,
             "{}",
-            autoPromotion ? "unknown-from-ai-full-text-extraction" : "unknown-from-abstract",
+            autoPromotion
+              ? "unknown-from-ai-full-text-extraction"
+              : humanOverturn ? "unknown-from-human-verified-full-text" : "unknown-from-abstract",
             now,
           ),
         d1.prepare(`INSERT INTO result_records (id, analysis_id, dependence_group_id, result_role, result_text, estimate_json, locator, excerpt, verification_status, payload_json, created_at)
@@ -787,7 +829,8 @@ export async function POST(request: Request) {
           SET status = 'superseded-by-full-text-review'
           WHERE er.case_id = ?
             AND (
-              er.status LIKE 'accepted%'
+              -- A person's explicit overturn survives later automatic re-runs.
+              (er.status LIKE 'accepted%' AND er.status != 'accepted-human-verified-full-text')
               OR er.status = 'provisional-pending-full-text'
             )
             AND er.result_id IN (
@@ -819,28 +862,52 @@ export async function POST(request: Request) {
       );
     }
 
-    if (autoPromotion && parsedDecisions?.success) {
-      parsedDecisions.data.forEach((decision) => {
-        statements.push(
-          d1.prepare(`INSERT INTO assessments (id, case_id, target_type, target_id, policy_id, assessor, dimension, score, label, rationale, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET label = excluded.label, rationale = excluded.rationale, status = excluded.status`)
-            .bind(
-              `${recordPrefix}-adversarial-assessment-${decision.resultIndex + 1}`,
-              caseId,
-              "extraction-proposal",
-              `${recordPrefix}-proposal-${decision.resultIndex + 1}`,
-              dualReviewPolicyId,
-              adversaryModel,
-              "full-text-result-fidelity",
-              decision.finalDecision === "promote" ? 1 : 0,
-              decision.finalDecision,
-              decision.rationale,
-              "recorded",
-              now,
-            ),
-        );
-      });
+    const recordedDecisions = autoPromotion && parsedDecisions?.success
+      ? parsedDecisions.data
+      : humanOverturn?.decisions ?? [];
+    const recordedAdversary = humanOverturn ? humanOverturn.models.adversary : adversaryModel;
+    recordedDecisions.forEach((decision) => {
+      statements.push(
+        d1.prepare(`INSERT INTO assessments (id, case_id, target_type, target_id, policy_id, assessor, dimension, score, label, rationale, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET label = excluded.label, rationale = excluded.rationale, status = excluded.status`)
+          .bind(
+            `${recordPrefix}-adversarial-assessment-${decision.resultIndex + 1}`,
+            caseId,
+            "extraction-proposal",
+            `${recordPrefix}-proposal-${decision.resultIndex + 1}`,
+            dualReviewPolicyId,
+            recordedAdversary,
+            "full-text-result-fidelity",
+            decision.finalDecision === "promote" ? 1 : 0,
+            decision.finalDecision,
+            decision.rationale,
+            "recorded",
+            now,
+          ),
+      );
+    });
+    if (humanOverturn) {
+      // The reviewer's reject stays on record next to the person's overturn.
+      statements.push(
+        d1.prepare(`INSERT INTO assessments (id, case_id, target_type, target_id, policy_id, assessor, dimension, score, label, rationale, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET label = excluded.label, rationale = excluded.rationale, status = excluded.status`)
+          .bind(
+            `${recordPrefix}-human-overturn-assessment-${humanOverturn.resultIndex + 1}`,
+            caseId,
+            "extraction-proposal",
+            `${recordPrefix}-proposal-${humanOverturn.resultIndex + 1}`,
+            dualReviewPolicyId,
+            "human-reviewer",
+            "full-text-result-fidelity",
+            1,
+            "overturn-reject",
+            humanOverturn.note || "A person read the passage and the reviewer's objection and accepted this result.",
+            "recorded",
+            now,
+          ),
+      );
     }
 
     const snapshotId = graphChanged ? crypto.randomUUID() : previousSnapshot?.id ?? crypto.randomUUID();
@@ -852,8 +919,10 @@ export async function POST(request: Request) {
             snapshotId,
             caseId,
             latestCaseSnapshot?.id ?? null,
-            autoPromotion ? "claude-dual-model-policy" : "human-ai-workflow",
-            autoPromotion ? "autopromote-full-text-results" : "record-provisional-abstract-results",
+            autoPromotion ? "claude-dual-model-policy" : humanOverturn ? "human-reviewer" : "human-ai-workflow",
+            autoPromotion
+              ? "autopromote-full-text-results"
+              : humanOverturn ? humanOverturnSnapshotOperation : "record-provisional-abstract-results",
             JSON.stringify({
               sourceId,
               graphFingerprint,
@@ -862,12 +931,13 @@ export async function POST(request: Request) {
               claimFrames: promotableClaimFrames,
               model,
               artifact: persistedArtifact,
-              adversarialReview: autoPromotion ? reviewEnvelope : null,
+              adversarialReview: fullTextReview ? reviewEnvelope : null,
+              ...(humanOverturn ? { humanOverturn: { resultIndex: humanOverturn.resultIndex, note: humanOverturn.note || null } } : {}),
             }),
             now,
           ),
       );
-      if (autoPromotion) {
+      if (fullTextReview) {
         statements.push(
           d1.prepare(`UPDATE decision_episodes
             SET status = 'stale', updated_at = ?

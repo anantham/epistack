@@ -57,6 +57,8 @@ import {
   type ClaimSteering,
 } from "../../lib/claim-steering";
 import { ClaimBoard } from "./claim-board";
+import { humanOverturnRelationStatus, humanOverturnReviewMode, rejectedProposal } from "../../lib/reject-overturn";
+import { RejectOverturn, type OverturnState } from "./reject-overturn";
 
 type LaneRun = {
   status: "ready" | "running" | "complete" | "error";
@@ -367,6 +369,7 @@ export function ResearchDashboard() {
     liveTrace: [],
   });
   const [sourceReviews, setSourceReviews] = useState<Record<string, SourceReviewRun>>({});
+  const [overturns, setOverturns] = useState<Record<string, OverturnState>>({});
   const [storageReady, setStorageReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionHealth>({ status: "checking", models: null, detail: "Checking the hosted evidence backend…" });
   const [runLedger, setRunLedger] = useState<ResearchRunLedger>({ briefId: "", startedAt: "", usage: emptyResearchUsage });
@@ -1076,6 +1079,49 @@ export function ResearchDashboard() {
     await loadPromotionRegister();
   }
 
+  async function overturnReject(record: PubmedDiscovery, payload: DualReviewResponse, resultIndex: number, note: string) {
+    const key = `${record.pmid}:${resultIndex}`;
+    const proposal = rejectedProposal(payload.primaryCandidate?.results ?? [], payload.review ?? { reviews: [] }, resultIndex);
+    if (!proposal) return;
+    setOverturns((current) => ({ ...current, [key]: { status: "saving", error: "" } }));
+    try {
+      const workspace = currentWorkspace();
+      const response = await fetch("/api/promote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          caseId: workspace.result?.caseId,
+          originalPrompt: workspace.prompt,
+          compiledQuestion: workspace.compiledQuestion,
+          source: payload.source,
+          candidate: { ...payload.candidate, results: [proposal] },
+          model: payload.models.primary,
+          claimFrames: compiledClaimFrames(),
+          humanChecked: true,
+          reviewMode: humanOverturnReviewMode,
+          artifact: payload.artifact,
+          adversarialReview: {
+            policyId: payload.promotion.policyId,
+            models: payload.models,
+            review: payload.review,
+            decisions: payload.decisions,
+            primaryResults: payload.primaryCandidate.results,
+          },
+          overturn: { resultIndex, note },
+        }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "The reject could not be overturned.");
+      setOverturns((current) => ({ ...current, [key]: { status: "saved", error: "" } }));
+      await loadPromotionRegister();
+    } catch (error) {
+      setOverturns((current) => ({
+        ...current,
+        [key]: { status: "error", error: error instanceof Error ? error.message : "The reject could not be overturned." },
+      }));
+    }
+  }
+
   async function investigateFullText(record: PubmedDiscovery, refresh = false) {
     if (runBudgetExhausted(runLedger.usage.costUsd)) {
       setDeepDives((current) => ({
@@ -1643,16 +1689,35 @@ export function ResearchDashboard() {
                                     <div><dt>Preserved source</dt><dd>{dualPayload.artifact.pmcid} · SHA-256 {dualPayload.artifact.contentHash.slice(0, 12)}…</dd></div>
                                   </dl>
                                   <div className="adversarial-decisions">
-                                    {dualPayload.decisions.map((decision) => (
-                                      <article className={decision.finalDecision} key={`${record.pmid}-review-${decision.resultIndex}`}>
-                                        <div>
-                                          <span>{decision.finalDecision === "promote" ? "survived" : "rejected"}</span>
-                                          <small>{decision.reviewerVerdict} · passage {decision.passageFound ? "found" : "not found"}</small>
-                                        </div>
-                                        <strong>{decision.analysisLabel}</strong>
-                                        <p>{decision.rationale}</p>
-                                      </article>
-                                    ))}
+                                    {dualPayload.decisions.map((decision) => {
+                                      const proposal = decision.finalDecision === "reject"
+                                        ? rejectedProposal(dualPayload.primaryCandidate?.results ?? [], dualPayload.review ?? { reviews: [] }, decision.resultIndex)
+                                        : null;
+                                      const overturnKey = `${record.pmid}:${decision.resultIndex}`;
+                                      const overturned = Boolean(proposal && promotionRecords.some((candidate) =>
+                                        candidate.pmid === record.pmid
+                                        && candidate.status === humanOverturnRelationStatus
+                                        && candidate.result_text === proposal.resultText));
+                                      return (
+                                        <article className={overturned ? "reject overturned" : decision.finalDecision} key={`${record.pmid}-review-${decision.resultIndex}`}>
+                                          <div>
+                                            <span>{overturned ? "overturned by you" : decision.finalDecision === "promote" ? "survived" : "rejected"}</span>
+                                            <small>{decision.reviewerVerdict} · passage {decision.passageFound ? "found" : "not found"}</small>
+                                          </div>
+                                          <strong>{decision.analysisLabel}</strong>
+                                          <p>{decision.rationale}</p>
+                                          {decision.finalDecision === "reject" && (
+                                            <RejectOverturn
+                                              result={proposal}
+                                              passageFound={decision.passageFound}
+                                              state={overturned ? { status: "saved", error: "" } : overturns[overturnKey] ?? { status: "idle", error: "" }}
+                                              disabled={agentBusy}
+                                              onOverturn={(note) => void overturnReject(record, dualPayload, decision.resultIndex, note)}
+                                            />
+                                          )}
+                                        </article>
+                                      );
+                                    })}
                                   </div>
                                   <div className="candidate-results">
                                     {dualPayload.candidate.results.map((result, resultIndex) => (
