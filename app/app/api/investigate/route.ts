@@ -35,6 +35,11 @@ const adversaryModel = "Astra · adversarial full-paper reviewer";
 // This article's methods, results, discussion, and conclusion fit within the
 // first 32k characters; the artifact hash still attests to the complete text.
 const hostedTextCap = 32_000;
+// Lyra's public Responses contract rejects rendered prompts over 12,000
+// characters. Full-paper extraction deliberately keeps more text than that,
+// so route oversized evidence requests to the server-side OpenRouter path
+// instead of sending a request Astra must reject with HTTP 400.
+const astraRenderedPromptLimit = 12_000;
 
 type InvestigateEnvironment = {
   OPENROUTER_API_KEY?: string;
@@ -546,7 +551,8 @@ export async function POST(request: Request) {
       instructions: string,
       role: "extractor" | "reviewer" | "repair",
     ) {
-      if (role !== "repair" && lyraConfigured()) {
+      const astraPromptTooLarge = input.length + instructions.length > astraRenderedPromptLimit;
+      if (role !== "repair" && lyraConfigured() && !astraPromptTooLarge) {
         try {
           const text = await runLyraStage({
             model: "lyra-chatgpt-pro",
@@ -564,7 +570,7 @@ export async function POST(request: Request) {
         usage = addResearchUsage(usage, result.usage);
         return {
           text: result.text,
-          model: `OpenRouter · ${openRouterModel(role, roleModels)} · ${role === "extractor" ? "extractor" : role === "reviewer" ? "adversarial reviewer" : "JSON repair"}`,
+          model: `OpenRouter · ${openRouterModel(role, roleModels)} · ${role === "extractor" ? "extractor" : role === "reviewer" ? "adversarial reviewer" : "JSON repair"}${astraPromptTooLarge ? " (Astra prompt limit)" : ""}`,
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

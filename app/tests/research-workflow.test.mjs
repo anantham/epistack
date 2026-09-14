@@ -48,11 +48,12 @@ test("the capability rail explains placeholder capabilities as planned", async (
 });
 
 test("research route keeps discovery separate from evidence promotion", async () => {
-  const [dashboard, api, deepDiveApi, promoteApi, database, decision, recallApi] = await Promise.all([
+  const [dashboard, api, deepDiveApi, promoteApi, investigateApi, database, decision, recallApi] = await Promise.all([
     readFile(new URL("../app/research/research-dashboard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/research/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/deep-dive/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/promote/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/investigate/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/synthesis/decision-workbench.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/recall/route.ts", import.meta.url), "utf8"),
@@ -80,6 +81,9 @@ test("research route keeps discovery separate from evidence promotion", async ()
   assert.match(promoteApi, /dualReviewPolicyId/);
   assert.match(promoteApi, /provisional-pending-full-text/);
   assert.match(promoteApi, /accepted-by-dual-model-review/);
+  assert.match(investigateApi, /astraRenderedPromptLimit/);
+  assert.match(investigateApi, /input\.length \+ instructions\.length/);
+  assert.match(investigateApi, /Astra prompt limit/);
   assert.match(promoteApi, /JOIN result_records/);
   assert.match(database, /ensureEvidenceGraphTables/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS assessments/);
