@@ -287,6 +287,7 @@ async function resolvePmcNumeric(pmid: string) {
   url.searchParams.set("tool", "epistack-evidence-lab");
   const response = await fetch(url, {
     headers: { "User-Agent": "Epistack Evidence Lab/0.1 (hosted full-text review)" },
+    signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`NCBI PMID-to-PMCID conversion returned ${response.status}.`);
   const payload = await response.json() as { records?: Array<{ pmcid?: string; pmid?: string }> };
