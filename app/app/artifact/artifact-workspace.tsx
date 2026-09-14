@@ -636,6 +636,7 @@ export function ArtifactWorkspace() {
     relation.result.verificationStatus === "human-verified-full-text"
     || relation.status === "accepted-human-verified-full-text",
   ).length;
+  const aiFullTextCount = Math.max(0, fullTextCount - humanVerifiedCount);
   const counts = artifact?.counts ?? {
     claims: visibleClaims.length,
     resultRelations: acceptedRelations.length,
@@ -761,16 +762,14 @@ export function ArtifactWorkspace() {
           <b>{counts.dependenceFamilies}</b>
         </div>
         <div>
-          <span>Full-text checks (AI + human)</span>
-          <b>{counts.fullTextVerified}</b>
+          <span>AI full-text checks</span>
+          <b>{aiFullTextCount}</b>
         </div>
         <div className={`live-artifact-freshness ${artifact?.freshness.stale ? "is-stale" : ""}`}>
           <span>{artifact?.freshness.stale ? "Decision freshness" : "Artifact status"}</span>
           <strong>{artifact?.statusLabel}</strong>
           <small>Latest accepted evidence: {formatDate(artifact?.freshness.latestEvidenceAt)}</small>
-          {humanVerifiedCount > 0 && (
-            <small>{humanVerifiedCount} human-verified full-text {humanVerifiedCount === 1 ? "stamp" : "stamps"}</small>
-          )}
+          <small>{humanVerifiedCount} human-verified full-text {humanVerifiedCount === 1 ? "stamp" : "stamps"} · separate from AI review</small>
           {artifact?.freshness.reasons.length ? <small>{artifact.freshness.reasons.join(" ")}</small> : null}
         </div>
       </section>
