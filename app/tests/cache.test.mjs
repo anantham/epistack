@@ -180,10 +180,11 @@ test("browser decomposition cache bounds and validates persisted entries", () =>
 
 test("the dashboard restores disposable UI state and exposes explicit live refresh", async () => {
   const dashboard = await readFile(new URL("../app/research/research-dashboard.tsx", import.meta.url), "utf8");
-  assert.match(dashboard, /epistack:research-ui-cache:v2/);
+  assert.match(dashboard, /epistack:research-ui-cache:v3:/);
   assert.match(dashboard, /briefId/);
-  assert.match(dashboard, /window\.localStorage\.getItem\(dashboardCacheKey\)/);
-  assert.match(dashboard, /window\.localStorage\.setItem\(dashboardCacheKey/);
+  assert.match(dashboard, /window\.localStorage\.getItem\(dashboardCacheKey\(loadedBrief\?\.briefId/);
+  assert.match(dashboard, /window\.localStorage\.setItem\(dashboardCacheKey\(brief\?\.briefId/);
+  assert.match(dashboard, /sourceReviews/);
   assert.match(dashboard, /Reset browser cache/);
   assert.match(dashboard, /Refresh live/);
   assert.match(dashboard, /Re-extract live/);

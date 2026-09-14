@@ -1,4 +1,5 @@
 import { ensureSnapshotTables, getD1 } from "../../../db";
+import { decompositionSchema } from "../../../lib/decomposition-server";
 import {
   projectResearchBriefForArtifact,
   researchBriefSchema,
@@ -13,6 +14,22 @@ type ArtifactPayload = {
   claims?: unknown;
   researchBrief?: unknown;
   shareContextInArtifact?: boolean;
+  workflow?: unknown;
+};
+
+type WorkflowPayload = {
+  version: 1;
+  decomposition: {
+    caseId: string;
+    prompt: string;
+    decisionContext: string;
+    mode: "ai" | "local-fallback";
+    model: string;
+    warning: string | null;
+    decomposition: unknown;
+  };
+  researchBrief: unknown;
+  researchState?: Record<string, unknown>;
 };
 
 function routeError(error: unknown) {
@@ -52,9 +69,51 @@ export async function POST(request: Request) {
     const researchBrief = parsedBrief?.success
       ? projectResearchBriefForArtifact(parsedBrief.data, artifact.shareContextInArtifact === true)
       : null;
+    let persistedWorkflow: WorkflowPayload | null = null;
+    if (artifact.workflow !== undefined) {
+      const candidate = artifact.workflow as Partial<WorkflowPayload> | null;
+      const decompositionCandidate = candidate?.decomposition;
+      const parsedDecomposition = decompositionCandidate
+        ? decompositionSchema.safeParse(decompositionCandidate.decomposition)
+        : { success: false as const };
+      const parsedWorkflowBrief = researchBriefSchema.safeParse(candidate?.researchBrief);
+      if (
+        candidate?.version !== 1
+        || !decompositionCandidate
+        || typeof decompositionCandidate.caseId !== "string"
+        || typeof decompositionCandidate.prompt !== "string"
+        || typeof decompositionCandidate.decisionContext !== "string"
+        || (decompositionCandidate.mode !== "ai" && decompositionCandidate.mode !== "local-fallback")
+        || typeof decompositionCandidate.model !== "string"
+        || (decompositionCandidate.warning !== null && typeof decompositionCandidate.warning !== "string")
+        || !parsedDecomposition.success
+        || !parsedWorkflowBrief.success
+        || !researchBrief
+      ) {
+        return Response.json({ error: "The persisted case workflow is incomplete or invalid." }, { status: 400 });
+      }
+      persistedWorkflow = {
+        version: 1,
+        decomposition: {
+          ...decompositionCandidate,
+          decomposition: parsedDecomposition.data,
+        },
+        researchBrief: parsedWorkflowBrief.data,
+        ...(candidate.researchState && typeof candidate.researchState === "object" && !Array.isArray(candidate.researchState)
+          ? { researchState: candidate.researchState as Record<string, unknown> }
+          : {}),
+      };
+    }
+    const artifactWithoutWorkflow = { ...artifact };
+    delete artifactWithoutWorkflow.workflow;
     const persistedArtifact = researchBrief
-      ? { ...artifact, researchBrief, shareContextInArtifact: researchBrief.privacy.shareContextInArtifact }
-      : artifact;
+      ? {
+          ...artifactWithoutWorkflow,
+          ...(persistedWorkflow ? { workflow: persistedWorkflow } : {}),
+          researchBrief,
+          shareContextInArtifact: researchBrief.privacy.shareContextInArtifact,
+        }
+      : artifactWithoutWorkflow;
 
     const statements = [
       d1
@@ -130,7 +189,22 @@ export async function GET(request: Request) {
       .prepare("SELECT * FROM snapshots WHERE case_id = ? ORDER BY created_at DESC LIMIT 20")
       .bind(caseId)
       .all();
-    return Response.json({ case: caseRecord, snapshots: snapshots.results });
+    let workflow: unknown = null;
+    for (const snapshot of snapshots.results ?? []) {
+      if (!snapshot || typeof snapshot !== "object") continue;
+      const artifactJson = (snapshot as { artifact_json?: unknown }).artifact_json;
+      if (typeof artifactJson !== "string") continue;
+      try {
+        const parsed = JSON.parse(artifactJson) as { workflow?: unknown };
+        if (parsed.workflow !== undefined) {
+          workflow = parsed.workflow;
+          break;
+        }
+      } catch {
+        // Ignore a malformed historical snapshot and keep looking for a valid one.
+      }
+    }
+    return Response.json({ case: caseRecord, snapshots: snapshots.results, workflow });
   } catch (error) {
     return routeError(error);
   }

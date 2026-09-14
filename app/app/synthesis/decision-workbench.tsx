@@ -13,6 +13,7 @@ import {
   researchBriefStorageKey,
   type ResearchBrief,
 } from "../../lib/research-brief";
+import { parseCaseWorkflow } from "../../lib/case-workflow";
 
 type ArtifactSummary = {
   contractVersion: "live-artifact.v1";
@@ -184,8 +185,28 @@ export function DecisionWorkbench() {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setSession(getSession()), 0);
-    return () => window.clearTimeout(timer);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      const initialSession = getSession();
+      setSession(initialSession);
+      const queryCaseId = new URLSearchParams(window.location.search).get("caseId")?.trim() || "";
+      if (!queryCaseId || initialSession.brief) return;
+      void fetch(`/api/cases?caseId=${encodeURIComponent(queryCaseId)}`, { cache: "no-store" })
+        .then(async (response) => ({ response, payload: await response.json().catch(() => null) as { workflow?: unknown } | null }))
+        .then(({ response, payload }) => {
+          const workflow = parseCaseWorkflow(payload?.workflow);
+          if (!cancelled && response.ok && workflow?.researchBrief.caseId === queryCaseId) {
+            setSession({ ...initialSession, brief: workflow.researchBrief });
+          }
+        })
+        .catch(() => {
+          // The case-bound artifact remains usable if optional brief hydration fails.
+        });
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   const loadCurrent = useCallback(async () => {

@@ -9,6 +9,7 @@ import type {
   QuestionHighlight,
 } from "../lib/decomposition";
 import { decompositionSessionKey, interpretationMapStorageKey } from "../lib/decomposition";
+import { parseCaseWorkflow } from "../lib/case-workflow";
 import {
   agentPromptStorageKey,
   promptOverridesSignature,
@@ -230,6 +231,7 @@ export default function Home() {
     const timer = setTimeout(() => {
       const searchParams = new URLSearchParams(window.location.search);
       const explicitlyResuming = window.location.pathname === "/decompose" || searchParams.get("resume") === "1";
+      const queryCaseId = searchParams.get("caseId")?.trim() || "";
       if (searchParams.get("settings") === "1") {
         setSettingsOpen(true);
       }
@@ -240,6 +242,31 @@ export default function Home() {
         }
       } catch {
         // Invalid local preferences should never block the app.
+      }
+
+      // A case-bound URL must load its server snapshot. Falling back to the
+      // latest browser workspace could show another question's data.
+      if (queryCaseId) {
+        void fetch(`/api/cases?caseId=${encodeURIComponent(queryCaseId)}`, { cache: "no-store" })
+          .then(async (response) => {
+            const payload = await response.json().catch(() => null) as { workflow?: unknown } | null;
+            const workflow = parseCaseWorkflow(payload?.workflow);
+            if (!response.ok || !workflow || workflow.decomposition.caseId !== queryCaseId) {
+              setError("This case does not have a saved decomposition snapshot.");
+              return;
+            }
+            const restoredResult: DecompositionResponse = {
+              ...workflow.decomposition,
+              cache: { status: "browser", layer: "browser", createdAt: new Date().toISOString(), expiresAt: null },
+            };
+            setResult(restoredResult);
+            setPrompt(restoredResult.prompt);
+            setDecisionContext(restoredResult.decisionContext ?? "");
+            setPhase("review");
+          })
+          .catch(() => setError("The saved decomposition could not be loaded. Return to the artifact and try again."))
+          .finally(() => setStorageReady(true));
+        return;
       }
 
       try {

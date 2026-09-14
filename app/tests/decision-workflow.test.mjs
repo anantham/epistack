@@ -31,7 +31,8 @@ test("decision synthesis reads the canonical accepted graph and validates every 
   assert.match(store, /accepted-by-dual-model-review/);
   assert.match(store, /accepted-human-verified-full-text/);
   assert.match(workbench, /typeof window === "undefined"/);
-  assert.match(workbench, /setSession\(getSession\(\)\)/);
+  assert.match(workbench, /const initialSession = getSession\(\)/);
+  assert.match(workbench, /fetch\(`\/api\/cases\?caseId=/);
 });
 
 test("new accepted evidence invalidates prior decisions and keeps stable semantic result identity", async () => {

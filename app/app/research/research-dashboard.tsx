@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   researchCapabilities,
   type ResearchLane,
@@ -14,6 +14,7 @@ import type {
   RecallResponse,
   RecallToolTraceEvent,
 } from "../../lib/broad-recall";
+import { parseCaseWorkflow, type PersistedCaseWorkflow } from "../../lib/case-workflow";
 import { sourceClassLabels, canPromoteSourceClass, type SourceClass } from "../../lib/source-class";
 import type { SourceReviewResponse } from "../../lib/source-adapters";
 import {
@@ -113,19 +114,24 @@ type PromotionRecord = {
 };
 
 type CachedDashboardState = {
-  version: 2;
+  version: 3;
   briefId: string;
   savedAt: string;
   queries: Record<string, string>;
   filters: PublicationFilter[];
   runs: Record<string, LaneRun>;
   deepDives: Record<string, DeepDiveRun>;
+  sourceReviews?: Record<string, SourceReviewRun>;
   openLane: string;
   recall?: RecallRun;
 };
 
-const dashboardCacheKey = "epistack:research-ui-cache:v2";
+const dashboardCacheKeyPrefix = "epistack:research-ui-cache:v3:";
 const researchRunStorageKey = "epistack:research-run:v1";
+
+function dashboardCacheKey(briefId: string) {
+  return `${dashboardCacheKeyPrefix}${briefId || "empty"}`;
+}
 
 type ResearchRunLedger = {
   briefId: string;
@@ -352,6 +358,7 @@ function renderSourceReviewPayload(review: SourceReviewResponse) {
 
 export function ResearchDashboard() {
   const [brief, setBrief] = useState<ResearchBrief | null>(null);
+  const [savedWorkflow, setSavedWorkflow] = useState<PersistedCaseWorkflow | null>(null);
   const activeLanes = useMemo(() => brief ? researchLanesFromBrief(brief) : [], [brief]);
   const [caseId, setCaseId] = useState("");
   const [queries, setQueries] = useState<Record<string, string>>({});
@@ -499,8 +506,10 @@ export function ResearchDashboard() {
   }, []);
 
   useEffect(() => {
-    try {
+    void (async () => {
+      try {
       let loadedBrief: ResearchBrief | null = null;
+      let loadedWorkflow: PersistedCaseWorkflow | null = null;
       const queryCaseId = new URLSearchParams(window.location.search).get("caseId")?.trim() || "";
       const rawBrief = window.localStorage.getItem(researchBriefStorageKey);
       if (rawBrief) {
@@ -509,6 +518,17 @@ export function ResearchDashboard() {
           if (!queryCaseId || parsedBrief.data.caseId === queryCaseId) loadedBrief = parsedBrief.data;
         } else {
           window.localStorage.removeItem(researchBriefStorageKey);
+        }
+      }
+      if (queryCaseId && !loadedWorkflow) {
+        const response = await fetch(`/api/cases?caseId=${encodeURIComponent(queryCaseId)}`, { cache: "no-store" });
+        const payload = await response.json().catch(() => null) as { workflow?: unknown } | null;
+        const workflow = parseCaseWorkflow(payload?.workflow);
+        if (response.ok && workflow?.researchBrief.caseId === queryCaseId) {
+          loadedWorkflow = workflow;
+          loadedBrief = workflow.researchBrief;
+          setSavedWorkflow(workflow);
+          window.localStorage.setItem(researchBriefStorageKey, JSON.stringify(loadedBrief));
         }
       }
       const lanes = loadedBrief ? researchLanesFromBrief(loadedBrief) : [];
@@ -521,11 +541,13 @@ export function ResearchDashboard() {
       setRunLedger(readRunLedger(loadedBrief?.briefId ?? ""));
       setResearchTelemetry(parseResearchTelemetry(window.localStorage.getItem(researchTelemetryStorageKey)));
 
-      const raw = window.localStorage.getItem(dashboardCacheKey);
-      if (!raw) return;
-      const cached = JSON.parse(raw) as Partial<CachedDashboardState>;
+      const raw = window.localStorage.getItem(dashboardCacheKey(loadedBrief?.briefId ?? ""));
+      const cached = raw
+        ? JSON.parse(raw) as Partial<CachedDashboardState>
+        : loadedWorkflow?.researchState as Partial<CachedDashboardState> | undefined;
+      if (!cached) return;
       const briefId = loadedBrief?.briefId ?? "";
-      if (cached.version !== 2 || !cached.savedAt || cached.briefId !== briefId) return;
+      if (cached.version !== 3 || !cached.savedAt || cached.briefId !== briefId) return;
 
       const restoredQueries = defaultQueries(lanes);
       for (const lane of lanes) {
@@ -570,6 +592,17 @@ export function ResearchDashboard() {
       }
       setDeepDives(restoredDeepDives);
 
+      const restoredSourceReviews: Record<string, SourceReviewRun> = {};
+      for (const [leadId, review] of Object.entries(cached.sourceReviews ?? {})) {
+        if (!review?.response) continue;
+        restoredSourceReviews[leadId] = {
+          status: "complete",
+          response: review.response,
+          error: "",
+        };
+      }
+      setSourceReviews(restoredSourceReviews);
+
       if (typeof cached.openLane === "string" && lanes.some((lane) => lane.id === cached.openLane)) setOpenLane(cached.openLane);
       if (cached.recall?.response) {
         setRecall({
@@ -580,12 +613,46 @@ export function ResearchDashboard() {
           liveTrace: cached.recall.response.toolTrace,
         });
       }
-    } catch {
-      window.localStorage.removeItem(dashboardCacheKey);
-    } finally {
-      setStorageReady(true);
-    }
+      } catch {
+        const queryCaseId = new URLSearchParams(window.location.search).get("caseId")?.trim() || "";
+        window.localStorage.removeItem(dashboardCacheKey(queryCaseId));
+      } finally {
+        setStorageReady(true);
+      }
+    })();
   }, []);
+
+  const persistResearchState = useCallback(async (cache: CachedDashboardState) => {
+    if (!savedWorkflow || !brief || savedWorkflow.researchBrief.caseId !== brief.caseId) return;
+    const hasResearchResults = Boolean(
+      cache.recall?.response
+      || Object.values(cache.runs).some((run) => run.response)
+      || Object.values(cache.deepDives).some((dive) => dive.payload)
+      || Object.values(cache.sourceReviews ?? {}).some((review) => review.response),
+    );
+    if (!hasResearchResults) return;
+    try {
+      await fetch("/api/cases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          caseId: brief.caseId,
+          originalPrompt: brief.originalQuestion,
+          compiledClaim: { statement: brief.compiledQuestion },
+          claims: brief.claims,
+          researchBrief: brief,
+          shareContextInArtifact: brief.privacy.shareContextInArtifact,
+          workflow: {
+            ...savedWorkflow,
+            researchBrief: brief,
+            researchState: cache,
+          },
+        }),
+      });
+    } catch {
+      // Browser cache remains the fast path if a background snapshot cannot be saved.
+    }
+  }, [brief, savedWorkflow]);
 
   useEffect(() => {
     if (!storageReady) return;
@@ -615,14 +682,24 @@ export function ResearchDashboard() {
             fallbackAvailable: dive.fallbackAvailable,
           }]),
       ) as Record<string, DeepDiveRun>;
+      const reusableSourceReviews = Object.fromEntries(
+        Object.entries(sourceReviews)
+          .filter(([, review]) => review.response !== null)
+          .map(([leadId, review]) => [leadId, {
+            status: "complete",
+            response: review.response,
+            error: "",
+          }]),
+      ) as Record<string, SourceReviewRun>;
       const cache: CachedDashboardState = {
-        version: 2,
+        version: 3,
         briefId: brief?.briefId ?? "",
         savedAt: new Date().toISOString(),
         queries,
         filters,
         runs: reusableRuns,
         deepDives: reusableDeepDives,
+        sourceReviews: reusableSourceReviews,
         openLane,
         recall: recall.response ? {
           status: "complete",
@@ -632,10 +709,11 @@ export function ResearchDashboard() {
           liveTrace: recall.response.toolTrace,
         } : undefined,
       };
-      window.localStorage.setItem(dashboardCacheKey, JSON.stringify(cache));
+      window.localStorage.setItem(dashboardCacheKey(brief?.briefId ?? ""), JSON.stringify(cache));
+      void persistResearchState(cache);
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [activeLanes, brief?.briefId, deepDives, filters, openLane, queries, recall.response, runs, storageReady]);
+  }, [activeLanes, brief?.briefId, deepDives, filters, openLane, persistResearchState, queries, recall.response, runs, sourceReviews, storageReady]);
 
   useEffect(() => {
     if (!storageReady || !steering) return;
@@ -647,7 +725,7 @@ export function ResearchDashboard() {
   }, [steering, storageReady]);
 
   function clearDashboardCache() {
-    window.localStorage.removeItem(dashboardCacheKey);
+    window.localStorage.removeItem(dashboardCacheKey(brief?.briefId ?? ""));
     setQueries(defaultQueries(activeLanes));
     setFilters(["trials", "reviews"]);
     setRuns(freshRuns(activeLanes));
@@ -1211,6 +1289,7 @@ export function ResearchDashboard() {
   const displayEffort = strongestEffort(steering ? keptClaimIds.map((claimId) => steering.claims[claimId].effort) : []);
   const recallEstimate = researchStageEstimate(researchTelemetry, "recall", displayEffort);
   const spendExhausted = runBudgetExhausted(runLedger.usage.costUsd);
+  const compilerHref = caseId ? `/map?caseId=${encodeURIComponent(caseId)}` : "/";
   const recallEstimateLabel = recallEstimate.provisional
     ? recallEstimate.samples === 0 && researchTelemetry.samples.every((sample) => sample.stage !== "recall")
       ? `No timed searches yet; allow up to ${formatDuration(recallEstimate.estimateMs)}`
@@ -1282,7 +1361,7 @@ export function ResearchDashboard() {
               Return to the question compiler to create the claims, action options, privacy boundary, and retrieval budget that agents are allowed to use.
             </p>
           </div>
-          <Link className="primary-button" href="/">Start with a question</Link>
+          <Link className="primary-button" href={compilerHref}>{caseId ? "Restore this case" : "Start with a question"}</Link>
         </section>
       </>
     );
@@ -1343,7 +1422,7 @@ export function ResearchDashboard() {
             <article><strong>{researchProgress.leadCount}</strong><span>discovery leads</span><small>Leads are candidates; they do not count as evidence.</small></article>
             <article><strong>{researchProgress.acquired}</strong><span>papers acquired</span><small>Full text or an explicit abstract fallback was read.</small></article>
             <article><strong>{researchProgress.reviewed}</strong><span>full-text reviews</span><small>Two-model review completed; rejected results stay inspectable.</small></article>
-            <article><strong>{researchProgress.accepted} / {researchProgress.totalClaims}</strong><span>claims with accepted evidence</span><small>Only promoted, provenance-bearing relations enter the artifact.</small></article>
+            <article><strong>{researchProgress.accepted}</strong><span>accepted records</span><small>Only promoted, provenance-bearing relations enter the artifact.</small></article>
           </div>
         </section>
       )}

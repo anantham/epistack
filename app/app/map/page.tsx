@@ -8,6 +8,7 @@ import {
   type DecompositionResponse,
   type DecompositionCluster
 } from "../../lib/decomposition";
+import { parseCaseWorkflow, type PersistedCaseWorkflow } from "../../lib/case-workflow";
 import {
   completeDimensionRoles,
   projectResearchBriefForArtifact,
@@ -96,6 +97,8 @@ export default function ContextualizeMap() {
   const [caseSummary, setCaseSummary] = useState("");
   const [knownUnknowns, setKnownUnknowns] = useState<string[]>([]);
   const [claimTemplate, setClaimTemplate] = useState("");
+  const [persistedWorkflow, setPersistedWorkflow] = useState<PersistedCaseWorkflow | null>(null);
+  const [caseLoadError, setCaseLoadError] = useState("");
   
   const [ready, setReady] = useState(false);
   
@@ -189,22 +192,64 @@ export default function ContextualizeMap() {
   }
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(decompositionSessionKey) || window.sessionStorage.getItem(decompositionSessionKey);
-    if (stored) {
-      try {
-        const response = JSON.parse(stored) as DecompositionResponse;
-        setPrompt(response.prompt);
-        setDecisionContext(response.decisionContext ?? "");
-        setClusters(response.decomposition.clusters);
-        setCaseId(response.caseId);
-        setCaseSummary(response.decomposition.summary);
-        setKnownUnknowns(response.decomposition.knownUnknowns);
-        setClaimTemplate(response.decomposition.claimTemplate);
-      } catch (err) {
-        console.error("Failed to parse stored decomposition", err);
+    let cancelled = false;
+
+    function applyDecomposition(response: DecompositionResponse, workflow: PersistedCaseWorkflow | null = null) {
+      if (cancelled) return;
+      setPersistedWorkflow(workflow);
+      setPrompt(response.prompt);
+      setDecisionContext(response.decisionContext ?? "");
+      setClusters(response.decomposition.clusters);
+      setCaseId(response.caseId);
+      setCaseSummary(response.decomposition.summary);
+      setKnownUnknowns(response.decomposition.knownUnknowns);
+      setClaimTemplate(response.decomposition.claimTemplate);
+      if (workflow) {
+        setContextAnswers(Object.fromEntries(workflow.researchBrief.contextualization.map((entry) => [entry.axisId, entry.typedAnswer])));
+        setContextSelections(Object.fromEntries(workflow.researchBrief.contextualization.map((entry) => [entry.axisId, entry.selectedValues])));
+        setCompiledBrief(workflow.researchBrief);
+        setEditedClaims(workflow.researchBrief.claims as ResearchClaimFrame[]);
+        setCompileState("review");
+        setCompileProgress("Review the saved research contract before starting research");
       }
     }
-    setReady(true);
+
+    async function load() {
+      const queryCaseId = new URLSearchParams(window.location.search).get("caseId")?.trim() || "";
+      if (queryCaseId) {
+        try {
+          const response = await fetch(`/api/cases?caseId=${encodeURIComponent(queryCaseId)}`, { cache: "no-store" });
+          const payload = await response.json().catch(() => null) as { workflow?: unknown } | null;
+          const workflow = parseCaseWorkflow(payload?.workflow);
+          if (!response.ok || !workflow || workflow.decomposition.caseId !== queryCaseId || workflow.researchBrief.caseId !== queryCaseId) {
+            if (!cancelled) setCaseLoadError("This case does not have a saved contextualization contract in the hosted workspace.");
+          } else {
+            applyDecomposition(workflow.decomposition, workflow);
+          }
+          if (!cancelled) setReady(true);
+          return;
+        } catch {
+          if (!cancelled) {
+            setCaseLoadError("The saved case could not be loaded. Return to the artifact and try again.");
+            setReady(true);
+          }
+          return;
+        }
+      }
+
+      const stored = window.localStorage.getItem(decompositionSessionKey) || window.sessionStorage.getItem(decompositionSessionKey);
+      if (stored) {
+        try {
+          applyDecomposition(JSON.parse(stored) as DecompositionResponse);
+        } catch (err) {
+          console.error("Failed to parse stored decomposition", err);
+        }
+      }
+      if (!cancelled) setReady(true);
+    }
+
+    void load();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -232,6 +277,7 @@ export default function ContextualizeMap() {
       setBriefTelemetry(emptyBriefTelemetry);
     }
     setPreferredEffort(readPreferredEffort());
+    if (new URLSearchParams(window.location.search).get("caseId")) return;
     try {
       const saved = JSON.parse(window.sessionStorage.getItem("epistack:contextualize:v1") || "null") as {
         contextAnswers?: Record<string, string>;
@@ -437,6 +483,18 @@ export default function ContextualizeMap() {
     if (!compiledBrief || savingContract) return;
     const brief: ResearchBrief = { ...compiledBrief, claims: editedClaims };
     const artifactBrief = projectResearchBriefForArtifact(brief, shareContextInArtifact);
+    const decomposition = persistedWorkflow?.decomposition ?? (() => {
+      try {
+        const raw = window.localStorage.getItem(decompositionSessionKey) || window.sessionStorage.getItem(decompositionSessionKey);
+        return raw ? JSON.parse(raw) as DecompositionResponse : null;
+      } catch {
+        return null;
+      }
+    })();
+    if (!decomposition) {
+      setCompileError("The decomposition snapshot is missing. Return to Stage 1 and reopen this case.");
+      return;
+    }
     setCompileError("");
     setSavingContract(true);
     void (async () => {
@@ -447,10 +505,17 @@ export default function ContextualizeMap() {
           body: JSON.stringify({
             caseId: brief.caseId,
             originalPrompt: brief.originalQuestion,
-            compiledClaim: { statement: brief.compiledQuestion },
+            // The case header is human-facing. Keep the provider/search prompt
+            // in the research brief, where its context policy is explicit.
+            compiledClaim: { statement: brief.originalQuestion },
             claims: brief.claims,
             researchBrief: artifactBrief,
             shareContextInArtifact,
+            workflow: {
+              version: 1,
+              decomposition: { ...decomposition, caseId: brief.caseId },
+              researchBrief: brief,
+            },
           }),
         });
         const payload = await response.json().catch(() => null) as { error?: string } | null;
@@ -513,6 +578,18 @@ export default function ContextualizeMap() {
   );
 
   if (!ready) return null;
+  if (caseLoadError) {
+    return (
+      <main className="case-layout map-layout">
+        <CaseHeader active="contextualize" actions={mapActions} />
+        <section className="stage-empty" aria-labelledby="map-case-error-title">
+          <h1 id="map-case-error-title">This saved case is unavailable here</h1>
+          <p>{caseLoadError}</p>
+          <Link className="primary-button" href="/">Start with a question</Link>
+        </section>
+      </main>
+    );
+  }
   if (!clusters.length) {
     return (
       <main className="case-layout map-layout">
