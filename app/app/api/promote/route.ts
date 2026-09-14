@@ -25,6 +25,7 @@ import {
   humanOverturnSnapshotOperation,
   humanVerifiedResultStatus,
 } from "../../../lib/reject-overturn";
+import { fetchPmcFullText, type PmcArtifactKind } from "../../../lib/pmc-full-text";
 
 type PromoteRequest = {
   caseId?: unknown;
@@ -54,36 +55,6 @@ function validCaseId(value: unknown): value is string {
     && /^[a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?$/.test(value.trim());
 }
 
-function decodeXmlEntities(value: string) {
-  const named: Record<string, string> = {
-    amp: "&",
-    lt: "<",
-    gt: ">",
-    quot: '"',
-    apos: "'",
-    nbsp: " ",
-    minus: "−",
-    ndash: "–",
-    mdash: "—",
-    times: "×",
-  };
-  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (entity, code: string) => {
-    if (code.startsWith("#x")) return String.fromCodePoint(Number.parseInt(code.slice(2), 16));
-    if (code.startsWith("#")) return String.fromCodePoint(Number.parseInt(code.slice(1), 10));
-    return named[code.toLowerCase()] ?? entity;
-  });
-}
-
-function jatsToPlainText(xml: string) {
-  return decodeXmlEntities(xml
-    .replace(/<\/?(?:p|sec|title|caption|tr|table-wrap|fig|list-item|abstract|article-title|kwd|ack|fn|ref-list)\b[^>]*>/gi, "\n")
-    .replace(/<[^>]+>/g, " "))
-    .replace(/[ \t]+/g, " ")
-    .replace(/ *\n */g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest))
@@ -102,7 +73,7 @@ class PromotionVerificationError extends Error {
 }
 
 type PersistedPmcArtifact = {
-  kind: "pmc-jats";
+  kind: PmcArtifactKind;
   pmcid: string;
   canonicalUrl: string;
   contentHash: string;
@@ -147,29 +118,18 @@ async function independentlyVerifyPmcArtifact(input: {
     }
 
     const pmcNumeric = resolvedPmcid.slice(3);
-    const fullTextUrl = new URL("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi");
-    fullTextUrl.searchParams.set("db", "pmc");
-    fullTextUrl.searchParams.set("id", pmcNumeric);
-    fullTextUrl.searchParams.set("retmode", "xml");
-    const fullTextResponse = await fetch(fullTextUrl, {
-      headers: { "User-Agent": "Epistack Evidence Lab/0.1 (promotion verification)" },
-    });
-    if (!fullTextResponse.ok) {
+    const expectedKind = input.artifact.kind === "pmc-jats" || input.artifact.kind === "pmc-bioc"
+      ? input.artifact.kind
+      : null;
+    if (!expectedKind) {
       throw new PromotionVerificationError(
-        `NCBI PMC full-text verification returned ${fullTextResponse.status}; no evidence was promoted.`,
-        "PMC_FETCH_FAILED",
-        502,
+        "The saved PMC artifact format is unknown; no evidence was promoted.",
+        "PMC_ARTIFACT_FORMAT_INVALID",
+        409,
       );
     }
-    const xml = await fullTextResponse.text();
-    if (!/<article[\s>]/i.test(xml) || xml.length < 5_000) {
-      throw new PromotionVerificationError(
-        "NCBI did not return a complete JATS article; no evidence was promoted.",
-        "PMC_ARTIFACT_INCOMPLETE",
-        502,
-      );
-    }
-    const fetchedHash = await sha256(xml);
+    const fetched = await fetchPmcFullText(pmcNumeric, expectedKind);
+    const fetchedHash = fetched.contentHash;
     const declaredHash = typeof input.artifact.contentHash === "string"
       ? input.artifact.contentHash.trim().toLowerCase()
       : "";
@@ -180,8 +140,7 @@ async function independentlyVerifyPmcArtifact(input: {
         409,
       );
     }
-    const plainText = jatsToPlainText(xml);
-    const missingExcerpt = input.exactExcerpts.find((excerpt) => !passageExists(plainText, excerpt));
+    const missingExcerpt = input.exactExcerpts.find((excerpt) => !passageExists(fetched.plainText, excerpt));
     if (missingExcerpt) {
       throw new PromotionVerificationError(
         "At least one promoted excerpt was not found in the independently fetched PMC article; no evidence was promoted.",
@@ -190,9 +149,9 @@ async function independentlyVerifyPmcArtifact(input: {
       );
     }
     return {
-      kind: "pmc-jats",
-      pmcid: resolvedPmcid,
-      canonicalUrl: `https://pmc.ncbi.nlm.nih.gov/articles/${resolvedPmcid}/`,
+      kind: fetched.kind,
+      pmcid: fetched.pmcid,
+      canonicalUrl: fetched.canonicalUrl,
       contentHash: fetchedHash,
       serverVerified: true,
     };
@@ -310,7 +269,7 @@ export async function POST(request: Request) {
   const autoGatePasses = autoRequested
     && reviewEnvelope?.policyId === dualReviewPolicyId
     && body.verificationStatus === "ai-cross-checked-full-text"
-    && rawArtifact?.kind === "pmc-jats"
+    && (rawArtifact?.kind === "pmc-jats" || rawArtifact?.kind === "pmc-bioc")
     && /^PMC\d{4,12}$/.test(rawArtifact.pmcid || "")
     && /^[a-f0-9]{64}$/i.test(artifactHash)
     && parsedReview?.success === true

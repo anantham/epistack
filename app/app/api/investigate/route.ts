@@ -12,6 +12,7 @@ import type { DeepDiveSource } from "../../../lib/deep-dive";
 import { lyraConfigured, runLyraStage, isBackendUnreachable, backendUnreachableResponse } from "../../../lib/lyra-stage";
 import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
 import { acquireSource, extractSource, InsufficientSourceTextError, type SourceReviewResponse } from "../../../lib/source-adapters";
+import { fetchPmcFullText } from "../../../lib/pmc-full-text";
 import { isPreliminarySourceClass, sourceClassSchema } from "../../../lib/source-class";
 import { extractJsonSlice, parseStructuredWithRepair, repairInstruction } from "../../../lib/structured-output";
 import {
@@ -267,28 +268,6 @@ type NormalizedRecord = {
   url: string;
 };
 
-function decodeXmlEntities(value: string) {
-  const named = new Map([
-    ["amp", "&"], ["lt", "<"], ["gt", ">"], ["quot", "\""], ["apos", "'"],
-    ["nbsp", " "], ["minus", "−"], ["ndash", "–"], ["mdash", "—"], ["times", "×"],
-  ]);
-  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (entity, code: string) => {
-    if (code.startsWith("#x")) return String.fromCodePoint(Number.parseInt(code.slice(2), 16));
-    if (code.startsWith("#")) return String.fromCodePoint(Number.parseInt(code.slice(1), 10));
-    return named.get(code.toLowerCase()) ?? entity;
-  });
-}
-
-function jatsToPlainText(xml: string) {
-  return decodeXmlEntities(xml
-    .replace(/<\/?(?:p|sec|title|caption|tr|table-wrap|fig|list-item|abstract|article-title|kwd|ack|fn|ref-list)\b[^>]*>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/[ \t]+/g, " ")
-    .replace(/ *\n */g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim());
-}
-
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest))
@@ -322,29 +301,22 @@ async function acquirePmcArtifact(pmid: string) {
   if (!pmcNumeric) {
     throw new FullTextUnavailableError("No open PMC full text is linked to this PubMed record. Automatic promotion is disabled; use the explicit abstract-only fallback.");
   }
-  const pmcid = `PMC${pmcNumeric}`;
-  const url = new URL("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi");
-  url.searchParams.set("db", "pmc");
-  url.searchParams.set("id", pmcNumeric);
-  url.searchParams.set("retmode", "xml");
-  const response = await fetch(url, {
-    headers: { "User-Agent": "Epistack Evidence Lab/0.1 (hosted full-text review)" },
-  });
-  if (!response.ok) throw new Error(`PMC full-text fetch returned ${response.status}.`);
-  const xml = await response.text();
-  if (!/<article[\s>]/i.test(xml) || xml.length < 5_000) {
-    throw new FullTextUnavailableError("PMC did not return a complete open-access JATS article for this record.");
+  let fetched;
+  try {
+    fetched = await fetchPmcFullText(pmcNumeric);
+  } catch (error) {
+    throw new FullTextUnavailableError(error instanceof Error ? error.message : "PMC full-text acquisition failed.");
   }
   const artifact: SourceArtifact = {
-    kind: "pmc-jats",
-    pmcid,
-    canonicalUrl: `https://pmc.ncbi.nlm.nih.gov/articles/${pmcid}/`,
+    kind: fetched.kind,
+    pmcid: fetched.pmcid,
+    canonicalUrl: fetched.canonicalUrl,
     localXmlPath: "(hosted inline)",
     localTextPath: "(hosted inline)",
-    contentHash: await sha256(xml),
+    contentHash: fetched.contentHash,
     retrievedAt: new Date().toISOString(),
   };
-  return { artifact, plainText: jatsToPlainText(xml) };
+  return { artifact, plainText: fetched.plainText };
 }
 
 function inlineArtifactText(fullText: string) {
@@ -548,7 +520,9 @@ export async function POST(request: Request) {
       decisionContext,
       citation: citationFor(normalizedRecord),
       artifactTextPath: artifactText,
-      artifactXmlPath: "(JATS XML is not separately inlined for the hosted run; the preserved article is supplied as plain text above.)",
+      artifactXmlPath: artifact.kind === "pmc-jats"
+        ? "(JATS XML is not separately inlined for the hosted run; the preserved article is supplied as plain text above.)"
+        : "(NCBI BioC JSON is not separately inlined for the hosted run; the preserved article is supplied as plain text above.)",
       artifactHash: artifact.contentHash,
       claimFrames: claimFramesText(claimFrames),
       applicabilityProfile,

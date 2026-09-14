@@ -21,6 +21,7 @@ import {
 } from "./source-class.ts";
 import type { ResearchClaimFrame } from "./research-brief.ts";
 import { parseStructuredWithRepair, repairInstruction, schemaInstruction } from "./structured-output.ts";
+import { fetchPmcFullText } from "./pmc-full-text.ts";
 
 const primaryModel = "Astra · GPT 6";
 const adversaryModel = "Astra · adversarial full-paper reviewer";
@@ -75,16 +76,6 @@ function decodeXmlEntities(value: string) {
   });
 }
 
-function jatsToPlainText(xml: string) {
-  return decodeXmlEntities(xml
-    .replace(/<\/?(?:p|sec|title|caption|tr|table-wrap|fig|list-item|abstract|article-title|kwd|ack|fn|ref-list)\b[^>]*>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/[ \t]+/g, " ")
-    .replace(/ *\n */g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim());
-}
-
 function htmlToPlainText(html: string) {
   return decodeXmlEntities(html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
@@ -130,20 +121,6 @@ async function resolvePmcNumeric(pmid: string) {
     ? payload.records.find((candidate) => String(candidate.pmid || "") === pmid) ?? payload.records[0]
     : null;
   return safePmcNumeric(record?.pmcid);
-}
-
-async function fetchPmcXml(pmcNumeric: string) {
-  const url = new URL("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi");
-  url.searchParams.set("db", "pmc");
-  url.searchParams.set("id", pmcNumeric);
-  url.searchParams.set("retmode", "xml");
-  const response = await fetchWithTimeout(url);
-  if (!response.ok) throw new Error(`PMC full-text fetch returned ${response.status}.`);
-  const xml = await response.text();
-  if (!/<article[\s>]/i.test(xml) || xml.length < 5_000) {
-    throw new Error("PMC did not return a complete open-access JATS article.");
-  }
-  return xml;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -230,15 +207,14 @@ export async function acquireSource(input: {
     }
     if (pmcNumeric) {
       try {
-        const text = jatsToPlainText(await fetchPmcXml(pmcNumeric));
-        const pmcid = `PMC${pmcNumeric}`;
+        const fetched = await fetchPmcFullText(pmcNumeric);
         return {
           acquisition: "fetched-verified",
-          text,
-          contentHash: await sha256(text),
-          url: `https://pmc.ncbi.nlm.nih.gov/articles/${pmcid}/`,
+          text: fetched.plainText,
+          contentHash: fetched.contentHash,
+          url: fetched.canonicalUrl,
           title,
-          metadata: { pmcid, pmid, source: "pmc-jats" },
+          metadata: { pmcid: fetched.pmcid, pmid, source: fetched.kind },
         };
       } catch {
         // Fall through to a best-effort public URL fetch, then the cited text.
@@ -500,7 +476,7 @@ SOURCE TEXT
 
 async function runCausalDualReview(input: ExtractionInput): Promise<DualReviewResponse> {
   const artifact: SourceArtifact = {
-    kind: "pmc-jats",
+    kind: input.acquired.metadata.source === "pmc-bioc" ? "pmc-bioc" : "pmc-jats",
     pmcid: input.acquired.metadata.pmcid || `NONPMC-${input.acquired.contentHash.slice(0, 12)}`,
     canonicalUrl: input.acquired.url,
     localXmlPath: "(hosted inline)",

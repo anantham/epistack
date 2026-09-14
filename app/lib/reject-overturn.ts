@@ -95,7 +95,7 @@ export function checkHumanOverturn(input: {
   const artifact = asRecord(input.artifact);
   const artifactHash = trimmed(artifact.contentHash).toLowerCase();
   if (
-    artifact.kind !== "pmc-jats"
+    artifact.kind !== "pmc-jats" && artifact.kind !== "pmc-bioc"
     || !/^PMC\d{4,12}$/.test(trimmed(artifact.pmcid))
     || !/^[a-f0-9]{64}$/.test(artifactHash)
     || review.data.artifactHash.toLowerCase() !== artifactHash

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { deepDiveResultSchema, deepDiveSchema, type DeepDiveCandidate, type DeepDiveResult, type DeepDiveSource } from "./deep-dive.ts";
+import type { PmcArtifactKind } from "./pmc-full-text.ts";
 
 export const dualReviewPolicyId = "dual-model-pmc-full-text-v2" as const;
 
@@ -36,7 +37,7 @@ export type FullPaperExtraction = z.infer<typeof fullPaperExtractionSchema>;
 export type AdversarialReview = z.infer<typeof adversarialReviewSchema>;
 
 export type SourceArtifact = {
-  kind: "pmc-jats";
+  kind: PmcArtifactKind;
   pmcid: string;
   canonicalUrl: string;
   localXmlPath: string;
