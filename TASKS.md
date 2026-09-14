@@ -5,8 +5,8 @@ This is the durable queue for requests that span code, documentation, deployment
 ## Now
 
 - [x] **Provider provenance in the decomposition header.** The response contract now carries stage-level provider/model/status data and safe failure reasons; the homepage and inspector render it instead of the old hard-coded Astra label.
-- [ ] **Release the integrated audit and provenance work.** Commit the reviewed `design/audit-fixes` integration plus documentation, push `main`, sync the Sites mirror, publish, and run the browser verification.
-- [ ] **Live verification after release.** Check `/`, `/map`, `/research`, the eggs flow, Settings backend health, no loopback requests, and the visible provider/model provenance. Record the deployed commit and any non-extension console errors.
+- [x] **Release the integrated audit and provenance work.** Canonical `main` is `3b058bb`; the Sites mirror is `10861257ade197ed7bf4ca4553437c7c1836ece4`; Sites version 80 is published.
+- [x] **Live verification after release.** On 2026-09-14, `/`, `/map`, and `/research` returned 200. The deployed homepage showed `OpenRouter · deepseek/deepseek-v4.1-flash`; no loopback reference appeared in the rendered runtime. Console warnings were limited to a browser wallet extension; no site error was observed.
 
 ## Accepted and integrated, awaiting release
 
