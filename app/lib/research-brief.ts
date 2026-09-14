@@ -113,6 +113,7 @@ export const researchBriefSchema = researchBriefDraftSchema.extend({
   privacy: z.object({
     localContextPolicy: boundedText(8, 420),
     outboundQueryPolicy: boundedText(8, 420),
+    shareContextInArtifact: z.boolean().default(false),
   }),
   generatedAt: z.string().datetime(),
   compiledBy: boundedText(2, 160),
@@ -120,6 +121,42 @@ export const researchBriefSchema = researchBriefDraftSchema.extend({
 
 export type ResearchBrief = z.infer<typeof researchBriefSchema>;
 export type ResearchBriefDraft = z.infer<typeof researchBriefDraftSchema>;
+
+/**
+ * The browser keeps the complete brief for the active workflow, but the
+ * server-side artifact must receive an explicit privacy projection. The
+ * research consequences remain visible even when the person's answers stay
+ * private, so a fresh share link can explain the work without leaking local
+ * context by default.
+ */
+export function projectResearchBriefForArtifact(brief: ResearchBrief, shareContextInArtifact = false): ResearchBrief {
+  const privateContext = "Personal context is kept private by the owner; inspect the local research brief for the answer-level details.";
+  return researchBriefSchema.parse({
+    ...brief,
+    decisionContext: shareContextInArtifact ? brief.decisionContext : privateContext,
+    stakeholderProfile: {
+      ...brief.stakeholderProfile,
+      summary: shareContextInArtifact ? brief.stakeholderProfile.summary : privateContext,
+      hardConstraints: shareContextInArtifact ? brief.stakeholderProfile.hardConstraints : [],
+      preferences: shareContextInArtifact ? brief.stakeholderProfile.preferences : [],
+      localOnlyFacts: [],
+    },
+    dimensionAssignments: brief.dimensionAssignments.map((assignment) => ({
+      ...assignment,
+      selectedBranchId: shareContextInArtifact ? assignment.selectedBranchId : null,
+      selectedValue: shareContextInArtifact ? assignment.selectedValue : null,
+    })),
+    contextualization: brief.contextualization.map((entry) => ({
+      ...entry,
+      selectedValues: shareContextInArtifact ? entry.selectedValues : [],
+      typedAnswer: shareContextInArtifact ? entry.typedAnswer : "",
+    })),
+    privacy: {
+      ...brief.privacy,
+      shareContextInArtifact,
+    },
+  });
+}
 
 export type ResearchBriefCompilerInput = {
   caseId: string;

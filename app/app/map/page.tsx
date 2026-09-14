@@ -10,6 +10,7 @@ import {
 } from "../../lib/decomposition";
 import {
   completeDimensionRoles,
+  projectResearchBriefForArtifact,
   researchBriefStorageKey,
   type ContextualizationEntry,
   type ResearchBrief,
@@ -106,6 +107,7 @@ export default function ContextualizeMap() {
   const [compileProgress, setCompileProgress] = useState("");
   const [compileError, setCompileError] = useState("");
   const [savingContract, setSavingContract] = useState(false);
+  const [shareContextInArtifact, setShareContextInArtifact] = useState(false);
   const [compiledBrief, setCompiledBrief] = useState<ResearchBrief | null>(null);
   const [editedClaims, setEditedClaims] = useState<ResearchClaimFrame[]>([]);
   const [recomputing, setRecomputing] = useState(false);
@@ -345,6 +347,9 @@ export default function ContextualizeMap() {
     }).filter(Boolean);
 
     const nextContext = [decisionContext.trim(), ...additions].filter(Boolean).join("\n");
+    const compiledQuestion = additions.length > 0
+      ? `${prompt.trim()} Decision scope: ${additions.join("; ")}.`
+      : prompt.trim();
     const contextualization: ContextualizationEntry[] = clusters.map((cluster) => {
       const question = cluster.contextQuestion;
       const selectedValues = contextSelections[question.id] ?? [];
@@ -386,7 +391,7 @@ export default function ContextualizeMap() {
       const created = await requestCompile({
         caseId,
         originalQuestion: prompt,
-        compiledQuestion: prompt, // simplified for now
+        compiledQuestion,
         decisionContext: nextContext,
         clusters,
         knownUnknowns,
@@ -429,6 +434,7 @@ export default function ContextualizeMap() {
   function confirmAndStartResearch() {
     if (!compiledBrief || savingContract) return;
     const brief: ResearchBrief = { ...compiledBrief, claims: editedClaims };
+    const artifactBrief = projectResearchBriefForArtifact(brief, shareContextInArtifact);
     setCompileError("");
     setSavingContract(true);
     void (async () => {
@@ -441,6 +447,8 @@ export default function ContextualizeMap() {
             originalPrompt: brief.originalQuestion,
             compiledClaim: { statement: brief.compiledQuestion },
             claims: brief.claims,
+            researchBrief: artifactBrief,
+            shareContextInArtifact,
           }),
         });
         const payload = await response.json().catch(() => null) as { error?: string } | null;
@@ -717,6 +725,21 @@ export default function ContextualizeMap() {
                     </div>
                   </div>
                 ))}
+                <section className="contextualization-privacy" aria-labelledby="artifact-context-privacy-title">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={shareContextInArtifact}
+                      onChange={(event) => setShareContextInArtifact(event.target.checked)}
+                    />
+                    <span>
+                      <strong id="artifact-context-privacy-title">Include my personal context in the shareable artifact</strong>
+                      <small>{shareContextInArtifact
+                        ? "The artifact will show the answers that shaped its claims and applicability checks."
+                        : "The artifact will show the research consequences while keeping personal answers private on the server."}</small>
+                    </span>
+                  </label>
+                </section>
                 <div className="elicitation-actions" style={{ gridTemplateColumns: "1fr auto", gap: 12 }}>
                   <button type="button" className="icon-button" style={{ width: "auto", padding: "0 18px" }} onClick={backToInterview}>Back</button>
                   <button type="button" className="primary-button" onClick={confirmAndStartResearch} disabled={savingContract} aria-busy={savingContract}>

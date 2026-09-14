@@ -164,6 +164,7 @@ export const liveArtifactSchema = z.object({
   latestSnapshot: liveSnapshotMetadataSchema.nullable(),
   latestEvidenceSnapshot: liveSnapshotMetadataSchema.nullable(),
   latestDecision: liveDecisionMetadataSchema.nullable(),
+  researchContract: jsonObjectSchema.nullable(),
   integrityWarnings: z.array(z.string()),
   graph: z.object({
     claimFrames: z.array(liveClaimFrameSchema),
@@ -303,6 +304,7 @@ export type RawSnapshotRow = {
   parent_id: string | null;
   actor: string;
   operation: string;
+  artifact_json?: string | null;
   created_at: string;
 };
 
@@ -703,6 +705,14 @@ export function normalizeLiveArtifact(
     operation: rows.latestEvidenceSnapshot.operation,
     createdAt: rows.latestEvidenceSnapshot.created_at,
   } : null;
+  let researchContract: Record<string, unknown> | null = null;
+  if (rows.latestSnapshot?.artifact_json) {
+    const snapshotArtifact = parseObject(rows.latestSnapshot.artifact_json, "latest snapshot artifact", integrityWarnings);
+    const candidateContract = snapshotArtifact.researchBrief;
+    if (candidateContract && typeof candidateContract === "object" && !Array.isArray(candidateContract)) {
+      researchContract = candidateContract as Record<string, unknown>;
+    }
+  }
 
   const artifact: LiveArtifact = {
     contractVersion: liveArtifactContractVersion,
@@ -734,6 +744,7 @@ export function normalizeLiveArtifact(
     latestSnapshot,
     latestEvidenceSnapshot,
     latestDecision,
+    researchContract,
     integrityWarnings,
     graph: {
       claimFrames,

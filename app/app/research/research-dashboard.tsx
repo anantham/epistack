@@ -387,6 +387,13 @@ export function ResearchDashboard() {
   );
   // Steering changes the next search, never one in flight.
   const searching = activeCount > 0 || recall.status === "running";
+  const researchProgress = useMemo(() => {
+    const investigatedClaims = activeLanes.filter((lane) => Boolean(runs[lane.id]?.response || runs[lane.id]?.status === "running")).length;
+    const leadCount = (recall.response?.leads.length ?? 0) + activeLanes.reduce((sum, lane) => sum + (runs[lane.id]?.response?.records.length ?? 0), 0);
+    const acquired = Object.values(deepDives).filter((dive) => dive.payload !== null).length;
+    const reviewed = Object.values(deepDives).filter((dive) => dive.payload && isDualReviewPayload(dive.payload)).length;
+    return { investigatedClaims, leadCount, acquired, reviewed, accepted: promotionRecords.length, totalClaims: activeLanes.length };
+  }, [activeLanes, deepDives, promotionRecords.length, recall.response?.leads.length, runs]);
 
   useEffect(() => {
     if (recall.status !== "running" || !recallStartedAt) return;
@@ -1318,6 +1325,22 @@ export function ResearchDashboard() {
               <span>Privacy boundary</span>
               <p>{brief.privacy.outboundQueryPolicy}</p>
             </article>
+          </div>
+        </section>
+      )}
+
+      {brief && (
+        <section className="research-progress" aria-labelledby="research-progress-title">
+          <header>
+            <div><span>Investigation status</span><h2 id="research-progress-title">What has happened to the contract so far.</h2></div>
+            <Link href={artifactHref}>Open live artifact <span aria-hidden="true">→</span></Link>
+          </header>
+          <div className="research-progress-grid">
+            <article><strong>{researchProgress.investigatedClaims} / {researchProgress.totalClaims}</strong><span>claims investigated</span><small>{researchProgress.investigatedClaims === 0 ? "Not started · launch the strongest lane below." : "A discovery response exists for this many claim lanes."}</small></article>
+            <article><strong>{researchProgress.leadCount}</strong><span>discovery leads</span><small>Leads are candidates; they do not count as evidence.</small></article>
+            <article><strong>{researchProgress.acquired}</strong><span>papers acquired</span><small>Full text or an explicit abstract fallback was read.</small></article>
+            <article><strong>{researchProgress.reviewed}</strong><span>full-text reviews</span><small>Two-model review completed; rejected results stay inspectable.</small></article>
+            <article><strong>{researchProgress.accepted} / {researchProgress.totalClaims}</strong><span>claims with accepted evidence</span><small>Only promoted, provenance-bearing relations enter the artifact.</small></article>
           </div>
         </section>
       )}

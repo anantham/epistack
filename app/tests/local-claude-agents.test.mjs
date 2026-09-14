@@ -31,10 +31,10 @@ function result(overrides = {}) {
     applicability: {
       matched: ["adults with overweight", "egg breakfast", "energy-matched comparator"],
       mismatched: [],
-      unknown: ["local egg preparation"],
+      unknown: [],
       constraintRelaxations: [],
-      distance: "near",
-      rationale: "The core population and exposure match, while local preparation is unreported.",
+      distance: "exact",
+      rationale: "The claim frame and study scope match for this controlled comparison.",
     },
     rationale: "This is the prespecified between-group comparison under energy restriction.",
     ...overrides,
@@ -147,4 +147,27 @@ test("reviewer approval cannot override a missing quotation or same-model review
   });
   assert.equal(sameModel.eligible, false);
   assert.match(sameModel.reasons.join(" "), /different models/);
+});
+
+test("automatic promotion rejects a study population with unrepresented scope qualifiers", () => {
+  const outcome = adjudicateDualReview({
+    primary: primary(),
+    review: review([{
+      resultIndex: 0,
+      verdict: "accept",
+      quoteVerified: true,
+      locatorVerified: true,
+      scopeVerified: true,
+      relationVerified: true,
+      rationale: "The quote is present, but the deterministic scope check must still run.",
+      correctedResult: null,
+    }]),
+    fullText: "Observed weight loss of 2.63 kg compared with 1.59 kg in the diet arms.",
+    artifact,
+    primaryModel: "opus",
+    adversaryModel: "sonnet",
+    claimFrames: [{ id: "weight-superiority", population: "generally healthy adults" }],
+  });
+  assert.equal(outcome.decisions[0].finalDecision, "reject");
+  assert.match(outcome.decisions[0].rationale, /scope qualifiers/i);
 });

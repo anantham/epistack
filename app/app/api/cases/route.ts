@@ -1,11 +1,18 @@
 import { ensureSnapshotTables, getD1 } from "../../../db";
-import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
+import {
+  projectResearchBriefForArtifact,
+  researchBriefSchema,
+  researchClaimFrameSchema,
+  type ResearchClaimFrame,
+} from "../../../lib/research-brief";
 
 type ArtifactPayload = {
   caseId?: string;
   originalPrompt?: string;
   compiledClaim?: { statement?: string } | null;
   claims?: unknown;
+  researchBrief?: unknown;
+  shareContextInArtifact?: boolean;
 };
 
 function routeError(error: unknown) {
@@ -36,6 +43,18 @@ export async function POST(request: Request) {
       return Response.json({ error: "The shareable claim contract is incomplete or invalid." }, { status: 400 });
     }
     const claims = parsedClaims.data;
+    const parsedBrief = artifact.researchBrief === undefined
+      ? null
+      : researchBriefSchema.safeParse(artifact.researchBrief);
+    if (artifact.researchBrief !== undefined && !parsedBrief?.success) {
+      return Response.json({ error: "The persisted research contract is incomplete or invalid." }, { status: 400 });
+    }
+    const researchBrief = parsedBrief?.success
+      ? projectResearchBriefForArtifact(parsedBrief.data, artifact.shareContextInArtifact === true)
+      : null;
+    const persistedArtifact = researchBrief
+      ? { ...artifact, researchBrief, shareContextInArtifact: researchBrief.privacy.shareContextInArtifact }
+      : artifact;
 
     const statements = [
       d1
@@ -60,7 +79,7 @@ export async function POST(request: Request) {
         .prepare(`INSERT INTO snapshots (
           id, case_id, parent_id, actor, operation, artifact_json, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .bind(snapshotId, caseId, null, "human-ai-workflow", "save-snapshot", JSON.stringify(artifact), now),
+        .bind(snapshotId, caseId, null, "human-ai-workflow", "save-snapshot", JSON.stringify(persistedArtifact), now),
       ...claims.map((claim) => d1.prepare(`INSERT INTO claim_frames (
         id, case_id, statement, population_json, exposure_json, comparator_json, outcome_json,
         time_horizon, modality, status, created_at, updated_at

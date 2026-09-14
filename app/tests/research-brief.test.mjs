@@ -4,7 +4,9 @@ import {
   buildDimensionAssignments,
   completeDimensionRoles,
   normalizeResearchBriefDraft,
+  projectResearchBriefForArtifact,
   researchBriefDraftSchema,
+  researchBriefSchema,
   researchLanesFromBrief,
 } from "../lib/research-brief.ts";
 
@@ -154,4 +156,49 @@ test("the compiler contract normalizes a small claim portfolio to a 100-point bu
   assert.equal(lanes.length, 3);
   assert.equal(lanes[0].defaultQuery, "egg breakfast body composition randomized trial");
   assert.equal(lanes[0].applicabilityFields[0], "training status");
+});
+
+test("the shareable artifact projection keeps research consequences while honoring the privacy choice", () => {
+  const brief = researchBriefSchema.parse({
+    ...normalizeResearchBriefDraft({
+      stakeholderProfile: {
+        summary: "A person deciding whether a concrete egg breakfast fits their routine.",
+        objectives: ["Choose a breakfast"],
+        hardConstraints: ["Keep it affordable"],
+        preferences: ["Sunny-side up"],
+        localOnlyFacts: ["Private address"],
+      },
+      actionSpace: {
+        decision: "Whether to eat one or two eggs with breakfast.",
+        currentAction: "Eat the usual breakfast",
+        options: [
+          { id: "eggs", label: "Eat eggs", description: "Add one or two eggs.", feasibility: "available-now" },
+          { id: "usual", label: "Keep the usual breakfast", description: "Do not add eggs.", feasibility: "available-now" },
+        ],
+        decisionHorizon: "Two weeks",
+        measurementPlan: ["Track satiety and cost"],
+      },
+      claims: [claim("direct-effect", 7, ["outcome", "population"]), claim("important-harm", 2, ["population"]), claim("real-comparator", 1, ["outcome"])],
+      parkedDimensions: [],
+      gapTriggers: [],
+    }, ["outcome", "population"]),
+    schemaVersion: "0.2.0",
+    briefId: "brief-share-test",
+    caseId: "case-share-test",
+    originalQuestion: "Are eggs good to eat?",
+    compiledQuestion: "Should I eat one or two eggs with breakfast?",
+    decisionContext: "Private answer: two eggs with toast in Kerala.",
+    dimensionAssignments: buildDimensionAssignments({ clusters, dimensionRoles: completeDimensionRoles(clusters) }),
+    contextualization: [{ axisId: "outcome", label: "Goal", question: "What matters?", whyItMatters: "It changes the outcome.", effect: "match", selectedValues: ["satiety"], typedAnswer: "I train often", researchConsequence: "Search satiety and performance outcomes." }],
+    privacy: { localContextPolicy: "Keep local.", outboundQueryPolicy: "Send compact concepts." },
+    generatedAt: "2026-07-20T00:00:00.000Z",
+    compiledBy: "Astra",
+  });
+  const projected = projectResearchBriefForArtifact(brief);
+  assert.equal(projected.privacy.shareContextInArtifact, false);
+  assert.equal(projected.contextualization[0].typedAnswer, "");
+  assert.match(projected.contextualization[0].researchConsequence, /satiety/);
+  assert.deepEqual(projected.stakeholderProfile.localOnlyFacts, []);
+  const shared = projectResearchBriefForArtifact(brief, true);
+  assert.equal(shared.contextualization[0].typedAnswer, "I train often");
 });

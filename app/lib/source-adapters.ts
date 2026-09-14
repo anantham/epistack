@@ -522,6 +522,7 @@ async function runCausalDualReview(input: ExtractionInput): Promise<DualReviewRe
     artifact,
     primaryModel,
     adversaryModel,
+    claimFrames: input.claimFrames.map((claim) => ({ id: claim.id, population: claim.population })),
   });
   return {
     source,

@@ -630,6 +630,7 @@ export async function POST(request: Request) {
       artifact,
       primaryModel: primaryStage.model,
       adversaryModel: reviewStage.model,
+      claimFrames: claimFrames.map((claim) => ({ id: claim.id, population: claim.population })),
     });
     const cacheKey = `investigate-${(await sha256(JSON.stringify({
       pmid,

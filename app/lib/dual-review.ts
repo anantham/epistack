@@ -117,6 +117,7 @@ export function adjudicateDualReview(input: {
   artifact: SourceArtifact;
   primaryModel: string;
   adversaryModel: string;
+  claimFrames?: Array<{ id: string; population: string }>;
 }): DualReviewOutcome {
   const primary = fullPaperExtractionSchema.parse(input.primary);
   const review = adversarialReviewSchema.parse(input.review);
@@ -143,12 +144,32 @@ export function adjudicateDualReview(input: {
   }
 
   const promoted: DeepDiveResult[] = [];
+  const claimPopulationById = new Map((input.claimFrames ?? []).map((claim) => [claim.id, claim.population.toLocaleLowerCase("en")]));
+  const populationMismatchSignals = (claimId: string, studyPopulation: string) => {
+    const claimPopulation = claimPopulationById.get(claimId);
+    if (!claimPopulation) return [];
+    const population = studyPopulation.toLocaleLowerCase("en");
+    const qualifiers = [
+      "male", "female", "smoker", "smoking", "diabetes", "pregnan", "child", "children",
+      "adolescent", "older adult", "elderly", "overweight", "obesity", "athlete", "resistance-trained",
+    ];
+    return qualifiers.filter((qualifier) => population.includes(qualifier) && !claimPopulation.includes(qualifier));
+  };
   const decisions: ReviewDecision[] = primary.results.map((original, resultIndex) => {
     const item = reviewsByIndex.get(resultIndex);
     const proposed = item?.verdict === "revise" ? item.correctedResult ?? null : original;
     const parsedProposed = proposed ? deepDiveResultSchema.safeParse(proposed) : null;
     const promotedResult = parsedProposed?.success ? parsedProposed.data : null;
     const passageFound = promotedResult ? passageExists(input.fullText, promotedResult.exactExcerpt) : false;
+    const populationMismatch = promotedResult
+      ? populationMismatchSignals(promotedResult.claimFrameId, primary.study.population)
+      : [];
+    const scopeGatePasses = Boolean(promotedResult
+      && promotedResult.scopeMatch === "direct"
+      && promotedResult.applicability.distance === "exact"
+      && promotedResult.applicability.mismatched.length === 0
+      && promotedResult.applicability.unknown.length === 0
+      && populationMismatch.length === 0);
     const checksPass = Boolean(item
       && item.verdict !== "reject"
       && promotedResult
@@ -156,7 +177,8 @@ export function adjudicateDualReview(input: {
       && item.locatorVerified
       && item.scopeVerified
       && item.relationVerified
-      && passageFound);
+      && passageFound
+      && scopeGatePasses);
     const finalDecision = commonGate && checksPass ? "promote" as const : "reject" as const;
     if (finalDecision === "promote" && promotedResult) promoted.push(promotedResult);
     return {
@@ -165,7 +187,9 @@ export function adjudicateDualReview(input: {
       reviewerVerdict: item?.verdict ?? "reject",
       finalDecision,
       passageFound,
-      rationale: item?.rationale ?? "The adversarial agent returned no review for this result.",
+      rationale: populationMismatch.length > 0
+        ? `The study population adds unrepresented scope qualifiers (${populationMismatch.join(", ")}); it remains outside automatic promotion until the claim is narrowed or a better-matched source is reviewed.`
+        : item?.rationale ?? "The adversarial agent returned no review for this result.",
       promotedResult: finalDecision === "promote" ? promotedResult : null,
     };
   });

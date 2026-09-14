@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sourceClassLabels, type SourceClass } from "../../lib/source-class";
 import type { Divergence, DivergenceItem } from "../../lib/source-divergence";
+import { buildContextualizationImpact } from "../../lib/contextualization-impact";
 import {
   researchBriefSchema,
   researchBriefStorageKey,
@@ -100,6 +101,7 @@ type ArtifactResponse = {
     dependenceFamilies: number;
     fullTextVerified: number;
   };
+  researchContract?: unknown;
   freshness: {
     latestEvidenceAt: string | null;
     graphUpdatedAt: string | null;
@@ -512,12 +514,13 @@ function normalizeArtifactResponse(payload: unknown): ArtifactResponse | null {
     },
     statusLabel: textField(status, "label") || "Live accepted evidence",
     integrityWarnings: stringArray(candidate.integrityWarnings),
+    researchContract: candidate.researchContract ?? null,
   };
 }
 
 export function ArtifactWorkspace() {
   const [session, setSession] = useState<ReturnType<typeof initialArtifactSession> | null>(null);
-  const brief = session?.brief ?? null;
+  const localBrief = session?.brief ?? null;
   const caseId = session?.caseId ?? "";
   const [load, setLoad] = useState<LoadState>({
     status: "loading",
@@ -587,6 +590,11 @@ export function ArtifactWorkspace() {
   }, [caseId, refreshNonce]);
 
   const artifact = load.artifact;
+  const brief = useMemo(() => {
+    if (localBrief) return localBrief;
+    const parsed = researchBriefSchema.safeParse(artifact?.researchContract);
+    return parsed.success ? parsed.data : null;
+  }, [artifact?.researchContract, localBrief]);
   const apiClaimsByBriefId = useMemo(() => {
     const byId = new Map<string, ArtifactClaim>();
     for (const claim of artifact?.claims ?? []) {
@@ -727,6 +735,12 @@ export function ArtifactWorkspace() {
   }
 
   const noAcceptedEvidence = acceptedRelations.length === 0;
+  const evidenceState = noAcceptedEvidence
+    ? artifact?.case?.status === "claim-created" || artifact?.case?.status === "framing"
+      ? "Research has not started for this case; no evidence has crossed the promotion boundary."
+      : "Research has run, but no evidence has crossed the promotion boundary."
+    : `${acceptedRelations.length} accepted result${acceptedRelations.length === 1 ? "" : "s"} currently cover${uncoveredClaims.length === 0 ? "" : " only"} ${visibleClaims.length - uncoveredClaims.length} of ${visibleClaims.length} claims.`;
+  const contextualizationImpact = brief ? buildContextualizationImpact(brief) : null;
 
   return (
     <>
@@ -790,14 +804,40 @@ export function ArtifactWorkspace() {
           <div>
             <span>0</span>
             <div>
-              <h2>No evidence has crossed the promotion boundary.</h2>
+              <h2>{evidenceState}</h2>
               <p>
+                No evidence has crossed the promotion boundary. {evidenceState}
                 The compiled claims below are a research contract, not conclusions. Discovery records,
                 abstracts, and agent proposals remain outside this artifact until they are reviewed and promoted.
               </p>
             </div>
           </div>
           <Link className="primary-button" href={researchHref}>Investigate these claims</Link>
+        </section>
+      )}
+
+      {brief && contextualizationImpact && (
+        <section className="contextualization-bridge artifact-context-bridge" aria-labelledby="artifact-context-title">
+          <header className="bridge-heading">
+            <span>Context → research contract · {brief.privacy.shareContextInArtifact ? "answers shared" : "answers private"}</span>
+            <strong id="artifact-context-title">What this person-specific context changed</strong>
+          </header>
+          <div className="contextualization-impact-summary">
+            <article><span>Answers carried in</span><strong>{contextualizationImpact.answeredQuestions} / {contextualizationImpact.totalQuestions}</strong><p>{brief.privacy.shareContextInArtifact ? "Answer details are visible in this share link." : "Answer details remain private; consequences stay visible."}</p></article>
+            <article><span>Claims scoped</span><strong>{contextualizationImpact.scopedClaimLabels.length}</strong><p>Claim frames linked to contextual answers.</p></article>
+            <article><span>Open gaps</span><strong>{contextualizationImpact.unresolved.length}</strong><p>Questions that still need evidence or a later decision.</p></article>
+          </div>
+          <div className="contextualization-impact-ledger">
+            {contextualizationImpact.entries.map((entry) => (
+              <article key={entry.axisId}>
+                <div className="impact-entry-heading"><strong>{entry.label}</strong><span>{entry.effect}</span></div>
+                <p><b>Your answer:</b> {entry.answer}</p>
+                <p><b>Changes:</b> {entry.changedFields.join(" · ") || "Applicability check retained"}</p>
+                {entry.claimLabels.length > 0 && <p><b>Claim/lane:</b> {entry.claimLabels.join(" · ")}</p>}
+                <p><b>Why:</b> {entry.consequence}</p>
+              </article>
+            ))}
+          </div>
         </section>
       )}
 

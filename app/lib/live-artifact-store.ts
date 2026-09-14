@@ -73,7 +73,7 @@ export async function readLiveArtifact(caseId: string): Promise<LiveArtifact> {
       JOIN evidence_relations er ON er.result_id = rr.id
       WHERE er.case_id = ? AND ${acceptedRelationFilter}
       ORDER BY dg.created_at, dg.id`).bind(caseId),
-    d1.prepare("SELECT id, parent_id, actor, operation, created_at FROM snapshots WHERE case_id = ? ORDER BY created_at DESC, id DESC LIMIT 1").bind(caseId),
+    d1.prepare("SELECT id, parent_id, actor, operation, artifact_json, created_at FROM snapshots WHERE case_id = ? ORDER BY created_at DESC, id DESC LIMIT 1").bind(caseId),
     d1.prepare(`SELECT id, parent_id, actor, operation, created_at
       FROM snapshots
       WHERE case_id = ? AND operation IN ('autopromote-full-text-results', 'promote-human-verified-full-text')
