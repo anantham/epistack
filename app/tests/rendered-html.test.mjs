@@ -39,6 +39,8 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(api, /openRouterProvenance/);
   assert.match(api, /specialistFailureReason/);
   assert.match(frame, /Decomposition provider and model provenance/);
+  assert.match(frame, /searchParams\.get\("resume"\) === "1"/);
+  assert.match(frame, /The root route is the question composer/);
   assert.match(api, /anthropic\/claude-opus-4\.8/);
   assert.match(promptRegistry, /maxOutputTokens: 5000/);
   assert.match(promptRegistry, /maxOutputTokens: 3500/);

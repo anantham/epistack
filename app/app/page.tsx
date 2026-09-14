@@ -228,7 +228,9 @@ export default function Home() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (new URLSearchParams(window.location.search).get("settings") === "1") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const explicitlyResuming = searchParams.get("resume") === "1";
+      if (searchParams.get("settings") === "1") {
         setSettingsOpen(true);
       }
       try {
@@ -258,7 +260,10 @@ export default function Home() {
         if (typeof savedWorkspace.elicitationIndex === "number") {
           setElicitationIndex(Math.max(0, savedWorkspace.elicitationIndex));
         }
-        if (restoredResult?.decomposition) {
+        // The root route is the question composer. Restore a saved result only
+        // when the user explicitly asks to resume it; a normal reload should
+        // leave the previous question editable and ready to submit again.
+        if (explicitlyResuming && restoredResult?.decomposition) {
           const restoredWithCache: DecompositionResponse = {
             ...restoredResult,
             cache: { status: "browser", layer: "browser", createdAt: new Date().toISOString(), expiresAt: null },
