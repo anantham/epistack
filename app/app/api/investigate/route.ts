@@ -223,7 +223,17 @@ const json = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 
 class FullTextUnavailableError extends Error {
-  readonly code = "NO_OPEN_FULL_TEXT";
+  readonly code!: "NO_OPEN_FULL_TEXT";
+
+  constructor(message: string) {
+    super(message);
+    Object.defineProperty(this, "code", {
+      configurable: true,
+      enumerable: false,
+      value: "NO_OPEN_FULL_TEXT",
+      writable: false,
+    });
+  }
 }
 
 type SourceRequest = {
