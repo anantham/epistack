@@ -5994,6 +5994,92 @@ h2 {
   margin-top: 14px;
 }
 
+.contextualization-impact-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.contextualization-impact-summary article {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px;
+}
+
+.contextualization-impact-summary span,
+.impact-entry-heading span {
+  color: var(--green);
+  display: block;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: var(--type-meta);
+  margin-bottom: 4px;
+}
+
+.contextualization-impact-summary strong {
+  display: block;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.contextualization-impact-summary p,
+.contextualization-impact-ledger p,
+.contextualization-gaps p,
+.contextualization-gaps li {
+  color: var(--ink-soft);
+  font-size: var(--type-meta);
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+
+.contextualization-impact-ledger {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 10px;
+}
+
+.contextualization-impact-ledger article {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.impact-entry-heading {
+  align-items: baseline;
+  display: flex;
+  gap: 9px;
+  justify-content: space-between;
+}
+
+.impact-entry-heading strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.contextualization-gaps {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.contextualization-gaps summary {
+  color: var(--green);
+  cursor: pointer;
+  font-size: var(--type-meta);
+  font-weight: 650;
+}
+
+@media (max-width: 720px) {
+  .contextualization-impact-summary,
+  .contextualization-impact-ledger {
+    grid-template-columns: 1fr;
+  }
+}
+
 .contextualization-entries article {
   background: var(--surface-raised);
   border: 1px solid var(--line);

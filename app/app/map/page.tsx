@@ -29,6 +29,7 @@ import {
   type BriefTelemetry
 } from "../../lib/brief-telemetry";
 import { formatDuration } from "../../lib/decomposition-telemetry";
+import { buildContextualizationImpact } from "../../lib/contextualization-impact";
 import { CaseHeader, RefreshControl } from "../components/case-navigation";
 import { BackendSettings, normalizeThinkingEffort, preferencesStorageKey, readPreferredEffort, type ThinkingEffort } from "../components/backend-settings";
 
@@ -117,6 +118,7 @@ export default function ContextualizeMap() {
   const briefEstimate = briefSummary.byEffort[preferredEffort]?.totalMedianMs ?? briefSummary.totalMedianMs;
   const briefSamples = briefSummary.byEffort[preferredEffort]?.samples ?? briefSummary.samples;
   const briefRemaining = briefEstimate ? Math.max(0, briefEstimate - compileElapsed) : null;
+  const contextualizationImpact = compiledBrief ? buildContextualizationImpact(compiledBrief) : null;
 
   async function requestCompile(body: unknown) {
     const response = await fetch("/api/compile-brief", {
@@ -617,6 +619,54 @@ export default function ContextualizeMap() {
                     <span>Contextualization bridge</span>
                     <strong id="contextualization-bridge-title">How your answers changed the investigation</strong>
                   </div>
+                  {contextualizationImpact && (
+                    <>
+                      <div className="contextualization-impact-summary">
+                        <article>
+                          <span>Answers used</span>
+                          <strong>{contextualizationImpact.answeredQuestions} / {contextualizationImpact.totalQuestions}</strong>
+                          <p>Answered dimensions carried into the compiled contract.</p>
+                        </article>
+                        <article>
+                          <span>Claims scoped</span>
+                          <strong>{contextualizationImpact.scopedClaimLabels.length}</strong>
+                          <p>Claim frames linked to your contextual answers.</p>
+                        </article>
+                        <article>
+                          <span>Action options</span>
+                          <strong>{contextualizationImpact.options.length}</strong>
+                          <p>Feasible choices the evidence will compare.</p>
+                        </article>
+                        <article>
+                          <span>Open gaps</span>
+                          <strong>{contextualizationImpact.unresolved.length}</strong>
+                          <p>Unknowns still visible for later follow-up.</p>
+                        </article>
+                      </div>
+                      <div className="contextualization-impact-ledger" aria-label="Contextualization impact ledger">
+                        {contextualizationImpact.entries.map((entry) => (
+                          <article key={entry.axisId}>
+                            <div className="impact-entry-heading">
+                              <strong>{entry.label}</strong>
+                              <span>{entry.effect}</span>
+                            </div>
+                            <p><b>Answer:</b> {entry.answer}</p>
+                            <p><b>Changes:</b> {entry.changedFields.join(" · ")}</p>
+                            {entry.claimLabels.length > 0 && <p><b>Scoped claims:</b> {entry.claimLabels.join(" · ")}</p>}
+                            <p><b>Why:</b> {entry.consequence}</p>
+                          </article>
+                        ))}
+                      </div>
+                      <details className="contextualization-gaps">
+                        <summary>What remains unresolved</summary>
+                        {contextualizationImpact.unresolved.length > 0 ? (
+                          <ul>{contextualizationImpact.unresolved.map((gap) => <li key={gap}>{gap}</li>)}</ul>
+                        ) : (
+                          <p>No unresolved gaps were recorded in this brief.</p>
+                        )}
+                      </details>
+                    </>
+                  )}
                   <div className="contextualization-entries">
                     {compiledBrief.contextualization.map((entry) => (
                       <article key={entry.axisId}>
