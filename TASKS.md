@@ -5,6 +5,7 @@ This is the durable queue for requests that span code, documentation, deployment
 ## Now
 
 - [x] **Provider provenance in the decomposition header.** The response contract now carries stage-level provider/model/status data and safe failure reasons; the homepage and inspector render it instead of the old hard-coded Astra label.
+- [x] **Root reload returns to the composer.** `/` keeps the saved question editable after a normal refresh; saved decomposition results require an explicit `?resume=1` request.
 - [x] **Release the integrated audit and provenance work.** Canonical `main` is `3b058bb`; the Sites mirror is `10861257ade197ed7bf4ca4553437c7c1836ece4`; Sites version 80 is published.
 - [x] **Live deployment smoke verification.** On 2026-09-14, `/`, `/map`, and `/research` returned 200. The deployed homepage showed `OpenRouter · deepseek/deepseek-v4.1-flash`; no loopback reference appeared in the rendered runtime. Console warnings were limited to a browser wallet extension; no site error was observed.
 - [ ] **Fresh browser E2E after release.** Submit the eggs question from a clean case and verify Decompose → Contextualize → brief → Research → Artifact, including Settings health and the hosted fallback path.
