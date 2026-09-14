@@ -93,9 +93,21 @@ function normalizePassage(value: string) {
     .toLocaleLowerCase("en");
 }
 
+function normalizePassageBoundary(value: string) {
+  return normalizePassage(value).replace(/[.,;:!?]+$/g, "").trim();
+}
+
 export function passageExists(fullText: string, excerpt: string) {
   const normalizedExcerpt = normalizePassage(excerpt);
-  return normalizedExcerpt.length >= 12 && normalizePassage(fullText).includes(normalizedExcerpt);
+  if (normalizedExcerpt.length < 12) return false;
+  if (normalizePassage(fullText).includes(normalizedExcerpt)) return true;
+
+  // Models sometimes add a sentence-ending period when the preserved article
+  // ends the same sentence with a comma, semicolon, or no punctuation. Allow
+  // only that terminal punctuation normalization; words and their order must
+  // still be a contiguous substring of the preserved artifact.
+  const boundaryExcerpt = normalizePassageBoundary(excerpt);
+  return boundaryExcerpt.length >= 12 && normalizePassageBoundary(fullText).includes(boundaryExcerpt);
 }
 
 export function adjudicateDualReview(input: {

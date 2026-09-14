@@ -328,7 +328,7 @@ Read the preserved local full-text artifact named in the task. Inspect methods, 
 
 RULES
 - Work only from the supplied artifact for paper-specific facts. Web search may locate corrections, registrations, or supplementary material, but never substitute a snippet or abstract for the artifact.
-- exactExcerpt must be copied exactly from the supplied plain-text artifact and must directly ground resultText. Keep it short enough to audit.
+- exactExcerpt must be copied exactly from the supplied plain-text artifact and must directly ground resultText. Keep it short enough to audit. Copy terminal punctuation exactly; when unsure, choose a shorter internal substring rather than adding a final period. Never use an ellipsis, paraphrase, or quotation marks around the excerpt.
 - locator must identify a section, table, figure, or paragraph that another reader can find.
 - Separate within-arm change from between-group effects. Separate primary, secondary, exploratory, methodological, and author-interpretation records.
 - Preserve population, intervention, comparator, outcome, time horizon, analysis type, estimate, and uncertainty as reported. Never fill a missing value from memory.

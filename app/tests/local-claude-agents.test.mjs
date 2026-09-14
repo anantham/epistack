@@ -88,6 +88,8 @@ test("JATS acquisition text and Claude structured envelopes are deterministicall
   assert.equal(jatsToPlainText("<article><sec><title>Results</title><p>A &amp; B</p></sec></article>"), "Results\n\nA & B");
   assert.deepEqual(parseClaudeStructuredOutput(JSON.stringify({ result: "{\"ok\":true}" })), { ok: true });
   assert.equal(passageExists("Observed weight loss of 2.63 kg compared with 1.59 kg.", "weight loss of 2.63 kg compared with 1.59 kg"), true);
+  assert.equal(passageExists("The result was associated with higher risk, representing 8%–10% higher risks.", "The result was associated with higher risk."), true);
+  assert.equal(passageExists("The result was associated with higher risk.", "The result was associated with higher risk, representing 8%–10% higher risks."), false);
 });
 
 test("the local companion keeps remote browser access opt-in and origin-scoped", async () => {
