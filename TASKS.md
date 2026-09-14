@@ -8,6 +8,7 @@ This is the durable queue for requests that span code, documentation, deployment
 - [x] **Release the integrated audit and provenance work.** Canonical `main` is `3b058bb`; the Sites mirror is `10861257ade197ed7bf4ca4553437c7c1836ece4`; Sites version 80 is published.
 - [x] **Live deployment smoke verification.** On 2026-09-14, `/`, `/map`, and `/research` returned 200. The deployed homepage showed `OpenRouter · deepseek/deepseek-v4.1-flash`; no loopback reference appeared in the rendered runtime. Console warnings were limited to a browser wallet extension; no site error was observed.
 - [ ] **Fresh browser E2E after release.** Submit the eggs question from a clean case and verify Decompose → Contextualize → brief → Research → Artifact, including Settings health and the hosted fallback path.
+- [ ] **In progress (Claude, branch `feat/investigate-budget-settings`): research budget and model settings.** Compact backend status; per-role OpenRouter model pickers (search, paper reader, reviewer); research effort steps with Standard as default; a $5 cap per run for everyone; capped web search (`max_uses`, `max_results`); per-call cost and duration recording for an empirical ETA. Claim-card steering on Investigate follows on the same branch. Please avoid overlapping edits to `app/api/recall`, `app/api/investigate`, `research-dashboard.tsx`, and `backend-settings.tsx` until this lands.
 
 ## Accepted and integrated, awaiting release
 
