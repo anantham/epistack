@@ -38,6 +38,20 @@ This is the durable queue for requests that span code, documentation, deployment
 - [ ] Resolve the Astra/Tailscale Funnel HTTP 530/525 path or replace it with a durable Cloudflare Tunnel; keep OpenRouter as an explicitly labeled recovery path.
 - [ ] Reconcile deploys with reproducible clean-checkout packaging so `/private/tmp` contains no unique source state.
 
+## Testing gaps
+
+The current 121-test gate is strong for pure contracts and build safety, but it does not yet provide complete product or production confidence.
+
+- [ ] Add a real browser E2E suite for a fresh case: submit → Decompose → edit → Contextualize → brief → Research → Artifact, with desktop/mobile, reduced motion, keyboard, refresh, and Settings health checks.
+- [ ] Add worker integration tests with an isolated D1: apply migrations, exercise API routes, verify indexes, enforce tick/stats authorization, and test job locks, stale locks, retries, and failure persistence.
+- [ ] Test the scheduled sweep itself, including cron invocation, self-fetch behavior, tab closure, and recovery when the browser never polls again.
+- [ ] Add provider fault-injection coverage for Astra 525/530, timeout, malformed JSON, rate limits, missing model metadata, and OpenRouter recovery across every hosted stage.
+- [ ] Add lane-accounting tests for five-lane/partial results: claim × lane preservation, deduplication, empty and failed lanes, fair result limits, and cache provenance.
+- [ ] Add golden quality evaluations for the eggs case and non-clinical questions: dimension retention, context-answer preservation, scoped claim quality, source relevance, and evidence-to-decision grounding.
+- [ ] Add built-asset security checks for provider-key leakage, loopback URLs, exported artifacts, logs, CORS/origin behavior, and server-only settings.
+- [ ] Add automated accessibility and visual regression checks at 390px and desktop widths, including focus order, touch targets, contrast, loading announcements, and route titles.
+- [ ] Add export/permanence tests: stable artifact links, version changes after accepted evidence, empty/stale/degraded states, and private versus stripped bundles.
+
 ## Release rule
 
 Before saying “done,” report these separately: local working tree, committed commit, pushed `main`, Sites mirror commit, published version, live URL, route statuses, backend used, and browser console/network results. Never print provider secrets.
