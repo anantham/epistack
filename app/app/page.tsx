@@ -229,7 +229,7 @@ export default function Home() {
   useEffect(() => {
     const timer = setTimeout(() => {
       const searchParams = new URLSearchParams(window.location.search);
-      const explicitlyResuming = searchParams.get("resume") === "1";
+      const explicitlyResuming = window.location.pathname === "/decompose" || searchParams.get("resume") === "1";
       if (searchParams.get("settings") === "1") {
         setSettingsOpen(true);
       }
@@ -260,9 +260,8 @@ export default function Home() {
         if (typeof savedWorkspace.elicitationIndex === "number") {
           setElicitationIndex(Math.max(0, savedWorkspace.elicitationIndex));
         }
-        // The root route is the question composer. Restore a saved result only
-        // when the user explicitly asks to resume it; a normal reload should
-        // leave the previous question editable and ready to submit again.
+        // The root route is the question composer. The explicit /decompose
+        // route (or resume query) restores the saved review instead.
         if (explicitlyResuming && restoredResult?.decomposition) {
           const restoredWithCache: DecompositionResponse = {
             ...restoredResult,

@@ -10,13 +10,15 @@ test("build emits the Epistack application", async () => {
 });
 
 test("question compiler stages AI reading before the editable map", async () => {
-  const [frame, styles, map, api, promptRegistry, packageJson] = await Promise.all([
+  const [frame, styles, map, api, promptRegistry, packageJson, decomposeRoute, navigation] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/globals.css", root), "utf8"),
     readFile(new URL("app/map/page.tsx", root), "utf8"),
     readFile(new URL("app/api/decompose/route.ts", root), "utf8"),
     readFile(new URL("lib/agent-prompts.ts", root), "utf8"),
     readFile(new URL("package.json", root), "utf8"),
+    readFile(new URL("app/decompose/page.tsx", root), "utf8"),
+    readFile(new URL("app/components/case-navigation.tsx", root), "utf8"),
   ]);
 
   assert.doesNotMatch(styles, /\.intro-surface\s*\{[^}]*visibility:\s*hidden/);
@@ -41,6 +43,8 @@ test("question compiler stages AI reading before the editable map", async () => 
   assert.match(frame, /Decomposition provider and model provenance/);
   assert.match(frame, /searchParams\.get\("resume"\) === "1"/);
   assert.match(frame, /The root route is the question composer/);
+  assert.match(decomposeRoute, /export \{ default \} from "\.\.\/page"/);
+  assert.match(navigation, /href: "\/decompose"/);
   assert.match(api, /anthropic\/claude-opus-4\.8/);
   assert.match(promptRegistry, /maxOutputTokens: 5000/);
   assert.match(promptRegistry, /maxOutputTokens: 3500/);

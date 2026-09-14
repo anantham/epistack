@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 export type InvestigationStage = "decompose" | "contextualize" | "investigate" | "artifact";
 
 const stages: Array<{ id: InvestigationStage; label: string; tooltip: string; href: string }> = [
-  { id: "decompose", label: "Decompose", tooltip: "Decompose · dimensions", href: "/" },
+  { id: "decompose", label: "Decompose", tooltip: "Decompose · dimensions", href: "/decompose" },
   { id: "contextualize", label: "Contextualize", tooltip: "Contextualize · action space", href: "/map" },
   { id: "investigate", label: "Investigate", tooltip: "Investigate · agents & ingestion", href: "/research" },
   { id: "artifact", label: "Artifact", tooltip: "Artifact · live accepted evidence", href: "/artifact" },
