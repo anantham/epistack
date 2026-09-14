@@ -46,6 +46,17 @@ import {
   type ResearchStage,
 } from "../../lib/research-telemetry";
 import { formatDuration } from "../../lib/decomposition-telemetry";
+import {
+  claimSteeringStorageKey,
+  fitContext,
+  parseBriefSteering,
+  recallSteering,
+  steeringPlanSummary,
+  strongestEffort,
+  type BriefSteering,
+  type ClaimSteering,
+} from "../../lib/claim-steering";
+import { ClaimBoard } from "./claim-board";
 
 type LaneRun = {
   status: "ready" | "running" | "complete" | "error";
@@ -109,7 +120,6 @@ type CachedDashboardState = {
   deepDives: Record<string, DeepDiveRun>;
   openLane: string;
   recall?: RecallRun;
-  recallSelectedClaimIds?: string[];
 };
 
 const dashboardCacheKey = "epistack:research-ui-cache:v2";
@@ -348,7 +358,7 @@ export function ResearchDashboard() {
   const [deepDives, setDeepDives] = useState<Record<string, DeepDiveRun>>({});
   const [promotionRecords, setPromotionRecords] = useState<PromotionRecord[]>([]);
   const [openLane, setOpenLane] = useState<string>("");
-  const [recallSelectedClaimIds, setRecallSelectedClaimIds] = useState<string[]>([]);
+  const [steering, setSteering] = useState<BriefSteering | null>(null);
   const [recall, setRecall] = useState<RecallRun>({
     status: "idle",
     response: null,
@@ -368,6 +378,12 @@ export function ResearchDashboard() {
     () => Object.values(runs).filter((run) => run.status === "running").length,
     [runs],
   );
+  const keptClaimIds = useMemo(
+    () => brief && steering ? brief.claims.filter((claim) => !steering.claims[claim.id]?.parked).map((claim) => claim.id) : [],
+    [brief, steering],
+  );
+  // Steering changes the next search, never one in flight.
+  const searching = activeCount > 0 || recall.status === "running";
 
   useEffect(() => {
     if (recall.status !== "running" || !recallStartedAt) return;
@@ -391,9 +407,8 @@ export function ResearchDashboard() {
     return remainingRunBudgetUsd(runLedger.usage.costUsd);
   }
 
-  function recordResearchCall(stage: ResearchStage, startedAt: number, model: string, usageValue: unknown) {
+  function recordResearchCall(stage: ResearchStage, startedAt: number, model: string, usageValue: unknown, effort = researchPreferences().effort) {
     const usage = normalizeResearchUsage(usageValue);
-    const effort = researchPreferences().effort;
     setRunLedger((current) => {
       const next = { ...current, usage: addResearchUsage(current.usage, usage) };
       try {
@@ -492,7 +507,7 @@ export function ResearchDashboard() {
       setQueries(defaultQueries(lanes));
       setRuns(freshRuns(lanes));
       setOpenLane(lanes[0]?.id ?? "");
-      setRecallSelectedClaimIds(loadedBrief?.claims.map((claim) => claim.id) ?? []);
+      setSteering(loadedBrief ? parseBriefSteering(window.localStorage.getItem(claimSteeringStorageKey), loadedBrief) : null);
       setRunLedger(readRunLedger(loadedBrief?.briefId ?? ""));
       setResearchTelemetry(parseResearchTelemetry(window.localStorage.getItem(researchTelemetryStorageKey)));
 
@@ -546,11 +561,6 @@ export function ResearchDashboard() {
       setDeepDives(restoredDeepDives);
 
       if (typeof cached.openLane === "string" && lanes.some((lane) => lane.id === cached.openLane)) setOpenLane(cached.openLane);
-      if (loadedBrief && Array.isArray(cached.recallSelectedClaimIds)) {
-        const allowed = new Set(loadedBrief.claims.map((claim) => claim.id));
-        const restoredSelection = cached.recallSelectedClaimIds.filter((id): id is string => typeof id === "string" && allowed.has(id));
-        if (restoredSelection.length) setRecallSelectedClaimIds(restoredSelection);
-      }
       if (cached.recall?.response) {
         setRecall({
           status: "complete",
@@ -611,12 +621,20 @@ export function ResearchDashboard() {
           progress: "Restored from this browser.",
           liveTrace: recall.response.toolTrace,
         } : undefined,
-        recallSelectedClaimIds,
       };
       window.localStorage.setItem(dashboardCacheKey, JSON.stringify(cache));
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [activeLanes, brief?.briefId, deepDives, filters, openLane, queries, recall.response, recallSelectedClaimIds, runs, storageReady]);
+  }, [activeLanes, brief?.briefId, deepDives, filters, openLane, queries, recall.response, runs, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady || !steering) return;
+    try {
+      window.localStorage.setItem(claimSteeringStorageKey, JSON.stringify(steering));
+    } catch {
+      // Steering still applies for this page session.
+    }
+  }, [steering, storageReady]);
 
   function clearDashboardCache() {
     window.localStorage.removeItem(dashboardCacheKey);
@@ -625,7 +643,6 @@ export function ResearchDashboard() {
     setRuns(freshRuns(activeLanes));
     setDeepDives({});
     setOpenLane(activeLanes[0]?.id ?? "");
-    setRecallSelectedClaimIds(brief?.claims.map((claim) => claim.id) ?? []);
     setRecall({
       status: "idle",
       response: null,
@@ -651,7 +668,12 @@ export function ResearchDashboard() {
       const response = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: queries[lane.id], filters, maxResults: researchBudgetProfiles[researchPreferences().effort].pubmedMaxResults, refresh }),
+        body: JSON.stringify({
+          query: queries[lane.id],
+          filters,
+          maxResults: researchBudgetProfiles[steering?.claims[lane.id]?.effort ?? researchPreferences().effort].pubmedMaxResults,
+          refresh,
+        }),
       });
       const payload = await response.json() as ResearchResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "The live discovery sweep failed.");
@@ -671,17 +693,28 @@ export function ResearchDashboard() {
     }
   }
 
-  async function runAll(refresh = false) {
+  async function runKeptPubmedLanes(refresh = false) {
     // PubMed asks unauthenticated clients to stay below three requests/second.
     // Each lane performs a search and summary request, so run lanes in series.
-    for (const lane of activeLanes) await runLane(lane, refresh);
+    for (const lane of activeLanes) {
+      if (keptClaimIds.includes(lane.id)) await runLane(lane, refresh);
+    }
   }
 
-  function toggleRecallClaim(claimId: string) {
-    setRecallSelectedClaimIds((current) =>
-      current.includes(claimId)
-        ? current.filter((candidate) => candidate !== claimId)
-        : [...current, claimId]);
+  async function searchKeptClaims(refresh = false) {
+    if (!brief || keptClaimIds.length === 0 || searching) return;
+    // One action: web recall fans out per claim internally while PubMed lanes run alongside it.
+    await Promise.allSettled([runRecall(refresh), runKeptPubmedLanes(refresh)]);
+  }
+
+  function updateClaimSteering(claimId: string, next: ClaimSteering) {
+    setSteering((current) => current ? { ...current, claims: { ...current.claims, [claimId]: next } } : current);
+  }
+
+  function parkClaim(claimId: string) {
+    const current = steering?.claims[claimId];
+    if (!current || searching) return;
+    updateClaimSteering(claimId, { ...current, parked: true });
   }
 
   function shareableRecallProfile() {
@@ -695,7 +728,7 @@ export function ResearchDashboard() {
         knownUnknowns: [],
       };
     }
-    const selectedClaims = brief.claims.filter((claim) => recallSelectedClaimIds.includes(claim.id));
+    const selectedClaims = brief.claims.filter((claim) => keptClaimIds.includes(claim.id));
     const applicabilityAssignments = brief.dimensionAssignments.filter((assignment) =>
       assignment.role === "applicability-only" || assignment.role === "monitored-unknown");
     const settingPattern = /(where|setting|geograph|location|jurisdiction|market)/i;
@@ -712,11 +745,11 @@ export function ResearchDashboard() {
   }
 
   async function runRecall(refresh = false) {
-    if (!brief || recallSelectedClaimIds.length === 0) {
+    if (!brief || !steering || keptClaimIds.length === 0) {
       setRecall((current) => ({
         ...current,
         status: "error",
-        error: brief ? "Select at least one scoped claim." : "Compile a research brief before launching broad recall.",
+        error: brief ? "Keep at least one claim to search." : "Compile a research brief before launching broad recall.",
       }));
       return;
     }
@@ -731,19 +764,24 @@ export function ResearchDashboard() {
     const preferences = researchPreferences();
     const startedAt = Date.now();
     const claims = brief.claims
-      .filter((claim) => recallSelectedClaimIds.includes(claim.id))
-      .map((claim) => ({
-        id: claim.id,
-        statement: claim.statement,
-        population: claim.population,
-        exposure: claim.exposure,
-        comparator: claim.comparator,
-        outcome: claim.outcome,
-        timeHorizon: claim.timeHorizon,
-        decisionLeverage: claim.decisionLeverage,
-        applicabilityFields: claim.applicabilityFields,
-        retrieval: claim.retrieval,
-      }));
+      .filter((claim) => keptClaimIds.includes(claim.id))
+      .map((claim) => {
+        const editedQuery = queries[claim.id]?.trim() ?? "";
+        return {
+          id: claim.id,
+          statement: claim.statement,
+          population: claim.population,
+          exposure: claim.exposure,
+          comparator: claim.comparator,
+          outcome: claim.outcome,
+          timeHorizon: claim.timeHorizon,
+          decisionLeverage: claim.decisionLeverage,
+          applicabilityFields: claim.applicabilityFields,
+          retrieval: { ...claim.retrieval, searchQuery: editedQuery.length >= 8 ? editedQuery.slice(0, 800) : claim.retrieval.searchQuery },
+          steering: recallSteering(steering.claims[claim.id]),
+        };
+      });
+    const effort = strongestEffort(claims.map((claim) => claim.steering.effort));
     setRecall({
       status: "running",
       response: refresh ? recall.response : null,
@@ -764,14 +802,14 @@ export function ResearchDashboard() {
           applicabilityProfile: shareableRecallProfile(),
           promptOverrides: promptOverrides(),
           refresh,
-          effort: preferences.effort,
+          effort,
           models: { search: preferences.models.search },
           budgetRemainingUsd: runBudgetRemaining(),
         }),
       });
       const payload = await response.json() as RecallResponse & { error?: string; usage?: unknown };
       if (!response.ok) throw new Error(payload.error || "The hosted lead-discovery sweep failed.");
-      recordResearchCall("recall", startedAt, payload.model, payload.usage);
+      recordResearchCall("recall", startedAt, payload.model, payload.usage, effort);
       setRecall({
         status: "complete",
         response: payload,
@@ -851,11 +889,10 @@ export function ResearchDashboard() {
   }
 
   function adoptRecallQuery(lead: RecallResponse["leads"][number]) {
-    const laneId = lead.claimIds.find((claimId) => activeLanes.some((lane) => lane.id === claimId));
-    if (!laneId) return;
-    setQueries((current) => ({ ...current, [laneId]: lead.discovery.reportedQuery }));
-    setOpenLane(laneId);
-    document.querySelector(".research-lanes")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const claimId = lead.claimIds.find((candidate) => activeLanes.some((lane) => lane.id === candidate));
+    if (!claimId || searching) return;
+    setQueries((current) => ({ ...current, [claimId]: lead.discovery.reportedQuery }));
+    document.getElementById(`claim-card-${claimId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   function modelPreferences() {
@@ -912,6 +949,11 @@ export function ResearchDashboard() {
       actionSpace: brief.actionSpace,
       applicabilityDimensions: brief.dimensionAssignments.filter((assignment) => assignment.role === "applicability-only"),
       monitoredUnknowns: brief.dimensionAssignments.filter((assignment) => assignment.role === "monitored-unknown"),
+      // Interview answers the person kept for fit (or search); ignored answers are left out.
+      answers: brief.claims.flatMap((claim) => {
+        const claimSteering = steering?.claims[claim.id];
+        return claimSteering ? fitContext(claimSteering).map((fact) => ({ claimId: claim.id, ...fact })) : [];
+      }),
       privacy: brief.privacy,
     };
   }
@@ -1098,12 +1140,9 @@ export function ResearchDashboard() {
   const localAgentControlsAvailable = companion.status === "online" || companion.status === "hosted";
   const artifactHref = caseId ? `/artifact?caseId=${encodeURIComponent(caseId)}` : "/artifact";
   const refreshInvestigation = () => {
-    if (!brief || activeLanes.length === 0 || activeCount > 0 || recall.status === "running") return;
-    if (!window.confirm("Refresh the investigation live? This reruns broad recall and every PubMed lane, bypassing saved operation results.")) return;
-    void Promise.all([
-      runRecall(true),
-      runAll(true),
-    ]);
+    if (!brief || keptClaimIds.length === 0 || searching) return;
+    if (!window.confirm("Refresh the investigation live? This reruns web recall and PubMed for every kept claim, bypassing saved operation results.")) return;
+    void searchKeptClaims(true);
   };
 
   useEffect(() => {
@@ -1111,9 +1150,9 @@ export function ResearchDashboard() {
     return () => window.removeEventListener("epistack:refresh-investigation", refreshInvestigation);
     // The handler intentionally closes over the current phase state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCount, activeLanes.length, brief, recall.status, storageReady]);
+  }, [activeCount, activeLanes.length, brief, keptClaimIds, queries, recall.status, steering, storageReady]);
 
-  const displayEffort = storageReady ? researchPreferences().effort : "standard";
+  const displayEffort = strongestEffort(steering ? keptClaimIds.map((claimId) => steering.claims[claimId].effort) : []);
   const recallEstimate = researchStageEstimate(researchTelemetry, "recall", displayEffort);
   const spendExhausted = runBudgetExhausted(runLedger.usage.costUsd);
   const recallEstimateLabel = recallEstimate.provisional
@@ -1121,6 +1160,34 @@ export function ResearchDashboard() {
       ? `No timed searches yet; allow up to ${formatDuration(recallEstimate.estimateMs)}`
       : `A search takes about ${formatDuration(recallEstimate.estimateMs)} (sharper after 3 timed runs)`
     : `A search takes about ${formatDuration(recallEstimate.estimateMs)} (median of ${recallEstimate.samples} runs)`;
+  const budgetPanel = (
+    <div className="research-budget">
+      <p className={`research-budget-line ${spendExhausted ? "exhausted" : ""}`}>
+        <span>Spent <strong>{formatUsd(runLedger.usage.costUsd)}</strong> of ${researchRunCapUsd} this run</span>
+        {runLedger.usage.webSearchRequests > 0 && <span>{runLedger.usage.webSearchRequests} web searches</span>}
+        {recall.status !== "running" && <span>{recallEstimateLabel}</span>}
+        {(runLedger.usage.calls > 0 || spendExhausted) && !searching && (
+          <button type="button" onClick={startNewRun}>Start a new run</button>
+        )}
+      </p>
+      {recall.status === "running" && (
+        <>
+          <div className="research-eta-rail" aria-hidden="true">
+            <span style={{ transform: `scaleX(${Math.min(1, recallElapsedMs / recallEstimate.estimateMs)})` }} />
+          </div>
+          <p className="research-budget-line">
+            <span>{formatDuration(recallElapsedMs)} elapsed</span>
+            <span>
+              {recallElapsedMs < recallEstimate.estimateMs
+                ? `about ${formatDuration(recallEstimate.estimateMs - recallElapsedMs)} left`
+                : "taking longer than usual"}
+              {recallEstimate.provisional ? " (provisional estimate)" : ""}
+            </span>
+          </p>
+        </>
+      )}
+    </div>
+  );
 
   if (!storageReady) {
     return (
@@ -1175,9 +1242,6 @@ export function ResearchDashboard() {
             Each lane is traced to the human-edited scope, runs a real editable PubMed sweep, and keeps personal context local for applicability checks. Hosted extraction preserves the full text, produces atomic results, and runs an independent adversarial pass.
           </p>
         </div>
-            <button className="primary-button run-all" onClick={() => void runAll(false)} disabled={activeCount > 0 || activeLanes.length === 0}>
-          {activeCount > 0 ? `${activeCount} lanes searching` : `Run all ${activeLanes.length} lanes`}
-        </button>
       </header>
 
       {brief && (
@@ -1222,13 +1286,70 @@ export function ResearchDashboard() {
         </p>
       </section>
 
-      <section className={`local-companion-status ${companion.status}`} aria-label="Hosted evidence backend status">
-        <div><i aria-hidden="true" /><span>{companion.status}</span></div>
-        <p><strong>Hosted evidence backend</strong>{companion.models ? ` · ${companion.models.primary} extracts, ${companion.models.adversary} challenges` : ""}</p>
-        <small>{companion.detail}</small>
-        <button type="button" onClick={() => void checkCompanion()} disabled={companion.status === "checking"}>{companion.status === "checking" ? "Checking…" : "Check again"}</button>
-      </section>
+      {steering && (
+        <ClaimBoard
+          claims={[...brief.claims].sort((a, b) => a.priority - b.priority)}
+          steering={steering}
+          queries={queries}
+          locked={searching}
+          budgetExhausted={spendExhausted || !localAgentControlsAvailable}
+          planSummary={steeringPlanSummary(brief.claims, steering)}
+          budget={budgetPanel}
+          onSteeringChange={updateClaimSteering}
+          onQueryChange={(claimId, query) => setQueries((current) => ({ ...current, [claimId]: query }))}
+          onSearch={() => void searchKeptClaims(false)}
+        />
+      )}
 
+      <details className="research-advanced">
+        <summary>Advanced · publication types, browser cache, backend status</summary>
+        <div className="research-advanced-body">
+          <section className="query-controls" aria-labelledby="query-controls-title">
+            <div>
+              <span>Human control surface</span>
+              <h2 id="query-controls-title">Choose what the agents are allowed to retrieve.</h2>
+            </div>
+            <div className="filter-pills" aria-label="Publication type filters">
+              {publicationOptions.map((option) => (
+                <button
+                  key={option.id}
+                  className={filters.includes(option.id) ? "active" : ""}
+                  onClick={() => toggleFilter(option.id)}
+                  aria-pressed={filters.includes(option.id)}
+                  disabled={searching}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <div className="cache-controls">
+              <p>Results reopen instantly on this browser. Shared operation outputs expire; accepted evidence records do not.</p>
+              <button onClick={clearDashboardCache} disabled={searching} title="Remove only this browser’s research display cache. The shared operation cache and accepted evidence graph are unchanged.">
+                Reset browser cache
+              </button>
+            </div>
+          </section>
+
+          <section className={`local-companion-status ${companion.status}`} aria-label="Hosted evidence backend status">
+            <div><i aria-hidden="true" /><span>{companion.status}</span></div>
+            <p><strong>Hosted evidence backend</strong>{companion.models ? ` · ${companion.models.primary} extracts, ${companion.models.adversary} challenges` : ""}</p>
+            <small>{companion.detail}</small>
+            <button type="button" onClick={() => void checkCompanion()} disabled={companion.status === "checking"}>{companion.status === "checking" ? "Checking…" : "Check again"}</button>
+          </section>
+
+          <section className="capability-rail" aria-label="Investigation capability status">
+            {researchCapabilities.map((capability) => (
+              <article className={capability.status} key={capability.id}>
+                <div><i aria-hidden="true" /><span>{capability.status === "live" ? "live" : "planned"}</span></div>
+                <strong>{capability.label}</strong>
+                <p>{capability.detail}</p>
+              </article>
+            ))}
+          </section>
+        </div>
+      </details>
+
+      {(recall.status !== "idle" || recall.response) && (
       <section className="recall-cockpit" aria-labelledby="recall-cockpit-title">
         <header>
           <div>
@@ -1236,52 +1357,14 @@ export function ResearchDashboard() {
             <h2 id="recall-cockpit-title">Search beyond the obvious corpus without weakening the evidence gate.</h2>
             <p>One specialist looks broadly for direct, negative, corrective, and boundary-setting sources. Another searches for transportability to the shareable parts of this action context. Neither can promote a claim.</p>
           </div>
-          <div className="recall-launch">
-            <button
-              className="primary-button"
-              onClick={() => void runRecall(false)}
-              disabled={!localAgentControlsAvailable || recallSelectedClaimIds.length === 0 || recall.status === "running"}
-              title={localAgentControlsAvailable ? "Launch both hosted recall agents." : companion.detail}
-            >
-              {recall.status === "running" ? "Agents searching…" : "Launch both agents"}
-            </button>
-            {recall.response && (
-              <button className="cache-refresh-button" onClick={() => void runRecall(true)} disabled={!localAgentControlsAvailable || recall.status === "running"}>
+          {recall.response && (
+            <div className="recall-launch">
+              <button className="cache-refresh-button" onClick={() => void runRecall(true)} disabled={!localAgentControlsAvailable || searching}>
                 Refresh live
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </header>
-
-        <div className="recall-focus">
-          <div>
-            <span>Spend recall tokens on</span>
-            <small>Multi-select · the agent receives only these claim frames</small>
-          </div>
-          <div className="recall-claim-pills">
-            {brief?.claims.map((claim) => (
-              <button
-                className={recallSelectedClaimIds.includes(claim.id) ? "active" : ""}
-                key={claim.id}
-                onClick={() => toggleRecallClaim(claim.id)}
-                aria-pressed={recallSelectedClaimIds.includes(claim.id)}
-                title={claim.statement}
-              >
-                {claim.shortLabel}
-              </button>
-            ))}
-            {brief && (
-              <button
-                className="recall-select-all"
-                onClick={() => setRecallSelectedClaimIds(
-                  recallSelectedClaimIds.length === brief.claims.length ? [] : brief.claims.map((claim) => claim.id),
-                )}
-              >
-                {recallSelectedClaimIds.length === brief.claims.length ? "clear all" : "select all"}
-              </button>
-            )}
-          </div>
-        </div>
 
         <div className={`recall-progress ${recall.status}`}>
           <i aria-hidden="true" />
@@ -1289,34 +1372,6 @@ export function ResearchDashboard() {
             {recall.status === "running" ? "Finding sources…" : recall.error || recall.progress}
           </span>
           {recall.response && <small>{recall.response.cache.status === "hit" ? "exact local run reused" : recall.response.cache.status === "bypass" ? "recomputed live" : "fresh local run"} · {recall.response.model}</small>}
-        </div>
-
-        <div className="research-budget">
-          <p className={`research-budget-line ${spendExhausted ? "exhausted" : ""}`}>
-            <span><strong>{researchBudgetProfiles[displayEffort].label}</strong> effort</span>
-            <span>Spent <strong>{formatUsd(runLedger.usage.costUsd)}</strong> of ${researchRunCapUsd} this run</span>
-            {runLedger.usage.webSearchRequests > 0 && <span>{runLedger.usage.webSearchRequests} web searches</span>}
-            {recall.status !== "running" && <span>{recallEstimateLabel}</span>}
-            {(runLedger.usage.calls > 0 || spendExhausted) && recall.status !== "running" && (
-              <button type="button" onClick={startNewRun}>Start a new run</button>
-            )}
-          </p>
-          {recall.status === "running" && (
-            <>
-              <div className="research-eta-rail" aria-hidden="true">
-                <span style={{ transform: `scaleX(${Math.min(1, recallElapsedMs / recallEstimate.estimateMs)})` }} />
-              </div>
-              <p className="research-budget-line">
-                <span>{formatDuration(recallElapsedMs)} elapsed</span>
-                <span>
-                  {recallElapsedMs < recallEstimate.estimateMs
-                    ? `about ${formatDuration(recallEstimate.estimateMs - recallElapsedMs)} left`
-                    : "taking longer than usual"}
-                  {recallEstimate.provisional ? " (provisional estimate)" : ""}
-                </span>
-              </p>
-            </>
-          )}
         </div>
 
         {recall.status === "complete" && recall.response && (
@@ -1407,7 +1462,12 @@ export function ResearchDashboard() {
                         </div>
                         <footer>
                           <a href={lead.source.url} target="_blank" rel="noreferrer">Open lead ↗</a>
-                          <button onClick={() => adoptRecallQuery(lead)}>Use query in PubMed lane</button>
+                          <button onClick={() => adoptRecallQuery(lead)} disabled={searching} title="Copy this lead's reported query onto its claim card for the next search.">Use this query</button>
+                          {lead.claimIds.length === 1 && steering?.claims[lead.claimIds[0]] && !steering.claims[lead.claimIds[0]].parked && (
+                            <button onClick={() => parkClaim(lead.claimIds[0])} disabled={searching} title="Skip this claim in the next search. Its leads stay here.">
+                              Park this claim
+                            </button>
+                          )}
                           {lead.sourceClass && (
                             <button
                               onClick={() => void investigateRecallLead(lead)}
@@ -1460,42 +1520,9 @@ export function ResearchDashboard() {
           <span>Opening a lead or copying its query does not create evidence. Acquisition, atomic extraction, dependence assignment, and adversarial verification still have to succeed.</span>
         </footer>
       </section>
+      )}
 
-      <section className="capability-rail" aria-label="Investigation capability status">
-        {researchCapabilities.map((capability) => (
-          <article className={capability.status} key={capability.id}>
-            <div><i aria-hidden="true" /><span>{capability.status === "live" ? "live" : "planned"}</span></div>
-            <strong>{capability.label}</strong>
-            <p>{capability.detail}</p>
-          </article>
-        ))}
-      </section>
-
-      <section className="query-controls" aria-labelledby="query-controls-title">
-        <div>
-          <span>Human control surface</span>
-          <h2 id="query-controls-title">Choose what the agents are allowed to retrieve.</h2>
-        </div>
-        <div className="filter-pills" aria-label="Publication type filters">
-          {publicationOptions.map((option) => (
-            <button
-              key={option.id}
-              className={filters.includes(option.id) ? "active" : ""}
-              onClick={() => toggleFilter(option.id)}
-              aria-pressed={filters.includes(option.id)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        <div className="cache-controls">
-          <p>Results reopen instantly on this browser. Shared operation outputs expire; accepted evidence records do not.</p>
-          <button onClick={clearDashboardCache} title="Remove only this browser’s research display cache. The shared operation cache and accepted evidence graph are unchanged.">
-            Reset browser cache
-          </button>
-        </div>
-      </section>
-
+      {activeLanes.some((lane) => runs[lane.id]?.status !== "ready") && (
       <div className="research-lanes">
         {activeLanes.map((lane, index) => {
           const run = runs[lane.id];
@@ -1505,7 +1532,7 @@ export function ResearchDashboard() {
               <button className="lane-heading" onClick={() => setOpenLane((current) => current === lane.id ? "" : lane.id)} aria-expanded={expanded}>
                 <span className="lane-number">0{index + 1}</span>
                 <span>
-                  <small>{statusLabel(run.status)}</small>
+                  <small>{steering?.claims[lane.id]?.parked ? "parked for the next search" : statusLabel(run.status)}</small>
                   <strong>{lane.label}</strong>
                   <p>{lane.question}</p>
                 </span>
@@ -1531,24 +1558,8 @@ export function ResearchDashboard() {
                     {lane.budgetShare && <div><span>Token budget</span><p>{lane.budgetShare}% of this investigation portfolio.</p></div>}
                     {lane.relaxationOrder?.length ? <div><span>Constraint relaxation</span><ol>{lane.relaxationOrder.map((step) => <li key={step}>{step}</li>)}</ol></div> : null}
                   </div>
-                  <label className="query-editor">
-                    <span>Editable PubMed query</span>
-                    <textarea
-                      value={queries[lane.id]}
-                      onChange={(event) => setQueries((current) => ({ ...current, [lane.id]: event.target.value }))}
-                      rows={3}
-                    />
-                  </label>
                   <div className="lane-actions">
-                    <button className="primary-button" onClick={() => runLane(lane)} disabled={run.status === "running"}>
-                      {run.status === "running" ? "Searching PubMed…" : "Run this lane"}
-                    </button>
-                    {run.response && (
-                      <button className="cache-refresh-button" onClick={() => runLane(lane, true)} disabled={run.status === "running"} title="Bypass both cached operation output and the browser-restored display.">
-                        Refresh live
-                      </button>
-                    )}
-                    <span>Discovery begins as leads. Only case-scoped records that cross the declared promotion policy appear in the live artifact.</span>
+                    <span>Edit this claim&apos;s query on its card above; it applies to the next search. Discovery begins as leads. Only case-scoped records that cross the declared promotion policy appear in the live artifact.</span>
                   </div>
 
                   {run.error && <p className="lane-error" role="alert">{run.error}</p>}
@@ -1745,6 +1756,7 @@ export function ResearchDashboard() {
           );
         })}
       </div>
+      )}
 
       <section className="promotion-register" aria-labelledby="promotion-register-title">
         <header>

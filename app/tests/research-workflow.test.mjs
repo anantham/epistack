@@ -87,9 +87,9 @@ test("research route keeps discovery separate from evidence promotion", async ()
   assert.match(decision, /Synthesize decision/);
   assert.match(decision, /loadBearingResultIds/);
   assert.match(decision, /dependenceGroups/);
-  assert.match(dashboard, /Launch both agents/);
+  assert.match(dashboard, /searchKeptClaims/);
   assert.match(dashboard, /Recall layer · Lead-only/);
-  assert.match(dashboard, /Use query in PubMed lane/);
+  assert.match(dashboard, /Use this query/);
   assert.match(recallApi, /openrouter:web_search/);
   assert.match(recallApi, /Astra fallback · web search/);
   assert.match(recallApi, /map\(\(lead\) => lead\.id\)\.slice\(0, 12\)/);

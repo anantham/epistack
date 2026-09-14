@@ -20,6 +20,7 @@ import {
   type ResearchBudgetProfile,
   type ResearchUsage,
 } from "../../../lib/research-budget";
+import { huntDirections, huntInstructions, steeringNoteLimit, strongestEffort } from "../../../lib/claim-steering";
 
 const hostedRecallClaimSchema = z.object({
   id: z.string().trim().min(2).max(80),
@@ -27,6 +28,12 @@ const hostedRecallClaimSchema = z.object({
   decisionLeverage: z.string().trim().min(8).max(420),
   retrieval: z.object({
     searchQuery: z.string().trim().min(8).max(800),
+  }).optional(),
+  steering: z.object({
+    hunt: z.enum(huntDirections).optional(),
+    effort: z.string().optional(),
+    searchTerms: z.array(z.string().trim().min(1).max(160)).max(12).optional(),
+    note: z.string().max(steeringNoteLimit).optional(),
   }).optional(),
 }).passthrough();
 
@@ -206,11 +213,17 @@ function reportedQueryFor(claims: HostedRecallClaim[]) {
 function claimBlock(claims: HostedRecallClaim[]) {
   return claims.map((claim) => {
     const query = claim.retrieval?.searchQuery?.trim();
+    const steering = claim.steering;
+    const searchTerms = steering?.searchTerms?.map((term) => term.trim()).filter(Boolean) ?? [];
+    const note = steering?.note?.trim();
     return [
       `- id: ${claim.id}`,
       `  statement: ${claim.statement}`,
       `  decision leverage: ${claim.decisionLeverage}`,
       query ? `  search query: ${query}` : "",
+      steering?.hunt ? `  hunt: ${huntInstructions[steering.hunt]}` : "",
+      searchTerms.length ? `  person-specific search terms (shareable): ${searchTerms.join("; ")}` : "",
+      note ? `  human steering note: ${note}` : "",
     ].filter(Boolean).join("\n");
   }).join("\n");
 }
@@ -453,8 +466,11 @@ export async function POST(request: Request) {
   const profile = input.applicabilityProfile ?? emptyApplicabilityProfile;
   const compiledQuestion = input.compiledQuestion || input.question;
   const effort = normalizeResearchEffortStep(input.effort);
-  const budget = researchBudgetProfiles[effort];
   const searchModel = normalizeModelId(input.models?.search) || openRouterRecallModel();
+  // A lane that searches several claims uses the strongest effort among them.
+  const laneBudget = (claims: HostedRecallClaim[]) => researchBudgetProfiles[strongestEffort(
+    claims.map((claim) => (claim.steering?.effort ? normalizeResearchEffortStep(claim.steering.effort) : effort)),
+  )];
   const cacheKey = `recall-${shortHash(JSON.stringify({
     question: input.question,
     compiledQuestion,
@@ -481,7 +497,7 @@ export async function POST(request: Request) {
         if (!isBackendUnreachable(error) || !openRouterRecallConfigured()) throw error;
       }
     }
-    const fallback = await openRouterChat(lanePrompt, "You are a careful web-research lead generator. Return a short Markdown report with every source as a Markdown link. Keep all results lead-only: discovery is not evidence, and do not claim that a source has been acquired or verified.", true, { model: searchModel, profile: budget });
+    const fallback = await openRouterChat(lanePrompt, "You are a careful web-research lead generator. Return a short Markdown report with every source as a Markdown link. Keep all results lead-only: discovery is not evidence, and do not claim that a source has been acquired or verified.", true, { model: searchModel, profile: laneBudget(claims) });
     return {
       leads: buildLeads(lane, extractLinks(fallback.text), claims.map((claim) => claim.id), "OpenRouter"),
       provider: "OpenRouter",
