@@ -6,16 +6,15 @@ This is the durable queue for requests that span code, documentation, deployment
 
 - [x] **Provider provenance in the decomposition header.** The response contract now carries stage-level provider/model/status data and safe failure reasons; the homepage and inspector render it instead of the old hard-coded Astra label.
 - [x] **Root reload returns to the composer.** `/` keeps the saved question editable after a normal refresh; saved decomposition results require an explicit `?resume=1` request.
-- [x] **Back up and integrate the current source work.** Canonical `main` is pushed to GitHub, including the explicit `/decompose` route, research budget/model settings, the Contextualize impact ledger, and artifact JSON export. The last verified Sites release is version 81; the newer source still needs to be published.
+- [x] **Back up and integrate the current source work.** Canonical `main` is pushed to GitHub, including the explicit `/decompose` route, research budget/model settings, Contextualize impact ledger, claim steering, human review overturns, and artifact JSON export. The last verified Sites release is version 81; the newer source still needs to be published.
 - [x] **Live deployment smoke verification.** On 2026-09-14, `/`, `/map`, and `/research` returned 200. The deployed homepage showed `OpenRouter · deepseek/deepseek-v4.1-flash`; no loopback reference appeared in the rendered runtime. Console warnings were limited to a browser wallet extension; no site error was observed.
 - [ ] **Fresh browser E2E after release.** Submit the eggs question from a clean case and verify Decompose → Contextualize → brief → Research → Artifact, including Settings health and the hosted fallback path.
-- [x] **Integrate the clean research budget/settings work.** The reviewed clean branch was merged into `main` and passes the current gate. A separate Claude scratchpad still contains uncommitted claim-card steering work; it remains isolated for review and is not represented as merged or deployed.
-- [ ] **Ready for review (Claude, two stacked branches in this repository; merge in order).** (1) `feat/investigate-claim-steering` at `c39fcbf` (based on `3a47985`): claim cards on Investigate, as described in `666def6`. (2) `feat/investigate-overturn-reject` at `298dc90` (on top of `c39fcbf`): a person can overturn a dual-model reviewer's reject. The promote route's `human-overturn` mode accepts only the exact rejected proposal, re-verifies the passage against an independently fetched PMC copy, writes `accepted-human-verified-full-text` next to the reviewer's reject assessment, and marks decisions stale; automatic re-runs no longer supersede a human stamp. Both are committed, not merged or deployed, and `git merge-tree` against `c28a92a` is clean for each. Verified locally: `npm test` (typecheck, build, 140/140); an end-to-end overturn with real PMC13521221 in the worktree's local D1 reached the Artifact, whose result detail labels it human-verified. Please avoid overlapping edits to `app/api/promote/route.ts`, `research-dashboard.tsx`, and the end of `globals.css` until these merge.
+- [x] **Integrate Claude's claim steering and human review overturns.** Stacked branches `c39fcbf` and `298dc90` were reviewed, passed the full gate, and merged into `main` in order. Claim cards now steer the Investigate lanes, and `human-overturn` accepts only the exact rejected proposal after independent passage re-verification. The Artifact now labels these relations as human-verified full-text stamps. The clean combined source passes 142 tests; the changes are pushed to GitHub but still await Sites publication.
 
 ## Accepted and integrated, awaiting release
 
 - [x] Review `design/audit-fixes` (`5f86ccc`) for current-main compatibility. Its readability, mobile, first-paint, accessibility, route-title, empty-state, and undo changes are accepted. The two conflicts were resolved against current refresh and fallback code.
-- [x] Current integration passes `npm test`: typecheck, build, and 131 tests.
+- [x] Current integration passes `npm test`: typecheck, build, and 142 tests.
 - [x] README and app README now document the production URL, hosted/local boundary, server-side secrets, jobs, fallback behavior, and current limitations.
 - [x] Hosted decomposition jobs, server-side recovery, guarded job ticking, scheduled sweep configuration, and persistent run telemetry are present in source.
 - [x] Backend settings expose Astra/Lyra and OpenRouter health checks; provider credentials remain server-side in production.
@@ -23,7 +22,7 @@ This is the durable queue for requests that span code, documentation, deployment
 ## Product follow-ups
 
 - [x] Make Contextualize show how each answer changes the scoped claims, constraints, action space, and unknowns before research starts.
-- [ ] Make Investigate show one locked run with per-lane progress, current task, cache state, elapsed time, estimate, failures, and a clear artifact-ready state.
+- [ ] Make Investigate show one locked run with per-lane progress, current task, cache state, elapsed time, estimate, failures, and a clear artifact-ready state. Claim steering is now present; the live run ledger is still pending.
 - [ ] Replace capability placeholders as each lane becomes real; keep unfinished source classes visibly separate from accepted evidence.
 - [ ] Connect divergence results to the Artifact and preserve class-specific source roles in the decision view.
 - [x] Add a clear artifact export/download flow and document the permanence/versioning behavior of case links.
@@ -43,7 +42,7 @@ This is the durable queue for requests that span code, documentation, deployment
 
 ## Testing gaps
 
-The current 131-test gate is strong for pure contracts and build safety, but it does not yet provide complete product or production confidence.
+The current 142-test gate is strong for pure contracts and build safety, but it does not yet provide complete product or production confidence.
 
 - [ ] Add a real browser E2E suite for a fresh case: submit → Decompose → edit → Contextualize → brief → Research → Artifact, with desktop/mobile, reduced motion, keyboard, refresh, and Settings health checks.
 - [ ] Add worker integration tests with an isolated D1: apply migrations, exercise API routes, verify indexes, enforce tick/stats authorization, and test job locks, stale locks, retries, and failure persistence.

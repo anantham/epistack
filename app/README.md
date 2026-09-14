@@ -83,6 +83,8 @@ It currently implements:
 - a typed, locally persisted `ResearchBrief` containing stakeholder profile, feasible actions, 3–7 prioritized claims, retrieval contracts, relaxation order, gap triggers, and a 100-point research budget;
 - dynamic research lanes generated from that brief rather than from the curated eggs fixture;
 - hosted broad, applicability, and context recall lanes with multi-claim human focus controls, per-lane cache metadata, and a schema-enforced lead-only boundary;
+- claim-steering cards that let a person keep or park claims, choose support/disconfirm/either search direction, set effort, and route answers to search or fit-only handling;
+- a guarded human-overturn path for reviewer rejects that re-fetches and re-checks the exact passage before recording a human-verified full-text stamp;
 - privacy-minimized discovery that sends only the editable query and publication filters to PubMed while retaining the full personal context locally;
 - probability semantics;
 - JSON export;
@@ -120,7 +122,7 @@ The interface is organized as a case workspace rather than one long report:
 
 Discovery is intentionally not treated as evidence. For a PubMed record linked to open PMC full text, the local companion saves JATS XML and plain text under `.epistack/sources`, records the source hash, runs specialized extraction and adversarial-review processes, literally checks accepted excerpts against the saved text, and caches the full run by source hash, compiled claims, applicability profile, prompts, question context, and model pair. At promotion time the server independently resolves PMID→PMCID, refetches the public JATS artifact, recomputes its hash, and verifies every accepted excerpt. Only results that pass the declared `dual-model-pmc-full-text-v2` policy enter the accepted graph. Human-checked abstract extractions are persisted as provisional intake records; they cannot satisfy accepted claim coverage or carry a final decision.
 
-“AI cross-checked full text” is deliberately not labeled human-verified. The server now verifies the public artifact and passages, but it does not prove that the model’s methodological judgment is correct. Broad-web discoveries are leads, not evidence, and there is not yet a general acquisition adapter for every non-PubMed source. Registration IDs improve cross-publication grouping, but unresolved dependencies still need a human merge/review operator. The app also does not yet acquire paywalled PDFs, independently reproduce statistical analyses, subscribe to retractions, merge multi-investigator artifacts, or aggregate contributed personal observations.
+“AI cross-checked full text” is deliberately labeled separately from a human overturn. The server verifies the public artifact and passages, but it does not prove that the model’s methodological judgment is correct; a human stamp records that a person read the exact passage and reviewer objection and accepted that exact proposal. Broad-web discoveries are leads, not evidence, and there is not yet a general acquisition adapter for every non-PubMed source. Registration IDs improve cross-publication grouping, but unresolved dependencies still need a human merge/review operator. The app also does not yet acquire paywalled PDFs, independently reproduce statistical analyses, subscribe to retractions, merge multi-investigator artifacts, or aggregate contributed personal observations.
 
 ## Commands
 

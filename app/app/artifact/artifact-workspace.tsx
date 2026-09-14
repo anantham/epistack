@@ -632,6 +632,10 @@ export function ArtifactWorkspace() {
   const fullTextCount = acceptedRelations.filter((relation) =>
     relation.result.verificationStatus.includes("full-text"),
   ).length;
+  const humanVerifiedCount = acceptedRelations.filter((relation) =>
+    relation.result.verificationStatus === "human-verified-full-text"
+    || relation.status === "accepted-human-verified-full-text",
+  ).length;
   const counts = artifact?.counts ?? {
     claims: visibleClaims.length,
     resultRelations: acceptedRelations.length,
@@ -757,13 +761,16 @@ export function ArtifactWorkspace() {
           <b>{counts.dependenceFamilies}</b>
         </div>
         <div>
-          <span>Accepted links with full-text review</span>
+          <span>Full-text checks (AI + human)</span>
           <b>{counts.fullTextVerified}</b>
         </div>
         <div className={`live-artifact-freshness ${artifact?.freshness.stale ? "is-stale" : ""}`}>
           <span>{artifact?.freshness.stale ? "Decision freshness" : "Artifact status"}</span>
           <strong>{artifact?.statusLabel}</strong>
           <small>Latest accepted evidence: {formatDate(artifact?.freshness.latestEvidenceAt)}</small>
+          {humanVerifiedCount > 0 && (
+            <small>{humanVerifiedCount} human-verified full-text {humanVerifiedCount === 1 ? "stamp" : "stamps"}</small>
+          )}
           {artifact?.freshness.reasons.length ? <small>{artifact.freshness.reasons.join(" ")}</small> : null}
         </div>
       </section>
@@ -879,6 +886,10 @@ export function ArtifactWorkspace() {
                             <strong>{relation.result.resultText}</strong>
                             <small>{relation.source.title}</small>
                             <SourceBadges item={relation} />
+                            {(relation.result.verificationStatus === "human-verified-full-text"
+                              || relation.status === "accepted-human-verified-full-text") && (
+                              <span className="live-relation-tag relation-human">Human-verified full text</span>
+                            )}
                           </span>
                           {relation.result.estimate && <b>{relation.result.estimate}</b>}
                         </summary>

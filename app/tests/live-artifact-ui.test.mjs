@@ -20,6 +20,8 @@ test("stage four renders the live accepted evidence contract", async () => {
   assert.match(workspace, /live-artifact\.v1/);
   assert.match(workspace, /Accepted claim–result links/);
   assert.match(workspace, /Dependence groups/);
+  assert.match(workspace, /Full-text checks \(AI \+ human\)/);
+  assert.match(workspace, /Human-verified full text/);
   assert.match(workspace, /No evidence has crossed the promotion boundary/);
   assert.match(workspace, /Resolving the active investigation/);
   assert.match(workspace, /No promoted result currently bears on this claim/);
