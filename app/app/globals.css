@@ -185,7 +185,9 @@ main {
   position: absolute;
   right: clamp(20px, 4vw, 64px);
   top: 58px;
-  width: min(330px, calc(100vw - 40px));
+  width: min(360px, calc(100vw - 36px));
+  max-height: min(680px, calc(100dvh - 140px));
+  overflow-y: auto;
 }
 
 .settings-heading {
@@ -267,107 +269,194 @@ main {
   width: 100%;
 }
 
-.settings-health-section {
+.settings-status {
   display: grid;
-  gap: 8px;
+  gap: 4px;
 }
 
-.settings-health-section-heading,
-.settings-health-heading {
+.settings-status-row {
   align-items: center;
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 14px;
 }
 
-.settings-health-section-heading > span {
+.settings-status-item {
+  align-items: center;
   color: var(--ink-soft);
+  display: inline-flex;
   font-size: var(--type-meta);
+  gap: 6px;
 }
 
-.settings-health-refresh,
-.settings-health-check {
-  background: transparent;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--ink-soft);
-  cursor: pointer;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: var(--type-meta);
-  padding: 5px 8px;
+.settings-status-item i {
+  background: #9a9f9b;
+  border-radius: 50%;
+  height: 7px;
+  width: 7px;
 }
 
-.settings-health-refresh:disabled,
-.settings-health-check:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
-
-.settings-health-card {
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  display: grid;
-  gap: 7px;
-  padding: 10px;
-}
-
-.settings-health-heading > div {
-  display: grid;
-  gap: 2px;
-}
-
-.settings-health-heading strong {
-  font-size: var(--type-label);
-  font-weight: 600;
-}
-
-.settings-health-heading small,
-.settings-health-model,
-.settings-health-note,
-.settings-health-error {
-  color: var(--ink-soft);
-  font-size: var(--type-meta);
-  line-height: 1.35;
-}
-
-.settings-health-card .connection-status {
-  font-size: var(--type-meta);
-}
-
-.settings-health-card .connection-status.valid {
-  color: #276047;
-}
-
-.settings-health-card .connection-status.invalid,
-.settings-health-error {
-  color: #8a3f35;
-}
-
-.settings-health-card .connection-status.attention {
-  color: #8a641c;
-}
-
-.settings-health-card .connection-status.unavailable,
-.settings-health-card .connection-status.not-configured {
-  color: #8a3f35;
-}
-
-.settings-health-card .connection-status.healthy i {
+.settings-status-item.healthy i {
   background: #3d916b;
 }
 
-.settings-health-card .connection-status.attention i {
+.settings-status-item.attention i {
   background: #c38a24;
 }
 
-.settings-health-card .connection-status.unavailable i,
-.settings-health-card .connection-status.not-configured i {
+.settings-status-item.unavailable i,
+.settings-status-item.not-configured i {
   background: #b24f43;
 }
 
-.settings-health-note,
-.settings-health-error {
+.settings-status-item.checking i {
+  animation: status-pulse 800ms ease-in-out infinite alternate;
+  background: #c38a24;
+}
+
+.settings-status-refresh {
+  background: transparent;
+  border: 0;
+  color: var(--green);
+  font-size: var(--type-meta);
+  margin-left: auto;
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.settings-status-refresh:disabled {
+  color: var(--ink-soft);
+  cursor: wait;
+  text-decoration: none;
+}
+
+.settings-status-detail {
+  color: #8a3f35;
+  font-size: var(--type-meta);
+  line-height: 1.4;
+}
+
+.settings-group {
+  border: 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  min-width: 0;
+  padding: 12px 0 0;
+}
+
+.settings-group legend {
+  color: var(--ink);
+  float: left;
+  font-size: var(--type-label);
+  font-weight: 600;
+  padding: 0;
+  width: 100%;
+}
+
+.settings-panel .settings-model > span,
+.settings-panel .settings-effort > span {
+  align-items: baseline;
+  color: var(--ink);
+  display: flex;
+  font-size: var(--type-label);
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.settings-panel .settings-model > span small {
+  color: var(--ink-soft);
+  font-size: var(--type-meta);
+  text-align: right;
+}
+
+.settings-model-note {
+  color: var(--ink-soft);
+  font-size: var(--type-meta);
+  line-height: 1.4;
+}
+
+.settings-model-note.error {
+  color: #8a3f35;
+}
+
+.settings-model-note.warning {
+  color: var(--amber);
+}
+
+.settings-panel .settings-model input[aria-invalid="true"] {
+  border-color: #b24f43;
+}
+
+.settings-panel .settings-steps {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 3px;
+}
+
+.settings-panel .settings-steps label {
+  align-items: center;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  min-height: 36px;
+  position: relative;
+  transition: background 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease;
+}
+
+.settings-panel .settings-steps label > span {
+  color: inherit;
+  font-size: var(--type-label);
+}
+
+.settings-panel .settings-steps label.active {
+  background: var(--surface-raised);
+  box-shadow: 0 1px 3px rgba(38, 47, 40, 0.14);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.settings-panel .settings-steps label:has(input:focus-visible) {
+  outline: 3px solid rgba(35, 92, 67, 0.3);
+  outline-offset: 1px;
+}
+
+.settings-panel .settings-steps input {
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.settings-steps-summary {
+  color: var(--ink-soft);
+  font-size: var(--type-meta);
+  line-height: 1.45;
+}
+
+.settings-select {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  font-size: var(--type-label);
+  padding: 10px 11px;
+  width: 100%;
+}
+
+.settings-footnote {
+  color: var(--ink-soft);
+  font-size: var(--type-meta);
   margin: 0;
 }
 
@@ -9969,5 +10058,96 @@ button.primary-link:disabled {
 
   .stage {
     padding: 8px;
+  }
+}
+
+/* Research budget and timing */
+.recall-cockpit .research-budget {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 28px;
+}
+
+/* Tooltips beside a screen edge anchor to that edge instead of centering past it. */
+.composer-submit[data-tooltip]::after {
+  left: auto;
+  right: 0;
+  transform: translateY(-4px);
+}
+
+.composer-submit[data-tooltip]:hover::after,
+.composer-submit[data-tooltip]:focus-visible::after {
+  transform: translateY(0);
+}
+
+@media (max-width: 680px) {
+  .minimal-topbar .stage-home[data-tooltip]::after {
+    left: 0;
+    transform: translateY(-4px);
+  }
+
+  .minimal-topbar .stage-home[data-tooltip]:hover::after,
+  .minimal-topbar .stage-home[data-tooltip]:focus-visible::after {
+    transform: translateY(0);
+  }
+}
+
+.research-budget {
+  display: grid;
+  gap: 8px;
+}
+
+.research-budget-line {
+  align-items: center;
+  color: var(--ink-soft);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--type-meta);
+  gap: 4px 14px;
+}
+
+.research-budget-line strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.research-budget-line button {
+  background: transparent;
+  border: 0;
+  color: var(--green);
+  font-size: var(--type-meta);
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.research-budget-line.exhausted {
+  color: #8a3f35;
+}
+
+.research-eta-rail {
+  background: rgba(35, 92, 67, 0.12);
+  border-radius: 999px;
+  height: 3px;
+  overflow: hidden;
+}
+
+.research-eta-rail span {
+  background: var(--green);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  transition: transform 900ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .research-eta-rail span {
+    transition: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .settings-panel .settings-steps label {
+    min-height: 44px;
   }
 }
