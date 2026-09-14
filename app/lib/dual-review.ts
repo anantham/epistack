@@ -82,6 +82,64 @@ export type DualReviewResponse = {
   cache: { status: "hit" | "miss" | "bypass"; key: string; createdAt: string };
 };
 
+const populationQualifierPatterns: Array<[string, RegExp]> = [
+  ["male", /\bmale\b/i],
+  ["female", /\bfemale\b/i],
+  ["smoker", /\bsmok(?:er|ers|ing)\b/i],
+  ["diabetes", /\bdiabet(?:es|ic)\b/i],
+  ["pregnancy", /\bpregnan(?:cy|t)\b/i],
+  ["children", /\bchild(?:ren)?\b/i],
+  ["adolescent", /\badolescent(?:s)?\b/i],
+  ["older adult", /\b(?:older adult|elderly|aged)\b/i],
+  ["overweight", /\boverweight\b/i],
+  ["obesity", /\bobes(?:e|ity)\b/i],
+  ["athlete", /\bathlet(?:e|es|ic)\b/i],
+  ["resistance-trained", /\bresistance[- ]trained\b/i],
+];
+
+/**
+ * Return population qualifiers that appear in the study but are not
+ * represented by the claim. Word boundaries matter here: "female" must not
+ * match "male", and "nonsmokers" must not match "smoker".
+ */
+export function populationMismatchSignals(claimPopulation: string, studyPopulation: string) {
+  const claim = claimPopulation.toLocaleLowerCase("en");
+  const study = studyPopulation.toLocaleLowerCase("en");
+  const nonSmoking = /\bnon[- ]?smok(?:er|ers|ing)\b/i;
+  return populationQualifierPatterns
+    .filter(([, pattern]) => pattern.test(study))
+    .filter(([qualifier]) => {
+      if (qualifier === "smoker" && nonSmoking.test(study)) return false;
+      return !populationQualifierPatterns.find(([candidate]) => candidate === qualifier)?.[1].test(claim);
+    })
+    .map(([qualifier]) => qualifier);
+}
+
+/**
+ * Apply the same deterministic applicability gate at every persistence
+ * boundary. The browser may request promotion, but it cannot turn a partial,
+ * unknown, or differently scoped model result into accepted evidence.
+ */
+export function automaticScopeGateReasons(input: {
+  result: DeepDiveResult;
+  studyPopulation: string;
+  claimFrames: Array<{ id: string; population: string }>;
+}) {
+  const claim = input.claimFrames.find((frame) => frame.id === input.result.claimFrameId);
+  const hasClaimContract = input.claimFrames.length > 0;
+  const reasons: string[] = [];
+  if (!claim && hasClaimContract) reasons.push(`The result references unknown claim frame ${input.result.claimFrameId}.`);
+  if (input.result.scopeMatch !== "direct") reasons.push(`The result scope is ${input.result.scopeMatch}, not direct.`);
+  if (input.result.applicability.distance !== "exact") reasons.push(`Applicability distance is ${input.result.applicability.distance}, not exact.`);
+  if (input.result.applicability.mismatched.length > 0) reasons.push(`Applicability mismatches remain: ${input.result.applicability.mismatched.join(", ")}.`);
+  if (input.result.applicability.unknown.length > 0) reasons.push(`Applicability is unknown for: ${input.result.applicability.unknown.join(", ")}.`);
+  if (claim) {
+    const populationMismatch = populationMismatchSignals(claim.population, input.studyPopulation);
+    if (populationMismatch.length > 0) reasons.push(`The study population adds unrepresented scope qualifiers: ${populationMismatch.join(", ")}.`);
+  }
+  return reasons;
+}
+
 function normalizePassage(value: string) {
   return value
     .normalize("NFKC")
@@ -144,32 +202,16 @@ export function adjudicateDualReview(input: {
   }
 
   const promoted: DeepDiveResult[] = [];
-  const claimPopulationById = new Map((input.claimFrames ?? []).map((claim) => [claim.id, claim.population.toLocaleLowerCase("en")]));
-  const populationMismatchSignals = (claimId: string, studyPopulation: string) => {
-    const claimPopulation = claimPopulationById.get(claimId);
-    if (!claimPopulation) return [];
-    const population = studyPopulation.toLocaleLowerCase("en");
-    const qualifiers = [
-      "male", "female", "smoker", "smoking", "diabetes", "pregnan", "child", "children",
-      "adolescent", "older adult", "elderly", "overweight", "obesity", "athlete", "resistance-trained",
-    ];
-    return qualifiers.filter((qualifier) => population.includes(qualifier) && !claimPopulation.includes(qualifier));
-  };
   const decisions: ReviewDecision[] = primary.results.map((original, resultIndex) => {
     const item = reviewsByIndex.get(resultIndex);
     const proposed = item?.verdict === "revise" ? item.correctedResult ?? null : original;
     const parsedProposed = proposed ? deepDiveResultSchema.safeParse(proposed) : null;
     const promotedResult = parsedProposed?.success ? parsedProposed.data : null;
     const passageFound = promotedResult ? passageExists(input.fullText, promotedResult.exactExcerpt) : false;
-    const populationMismatch = promotedResult
-      ? populationMismatchSignals(promotedResult.claimFrameId, primary.study.population)
-      : [];
-    const scopeGatePasses = Boolean(promotedResult
-      && promotedResult.scopeMatch === "direct"
-      && promotedResult.applicability.distance === "exact"
-      && promotedResult.applicability.mismatched.length === 0
-      && promotedResult.applicability.unknown.length === 0
-      && populationMismatch.length === 0);
+    const scopeReasons = promotedResult
+      ? automaticScopeGateReasons({ result: promotedResult, studyPopulation: primary.study.population, claimFrames: input.claimFrames ?? [] })
+      : ["No schema-valid result was proposed."];
+    const scopeGatePasses = scopeReasons.length === 0;
     const checksPass = Boolean(item
       && item.verdict !== "reject"
       && promotedResult
@@ -187,8 +229,8 @@ export function adjudicateDualReview(input: {
       reviewerVerdict: item?.verdict ?? "reject",
       finalDecision,
       passageFound,
-      rationale: populationMismatch.length > 0
-        ? `The study population adds unrepresented scope qualifiers (${populationMismatch.join(", ")}); it remains outside automatic promotion until the claim is narrowed or a better-matched source is reviewed.`
+      rationale: scopeReasons.length > 0
+        ? `${scopeReasons.join(" ")} It remains outside automatic promotion until the claim is narrowed or a better-matched source is reviewed.`
         : item?.rationale ?? "The adversarial agent returned no review for this result.",
       promotedResult: finalDecision === "promote" ? promotedResult : null,
     };

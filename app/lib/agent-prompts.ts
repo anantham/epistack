@@ -436,11 +436,17 @@ LOCAL DECISION CONTEXT
 EDITED DIMENSIONS AND HUMAN ROLE ASSIGNMENTS
 {{dimensionAssignmentsJson}}
 
+ANSWER-TO-RESEARCH CONTEXT MAP
+{{contextualizationJson}}
+
 FEASIBLE BRANCHES AND PARKED ALTERNATIVES
 {{axesJson}}
 
 KNOWN UNKNOWNS
 {{knownUnknownsJson}}
+
+CONTRACT RULE
+Every contextual answer must either change a claim field or remain an explicit unknown. Never invent a claim link for an answer that is not represented.
 
 The local context may be summarized in the stakeholder profile, but outbound searchQuery fields must contain only the minimum shareable scientific concepts needed for retrieval.`,
     repairTemplate: `{{basePrompt}}

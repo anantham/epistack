@@ -170,11 +170,16 @@ export type ResearchBriefCompilerInput = {
   prior: number;
 };
 
+const decisionActivePattern = /(cost|price|budget|affordab|free[- ]?range|ordinary|production|convenience|replacement|alternative|meal|preparation|dose|frequency|quantity|serving)/i;
 const applicabilityPattern = /(population|people|person|who|where|setting|geograph|jurisdiction|demograph|age|sex|source|access|preference)/i;
 const monitoredPattern = /(unknown|uncertain|predict|modifier|heterogen|boundary|mechanism|production|provenance|certif|feed|housing)/i;
 
 export function defaultDimensionRole(cluster: Pick<DecompositionCluster, "id" | "label" | "latentVariable">): DimensionRole {
   const description = `${cluster.id} ${cluster.label} ${cluster.latentVariable}`;
+  // A personal decision about price, preparation, replacement, or production
+  // needs an explicit evidence lane. These are not merely transportability
+  // metadata when the person is deciding between the options themselves.
+  if (decisionActivePattern.test(description)) return "decision-active";
   if (applicabilityPattern.test(description)) return "applicability-only";
   if (monitoredPattern.test(description)) return "monitored-unknown";
   return "decision-active";

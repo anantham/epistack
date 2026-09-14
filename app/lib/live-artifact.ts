@@ -329,6 +329,7 @@ export type LiveArtifactRows = {
   evidenceRelations?: RawEvidenceRelationRow[];
   dependenceGroups?: RawDependenceGroupRow[];
   latestSnapshot?: RawSnapshotRow | null;
+  latestContractSnapshot?: RawSnapshotRow | null;
   latestEvidenceSnapshot?: RawSnapshotRow | null;
   latestDecision?: RawDecisionRow | null;
 };
@@ -706,8 +707,9 @@ export function normalizeLiveArtifact(
     createdAt: rows.latestEvidenceSnapshot.created_at,
   } : null;
   let researchContract: Record<string, unknown> | null = null;
-  if (rows.latestSnapshot?.artifact_json) {
-    const snapshotArtifact = parseObject(rows.latestSnapshot.artifact_json, "latest snapshot artifact", integrityWarnings);
+  const contractSnapshot = rows.latestContractSnapshot ?? rows.latestSnapshot;
+  if (contractSnapshot?.artifact_json) {
+    const snapshotArtifact = parseObject(contractSnapshot.artifact_json, "latest contextualization snapshot artifact", integrityWarnings);
     const candidateContract = snapshotArtifact.researchBrief;
     if (candidateContract && typeof candidateContract === "object" && !Array.isArray(candidateContract)) {
       researchContract = candidateContract as Record<string, unknown>;

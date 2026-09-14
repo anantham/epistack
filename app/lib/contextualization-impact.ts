@@ -20,10 +20,21 @@ export type ContextualizationImpact = {
   entries: ContextualizationImpactEntry[];
 };
 
-function changedFieldsFor(effect: string) {
-  if (effect === "prune") return ["claim scope", "retrieval and screening"];
-  if (effect === "branch") return ["action alternatives", "separate evidence paths"];
-  return ["applicability", "transportability checks"];
+function changedFieldsFor(
+  effect: string,
+  claims: Array<{ shortLabel: string; queryUsesAxisIds?: string[]; applicabilityUsesAxisIds?: string[] }>,
+  axisId: string,
+) {
+  const fields = effect === "prune"
+    ? ["claim scope", "retrieval and screening"]
+    : effect === "branch"
+      ? ["action alternatives", "separate evidence paths"]
+      : ["applicability", "transportability checks"];
+  for (const claim of claims) {
+    if ((claim.queryUsesAxisIds ?? []).includes(axisId)) fields.push("search query · " + claim.shortLabel);
+    if ((claim.applicabilityUsesAxisIds ?? []).includes(axisId)) fields.push("applicability fields · " + claim.shortLabel);
+  }
+  return Array.from(new Set(fields));
 }
 
 export function buildContextualizationImpact(brief: Pick<ResearchBrief, "claims" | "contextualization" | "stakeholderProfile" | "actionSpace" | "parkedDimensions" | "gapTriggers">): ContextualizationImpact {
@@ -38,13 +49,14 @@ export function buildContextualizationImpact(brief: Pick<ResearchBrief, "claims"
 
   const entries = brief.contextualization.map((entry) => {
     const answer = [...entry.selectedValues, entry.typedAnswer].filter(Boolean).join("; ") || "No answer supplied";
+    const linkedClaims = brief.claims.filter((claim) => claim.axisIds.includes(entry.axisId));
     return {
       axisId: entry.axisId,
       label: entry.label,
       effect: entry.effect,
       answer,
       consequence: entry.researchConsequence,
-      changedFields: changedFieldsFor(entry.effect),
+      changedFields: changedFieldsFor(entry.effect, linkedClaims, entry.axisId),
       claimLabels: Array.from(new Set(claimsByAxis.get(entry.axisId) ?? [])),
     };
   });

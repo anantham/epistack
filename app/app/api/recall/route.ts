@@ -21,6 +21,7 @@ import {
   type ResearchUsage,
 } from "../../../lib/research-budget";
 import { huntDirections, huntInstructions, steeringNoteLimit, strongestEffort } from "../../../lib/claim-steering";
+import { ensureSnapshotTables, getD1 } from "../../../db";
 
 const hostedRecallClaimSchema = z.object({
   id: z.string().trim().min(2).max(80),
@@ -38,6 +39,7 @@ const hostedRecallClaimSchema = z.object({
 }).passthrough();
 
 const hostedRecallRequestSchema = z.object({
+  caseId: z.string().trim().min(1).max(120).optional(),
   question: z.string().trim().min(8).max(5_000),
   compiledQuestion: z.string().trim().min(8).max(5_000).optional(),
   claims: z.array(hostedRecallClaimSchema).min(1).max(7),
@@ -48,6 +50,19 @@ const hostedRecallRequestSchema = z.object({
   models: z.object({ search: z.string().optional() }).optional(),
   budgetRemainingUsd: z.number().min(0).optional(),
 });
+
+async function markResearchCase(caseId: string | undefined, status: "research-started" | "research-reviewed") {
+  if (!caseId) return;
+  try {
+    await ensureSnapshotTables();
+    await getD1().prepare(`UPDATE cases
+      SET status = CASE WHEN status = 'evidence-promoted' THEN status ELSE ? END,
+          updated_at = ?
+      WHERE id = ?`).bind(status, new Date().toISOString(), caseId).run();
+  } catch (error) {
+    console.error("[recall] could not persist research status:", error instanceof Error ? error.message : error);
+  }
+}
 
 type HostedRecallRequest = z.infer<typeof hostedRecallRequestSchema>;
 type HostedRecallClaim = z.infer<typeof hostedRecallClaimSchema>;
@@ -457,6 +472,7 @@ export async function POST(request: Request) {
     return json({ error: issue ? `${issue.path.join(".") || "body"}: ${issue.message}` : "Invalid lead-discovery request." }, 400);
   }
   const input = parsed.data;
+  await markResearchCase(input.caseId, "research-started");
   if (input.budgetRemainingUsd !== undefined && input.budgetRemainingUsd <= 0) {
     return json({ error: `This run has reached its $${researchRunCapUsd} cap. Start a new run to search again.`, code: "run-budget-exhausted" }, 409);
   }

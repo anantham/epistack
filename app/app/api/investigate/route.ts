@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ensureSnapshotTables, getD1 } from "../../../db";
 import { env } from "cloudflare:workers";
 import { renderAgentPrompt, resolveAgentPrompt, sanitizeAgentPromptOverrides, type AgentPromptOverrides } from "../../../lib/agent-prompts";
 import {
@@ -269,6 +270,7 @@ type SourceRequest = {
 };
 
 type InvestigateRequest = {
+  caseId?: string;
   record?: {
     pmid?: unknown;
     pmcid?: unknown;
@@ -290,6 +292,19 @@ type InvestigateRequest = {
   effort?: unknown;
   budgetRemainingUsd?: unknown;
 };
+
+async function markResearchCase(caseId: string | undefined, status: "research-started" | "research-reviewed") {
+  if (!caseId) return;
+  try {
+    await ensureSnapshotTables();
+    await getD1().prepare(`UPDATE cases
+      SET status = CASE WHEN status = 'evidence-promoted' THEN status ELSE ? END,
+          updated_at = ?
+      WHERE id = ?`).bind(status, new Date().toISOString(), caseId).run();
+  } catch (error) {
+    console.error("[investigate] could not persist research status:", error instanceof Error ? error.message : error);
+  }
+}
 
 type NormalizedRecord = {
   pmid: string;
@@ -461,6 +476,7 @@ export async function POST(request: Request) {
       error: "The investigation request is missing the compiled claim frames. Return to Contextualize and compile a research brief first.",
     }, 400);
   }
+  await markResearchCase(body.caseId, "research-started");
   if (body.promptOverrides && JSON.stringify(body.promptOverrides).length > 120_000) {
     return json({ error: "Prompt overrides are too large." }, 400);
   }
@@ -501,7 +517,7 @@ export async function POST(request: Request) {
   let usage: ResearchUsage = emptyResearchUsage;
 
   if (body.source && typeof body.source === "object") {
-    return await investigateSource({
+    const response = await investigateSource({
       source: body.source,
       question,
       decisionContext,
@@ -509,6 +525,8 @@ export async function POST(request: Request) {
       applicabilityProfile,
       promptOverrides,
     });
+    await markResearchCase(body.caseId, "research-reviewed");
+    return response;
   }
 
   const pmid = typeof record?.pmid === "string" ? record.pmid.trim() : "";
@@ -661,6 +679,7 @@ export async function POST(request: Request) {
       verificationStatus: "ai-cross-checked-full-text",
       cache: { status: refresh ? "bypass" : "miss", key: cacheKey, createdAt: new Date().toISOString() },
     };
+    await markResearchCase(body.caseId, "research-reviewed");
     return json({ ...response, effort, usage });
   } catch (error) {
     if (isBackendUnreachable(error)) return backendUnreachableResponse();

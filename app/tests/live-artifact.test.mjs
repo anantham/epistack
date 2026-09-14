@@ -179,6 +179,34 @@ test("normalizes accepted evidence into one stable, schema-valid graph", () => {
   assert.equal(artifact.latestEvidenceSnapshot.id, "snapshot-evidence-1");
 });
 
+test("keeps the contextualization contract visible after a later evidence snapshot", () => {
+  const rows = fixture({
+    latestSnapshot: {
+      id: "snapshot-evidence-2",
+      parent_id: "snapshot-contract-1",
+      actor: "claude-dual-model-policy",
+      operation: "autopromote-full-text-results",
+      artifact_json: JSON.stringify({ sourceId: "pubmed-12345" }),
+      created_at: t2,
+    },
+    latestContractSnapshot: {
+      id: "snapshot-contract-1",
+      parent_id: null,
+      actor: "human-ai-workflow",
+      operation: "save-snapshot",
+      artifact_json: JSON.stringify({
+        researchBrief: {
+          briefId: "brief-case-eggs",
+          contextualization: [{ axisId: "dose", typedAnswer: "two eggs", selectedValues: [] }],
+        },
+      }),
+      created_at: t1,
+    },
+  });
+  const artifact = normalizeLiveArtifact("case-eggs", rows, t2);
+  assert.equal(artifact.researchContract?.briefId, "brief-case-eggs");
+});
+
 test("reports unanswered claims without treating a proposed relation as evidence", () => {
   const artifact = normalizeLiveArtifact("case-eggs", fixture(), t2);
   assert.equal(artifact.status.phase, "collecting");

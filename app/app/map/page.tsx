@@ -120,7 +120,9 @@ export default function ContextualizeMap() {
   const briefEstimate = briefSummary.byEffort[preferredEffort]?.totalMedianMs ?? briefSummary.totalMedianMs;
   const briefSamples = briefSummary.byEffort[preferredEffort]?.samples ?? briefSummary.samples;
   const briefRemaining = briefEstimate ? Math.max(0, briefEstimate - compileElapsed) : null;
-  const contextualizationImpact = compiledBrief ? buildContextualizationImpact(compiledBrief) : null;
+  const contextualizationImpact = compiledBrief
+    ? buildContextualizationImpact({ ...compiledBrief, claims: editedClaims.length > 0 ? editedClaims : compiledBrief.claims })
+    : null;
 
   async function requestCompile(body: unknown) {
     const response = await fetch("/api/compile-brief", {

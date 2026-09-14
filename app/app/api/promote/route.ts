@@ -3,6 +3,7 @@ import { deepDiveSchema, type DeepDiveSource } from "../../../lib/deep-dive";
 import {
   adversarialReviewSchema,
   dualReviewPolicyId,
+  automaticScopeGateReasons,
   passageExists,
   reviewDecisionSchema,
   type SourceArtifact,
@@ -250,6 +251,12 @@ export async function POST(request: Request) {
         && review.scopeVerified
         && review.relationVerified;
     });
+  const deterministicScopeGatePasses = parsed.success
+    && parsed.data.results.every((result) => automaticScopeGateReasons({
+      result,
+      studyPopulation: parsed.data.study.population,
+      claimFrames: promotableClaimFrames,
+    }).length === 0);
   const autoGatePasses = autoRequested
     && reviewEnvelope?.policyId === dualReviewPolicyId
     && body.verificationStatus === "ai-cross-checked-full-text"
@@ -267,6 +274,7 @@ export async function POST(request: Request) {
     && typeof body.model === "string"
     && body.model.trim() === primaryModel
     && reviewSupportsDecisions
+    && deterministicScopeGatePasses
     && candidateMatchesAccepted;
 
   // A person's overturn of a reviewer reject is a separate, explicitly human path.

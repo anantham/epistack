@@ -806,6 +806,7 @@ export function ResearchDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          caseId: brief.caseId,
           question: brief.originalQuestion,
           compiledQuestion: brief.compiledQuestion,
           claims,
@@ -865,6 +866,7 @@ export function ResearchDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          caseId: brief?.caseId,
           source: {
             sourceClass,
             url: lead.source.url,
@@ -1157,6 +1159,7 @@ export function ResearchDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           record,
+          caseId: workspace.result?.caseId || caseId || brief?.caseId,
           question: workspace.prompt,
           decisionContext: workspace.decisionContext || workspace.result?.decisionContext,
           claimFrames: compiledClaimFrames(),

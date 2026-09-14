@@ -78,10 +78,14 @@ export async function readLiveArtifact(caseId: string): Promise<LiveArtifact> {
       FROM snapshots
       WHERE case_id = ? AND operation IN ('autopromote-full-text-results', 'promote-human-verified-full-text')
       ORDER BY created_at DESC, id DESC LIMIT 1`).bind(caseId),
+    d1.prepare(`SELECT id, parent_id, actor, operation, artifact_json, created_at
+      FROM snapshots
+      WHERE case_id = ? AND json_extract(artifact_json, '$.researchBrief') IS NOT NULL
+      ORDER BY created_at DESC, id DESC LIMIT 1`).bind(caseId),
     d1.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'decision_episodes' LIMIT 1"),
   ];
   const queryResults = await d1.batch(prepared);
-  const decisionTableExists = resultRows<{ name: string }>(queryResults[10]).length > 0;
+  const decisionTableExists = resultRows<{ name: string }>(queryResults[11]).length > 0;
   let latestDecision: RawDecisionRow | null = null;
   if (decisionTableExists) {
     const decisionResult = await d1.prepare(`SELECT
@@ -107,6 +111,7 @@ export async function readLiveArtifact(caseId: string): Promise<LiveArtifact> {
     dependenceGroups: resultRows<RawDependenceGroupRow>(queryResults[7]),
     latestSnapshot: resultRows<RawSnapshotRow>(queryResults[8])[0] || null,
     latestEvidenceSnapshot: resultRows<RawSnapshotRow>(queryResults[9])[0] || null,
+    latestContractSnapshot: resultRows<RawSnapshotRow>(queryResults[10])[0] || null,
     latestDecision,
   });
 }

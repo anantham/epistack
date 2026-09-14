@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { adjudicateDualReview, dualReviewPolicyId, passageExists } from "../lib/dual-review.ts";
+import { adjudicateDualReview, dualReviewPolicyId, passageExists, populationMismatchSignals } from "../lib/dual-review.ts";
 import { jatsToPlainText, parseClaudeStructuredOutput } from "../scripts/local-claude-agents.mjs";
 
 const artifact = {
@@ -170,4 +170,11 @@ test("automatic promotion rejects a study population with unrepresented scope qu
   });
   assert.equal(outcome.decisions[0].finalDecision, "reject");
   assert.match(outcome.decisions[0].rationale, /scope qualifiers/i);
+});
+
+test("population scope qualifiers use token boundaries instead of substring matches", () => {
+  assert.deepEqual(populationMismatchSignals("healthy female adults", "healthy male adults"), ["male"]);
+  assert.deepEqual(populationMismatchSignals("healthy male adults", "healthy female adults"), ["female"]);
+  assert.deepEqual(populationMismatchSignals("adult nonsmokers", "adult smokers"), ["smoker"]);
+  assert.deepEqual(populationMismatchSignals("adult smokers", "adult nonsmokers"), []);
 });

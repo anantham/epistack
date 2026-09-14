@@ -191,6 +191,7 @@ export async function POST(request: Request) {
       compiledQuestion: current.compiledQuestion,
       decisionContext: current.decisionContext || 'No personal context supplied. Preserve this as an explicit limitation.',
       dimensionAssignmentsJson: JSON.stringify(dimensionAssignments, null, 2),
+      contextualizationJson: JSON.stringify(current.contextualization, null, 2),
       axesJson: JSON.stringify(current.clusters.map((cluster) => ({ id: cluster.id, label: cluster.label })), null, 2),
       knownUnknownsJson: JSON.stringify(current.knownUnknowns, null, 2),
     };
@@ -230,6 +231,7 @@ export async function POST(request: Request) {
       compiledQuestion: current.compiledQuestion,
       decisionContext: current.decisionContext || 'No personal context supplied. Preserve this as an explicit limitation.',
       dimensionAssignmentsJson: JSON.stringify(dimensionAssignments, null, 2),
+      contextualizationJson: JSON.stringify(current.contextualization, null, 2),
       axesJson: JSON.stringify(current.clusters.map((cluster) => ({ id: cluster.id, label: cluster.label })), null, 2),
       knownUnknownsJson: JSON.stringify(current.knownUnknowns, null, 2),
     };
