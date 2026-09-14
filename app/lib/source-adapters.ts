@@ -21,7 +21,7 @@ import {
 } from "./source-class.ts";
 import type { ResearchClaimFrame } from "./research-brief.ts";
 import { parseStructuredWithRepair, repairInstruction, schemaInstruction } from "./structured-output.ts";
-import { fetchPmcFullText } from "./pmc-full-text.ts";
+import { fetchPmcFullText, resolvePmcNumeric } from "./pmc-full-text.ts";
 
 const primaryModel = "Astra · GPT 6";
 const adversaryModel = "Astra · adversarial full-paper reviewer";
@@ -107,20 +107,6 @@ async function fetchWithTimeout(url: URL | string) {
     headers: { "User-Agent": userAgent },
     signal: AbortSignal.timeout(fetchTimeoutMs),
   });
-}
-
-async function resolvePmcNumeric(pmid: string) {
-  const url = new URL("https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/");
-  url.searchParams.set("ids", pmid);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("tool", "epistack-evidence-lab");
-  const response = await fetchWithTimeout(url);
-  if (!response.ok) throw new Error(`NCBI PMID-to-PMCID conversion returned ${response.status}.`);
-  const payload = await response.json() as { records?: Array<{ pmcid?: string; pmid?: string }> };
-  const record = Array.isArray(payload.records)
-    ? payload.records.find((candidate) => String(candidate.pmid || "") === pmid) ?? payload.records[0]
-    : null;
-  return safePmcNumeric(record?.pmcid);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -214,7 +200,7 @@ export async function acquireSource(input: {
           contentHash: fetched.contentHash,
           url: fetched.canonicalUrl,
           title,
-          metadata: { pmcid: fetched.pmcid, pmid, source: fetched.kind },
+          metadata: { pmcid: fetched.pmcid, pmid, source: fetched.kind, retrievedFrom: fetched.retrievedFrom },
         };
       } catch {
         // Fall through to a best-effort public URL fetch, then the cited text.

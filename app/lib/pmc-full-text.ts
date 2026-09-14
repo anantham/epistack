@@ -4,6 +4,7 @@ export type PmcFullTextArtifact = {
   kind: PmcArtifactKind;
   pmcid: string;
   canonicalUrl: string;
+  retrievedFrom: string;
   raw: string;
   plainText: string;
   contentHash: string;
@@ -68,12 +69,35 @@ async function sha256(value: string) {
     .join("");
 }
 
-async function fetchText(url: URL) {
+async function fetchText(url: URL | string) {
   const response = await fetch(url, {
     headers: { "User-Agent": userAgent },
     signal: AbortSignal.timeout(fetchTimeoutMs),
   });
   return { response, body: await response.text() };
+}
+
+function validateJats(body: string, provider: string) {
+  if (!/<article[\s>]/i.test(body) || body.length < minimumRawChars) {
+    throw new Error(`${provider} did not return a complete open-access JATS article.`);
+  }
+  const plainText = jatsToPlainText(body);
+  if (plainText.length < minimumPlainTextChars) {
+    throw new Error(`${provider} article did not contain enough readable full text.`);
+  }
+  return plainText;
+}
+
+async function fetchEuropePmc(pmcNumeric: string) {
+  const url = new URL(`https://www.ebi.ac.uk/europepmc/webservices/rest/PMC${pmcNumeric}/fullTextXML`);
+  const { response, body } = await fetchText(url);
+  if (!response.ok) throw new Error(`Europe PMC full-text fetch returned ${response.status}.`);
+  return {
+    kind: "pmc-jats" as const,
+    raw: body,
+    plainText: validateJats(body, "Europe PMC"),
+    retrievedFrom: url.toString(),
+  };
 }
 
 async function fetchJats(pmcNumeric: string) {
@@ -84,14 +108,12 @@ async function fetchJats(pmcNumeric: string) {
   url.searchParams.set("tool", "epistack-evidence-lab");
   const { response, body } = await fetchText(url);
   if (!response.ok) throw new Error(`PMC JATS fetch returned ${response.status}.`);
-  if (!/<article[\s>]/i.test(body) || body.length < minimumRawChars) {
-    throw new Error("PMC did not return a complete open-access JATS article.");
-  }
-  const plainText = jatsToPlainText(body);
-  if (plainText.length < minimumPlainTextChars) {
-    throw new Error("PMC JATS article did not contain enough readable full text.");
-  }
-  return { kind: "pmc-jats" as const, raw: body, plainText };
+  return {
+    kind: "pmc-jats" as const,
+    raw: body,
+    plainText: validateJats(body, "PMC JATS"),
+    retrievedFrom: url.toString(),
+  };
 }
 
 async function fetchBioC(pmcNumeric: string) {
@@ -111,7 +133,47 @@ async function fetchBioC(pmcNumeric: string) {
   // Hash canonical JSON so harmless response whitespace does not invalidate a
   // later independent verification of the same BioC artifact.
   const raw = JSON.stringify(payload);
-  return { kind: "pmc-bioc" as const, raw, plainText };
+  return { kind: "pmc-bioc" as const, raw, plainText, retrievedFrom: url.toString() };
+}
+
+function safePmcNumeric(value: unknown) {
+  const numeric = String(value || "").replace(/^PMC/i, "");
+  return /^\d{4,12}$/.test(numeric) ? numeric : null;
+}
+
+/** Resolve a PubMed record through Europe PMC first, then NCBI as a fallback. */
+export async function resolvePmcNumeric(pmid: string) {
+  const europeUrl = new URL("https://www.ebi.ac.uk/europepmc/webservices/rest/search");
+  europeUrl.searchParams.set("query", `EXT_ID:${pmid}`);
+  europeUrl.searchParams.set("format", "json");
+  europeUrl.searchParams.set("pageSize", "1");
+  try {
+    const response = await fetchText(europeUrl);
+    if (!response.response.ok) throw new Error(`Europe PMC PMID lookup returned ${response.response.status}.`);
+    const payload = JSON.parse(response.body) as {
+      resultList?: { result?: Array<{
+        pmcid?: string;
+        fullTextIdList?: { fullTextId?: string[] };
+      }> };
+    };
+    const record = payload.resultList?.result?.[0];
+    const pmcid = safePmcNumeric(record?.pmcid ?? record?.fullTextIdList?.fullTextId?.find((value) => /^PMC\d{4,12}$/i.test(value)));
+    if (pmcid) return pmcid;
+  } catch {
+    // Try NCBI below; the two services have independent availability.
+  }
+
+  const ncbiUrl = new URL("https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/");
+  ncbiUrl.searchParams.set("ids", pmid);
+  ncbiUrl.searchParams.set("format", "json");
+  ncbiUrl.searchParams.set("tool", "epistack-evidence-lab");
+  const response = await fetchText(ncbiUrl);
+  if (!response.response.ok) throw new Error(`NCBI PMID-to-PMCID conversion returned ${response.response.status}.`);
+  const payload = JSON.parse(response.body) as { records?: Array<{ pmcid?: string; pmid?: string }> };
+  const record = Array.isArray(payload.records)
+    ? payload.records.find((candidate) => String(candidate.pmid || "") === pmid) ?? payload.records[0]
+    : null;
+  return safePmcNumeric(record?.pmcid);
 }
 
 export async function fetchPmcFullText(
@@ -123,8 +185,8 @@ export async function fetchPmcFullText(
   const attempts = preferredKind === "pmc-bioc"
     ? [fetchBioC]
     : preferredKind === "pmc-jats"
-      ? [fetchJats]
-      : [fetchJats, fetchBioC];
+      ? [fetchEuropePmc, fetchJats]
+      : [fetchEuropePmc, fetchJats, fetchBioC];
   const errors: string[] = [];
   for (const fetcher of attempts) {
     try {

@@ -40,6 +40,7 @@ export type SourceArtifact = {
   kind: PmcArtifactKind;
   pmcid: string;
   canonicalUrl: string;
+  retrievedFrom?: string;
   localXmlPath: string;
   localTextPath: string;
   contentHash: string;

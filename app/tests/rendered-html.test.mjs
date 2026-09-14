@@ -185,7 +185,8 @@ test("hosted investigation and recall survive an Astra outage with strict provid
     readFile(new URL("app/research/research-dashboard.tsx", root), "utf8"),
   ]);
   assert.match(investigate, /runOpenRouterStructured/);
-  assert.match(investigate, /response_format: \{ type: "json_object" \}/);
+  assert.match(investigate, /type: "json_schema"/);
+  assert.match(investigate, /type: "json_object"/);
   assert.match(investigate, /normalizeInvestigationJson/);
   assert.match(investigate, /OpenRouter · \$\{openRouterModel\(role, roleModels\)\}/);
   assert.match(investigate, /role !== "repair" && lyraConfigured\(\)/);

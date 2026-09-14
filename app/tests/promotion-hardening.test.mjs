@@ -47,7 +47,7 @@ test("identical promotion fingerprints do not invalidate decisions", () => {
 });
 
 test("automatic acceptance independently verifies the public source artifact", () => {
-  assert.match(promotionRoute, /idconv\/api\/v1\/articles/);
+  assert.match(promotionRoute, /resolvePmcNumeric/);
   assert.match(promotionRoute, /fetchPmcFullText/);
   assert.match(promotionRoute, /pmc-bioc/);
   assert.match(promotionRoute, /fetchedHash !== declaredHash/);

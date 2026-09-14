@@ -25,7 +25,7 @@ import {
   humanOverturnSnapshotOperation,
   humanVerifiedResultStatus,
 } from "../../../lib/reject-overturn";
-import { fetchPmcFullText, type PmcArtifactKind } from "../../../lib/pmc-full-text";
+import { fetchPmcFullText, resolvePmcNumeric, type PmcArtifactKind } from "../../../lib/pmc-full-text";
 
 type PromoteRequest = {
   caseId?: unknown;
@@ -76,6 +76,7 @@ type PersistedPmcArtifact = {
   kind: PmcArtifactKind;
   pmcid: string;
   canonicalUrl: string;
+  retrievedFrom?: string;
   contentHash: string;
   serverVerified: true;
 };
@@ -89,29 +90,11 @@ async function independentlyVerifyPmcArtifact(input: {
     ? input.artifact.pmcid.trim().toUpperCase()
     : "";
   try {
-    const conversionUrl = new URL("https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/");
-    conversionUrl.searchParams.set("ids", input.pmid);
-    conversionUrl.searchParams.set("format", "json");
-    conversionUrl.searchParams.set("tool", "epistack-evidence-lab");
-    const conversionResponse = await fetch(conversionUrl, {
-      headers: { "User-Agent": "Epistack Evidence Lab/0.1 (promotion verification)" },
-    });
-    if (!conversionResponse.ok) {
-      throw new PromotionVerificationError(
-        `NCBI PMID-to-PMCID verification returned ${conversionResponse.status}; no evidence was promoted.`,
-        "PMC_ID_RESOLUTION_FAILED",
-        502,
-      );
-    }
-    const conversion = await conversionResponse.json() as {
-      records?: Array<{ pmcid?: string; pmid?: string }>;
-    };
-    const resolved = conversion.records?.find((record) => String(record.pmid || "") === input.pmid)
-      ?? conversion.records?.[0];
-    const resolvedPmcid = typeof resolved?.pmcid === "string" ? resolved.pmcid.trim().toUpperCase() : "";
+    const resolvedNumeric = await resolvePmcNumeric(input.pmid);
+    const resolvedPmcid = resolvedNumeric ? `PMC${resolvedNumeric}` : "";
     if (!/^PMC\d{4,12}$/.test(resolvedPmcid) || resolvedPmcid !== declaredPmcid) {
       throw new PromotionVerificationError(
-        "The declared PMCID does not resolve from the supplied PMID at NCBI; no evidence was promoted.",
+        "The declared PMCID does not resolve from the supplied PMID at a public PMC index; no evidence was promoted.",
         "PMID_PMCID_MISMATCH",
         409,
       );
@@ -152,13 +135,14 @@ async function independentlyVerifyPmcArtifact(input: {
       kind: fetched.kind,
       pmcid: fetched.pmcid,
       canonicalUrl: fetched.canonicalUrl,
+      retrievedFrom: fetched.retrievedFrom,
       contentHash: fetchedHash,
       serverVerified: true,
     };
   } catch (error) {
     if (error instanceof PromotionVerificationError) throw error;
     throw new PromotionVerificationError(
-      `Independent PMC verification could not reach or parse NCBI: ${error instanceof Error ? error.message : "unknown network failure"}. No evidence was promoted.`,
+      `Independent PMC verification could not reach or parse the public full-text sources: ${error instanceof Error ? error.message : "unknown network failure"}. No evidence was promoted.`,
       "PMC_VERIFICATION_UNAVAILABLE",
       502,
     );

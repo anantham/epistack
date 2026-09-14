@@ -12,7 +12,7 @@ import type { DeepDiveSource } from "../../../lib/deep-dive";
 import { lyraConfigured, runLyraStage, isBackendUnreachable, backendUnreachableResponse } from "../../../lib/lyra-stage";
 import { researchClaimFrameSchema, type ResearchClaimFrame } from "../../../lib/research-brief";
 import { acquireSource, extractSource, InsufficientSourceTextError, type SourceReviewResponse } from "../../../lib/source-adapters";
-import { fetchPmcFullText } from "../../../lib/pmc-full-text";
+import { fetchPmcFullText, resolvePmcNumeric } from "../../../lib/pmc-full-text";
 import { isPreliminarySourceClass, sourceClassSchema } from "../../../lib/source-class";
 import { extractJsonSlice, parseStructuredWithRepair, repairInstruction } from "../../../lib/structured-output";
 import {
@@ -49,6 +49,8 @@ type InvestigateEnvironment = {
 
 type OpenRouterMessage = {
   content?: string | Array<{ type?: string; text?: string }>;
+  reasoning?: string;
+  refusal?: string;
 };
 
 function investigateEnvironment() {
@@ -70,7 +72,9 @@ function openRouterConfigured() {
 
 function openRouterMessageText(message: OpenRouterMessage) {
   if (typeof message.content === "string") return message.content;
-  return (message.content || []).map((part) => part.text || "").join("\n");
+  const content = (message.content || []).map((part) => part.text || "").join("\n").trim();
+  if (content) return content;
+  return typeof message.reasoning === "string" ? message.reasoning : "";
 }
 
 function canonicalEnum(value: unknown, aliases: Record<string, string>) {
@@ -174,35 +178,49 @@ async function runOpenRouterStructured(
   instructions: string,
   role: "extractor" | "reviewer" | "repair",
   options: StructuredCallOptions,
+  schema: z.ZodType<unknown>,
 ) {
   const apiKey = investigateEnvironment().OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("The hosted OpenRouter investigation fallback is not configured.");
   const model = openRouterModel(role, options.models);
   const reasoning = role === "extractor" ? options.reasoning : "none";
+  const strictResponseFormat = {
+    type: "json_schema" as const,
+    json_schema: {
+      name: role === "reviewer" ? "epistack_adversarial_review" : "epistack_full_paper_extraction",
+      strict: true,
+      schema: z.toJSONSchema(schema),
+    },
+  };
+  const jsonObjectResponseFormat = { type: "json_object" as const };
+  const requestWithFormat = async (responseFormat: typeof strictResponseFormat | typeof jsonObjectResponseFormat) => fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://epistack.adityaarpitha.com",
+      "X-OpenRouter-Title": "Epistack Evidence Lab",
+      "X-OpenRouter-Metadata": "enabled",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: instructions },
+        { role: "user", content: input },
+      ],
+      response_format: responseFormat,
+      reasoning: { effort: reasoning },
+      temperature: 0,
+      max_tokens: role === "repair" ? 6_000 : role === "extractor" ? options.extractorMaxTokens : 5_000,
+    }),
+    signal: AbortSignal.timeout(reasoning === "none" ? 60_000 : 120_000),
+  });
   let response: Response;
   try {
-    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://epistack.adityaarpitha.com",
-        "X-OpenRouter-Title": "Epistack Evidence Lab",
-        "X-OpenRouter-Metadata": "enabled",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: instructions },
-          { role: "user", content: input },
-        ],
-        response_format: { type: "json_object" },
-        reasoning: { effort: reasoning },
-        temperature: 0,
-        max_tokens: role === "extractor" ? options.extractorMaxTokens : 3_500,
-      }),
-      signal: AbortSignal.timeout(reasoning === "none" ? 60_000 : 120_000),
-    });
+    response = await requestWithFormat(strictResponseFormat);
+    if (!response.ok && response.status === 400) {
+      response = await requestWithFormat(jsonObjectResponseFormat);
+    }
   } catch {
     throw new Error("The hosted OpenRouter investigation fallback could not be reached.");
   }
@@ -290,28 +308,6 @@ async function sha256(value: string) {
     .join("");
 }
 
-function safePmcNumeric(value: unknown) {
-  const numeric = String(value || "").replace(/^PMC/i, "");
-  return /^\d{4,12}$/.test(numeric) ? numeric : null;
-}
-
-async function resolvePmcNumeric(pmid: string) {
-  const url = new URL("https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/");
-  url.searchParams.set("ids", pmid);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("tool", "epistack-evidence-lab");
-  const response = await fetch(url, {
-    headers: { "User-Agent": "Epistack Evidence Lab/0.1 (hosted full-text review)" },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) throw new Error(`NCBI PMID-to-PMCID conversion returned ${response.status}.`);
-  const payload = await response.json() as { records?: Array<{ pmcid?: string; pmid?: string }> };
-  const record = Array.isArray(payload.records)
-    ? payload.records.find((candidate) => String(candidate.pmid || "") === pmid) ?? payload.records[0]
-    : null;
-  return safePmcNumeric(record?.pmcid);
-}
-
 async function acquirePmcArtifact(pmid: string) {
   const pmcNumeric = await resolvePmcNumeric(pmid);
   if (!pmcNumeric) {
@@ -327,6 +323,7 @@ async function acquirePmcArtifact(pmid: string) {
     kind: fetched.kind,
     pmcid: fetched.pmcid,
     canonicalUrl: fetched.canonicalUrl,
+    retrievedFrom: fetched.retrievedFrom,
     localXmlPath: "(hosted inline)",
     localTextPath: "(hosted inline)",
     contentHash: fetched.contentHash,
@@ -550,6 +547,7 @@ export async function POST(request: Request) {
       input: string,
       instructions: string,
       role: "extractor" | "reviewer" | "repair",
+      schema: z.ZodType<unknown>,
     ) {
       const astraPromptTooLarge = input.length + instructions.length > astraRenderedPromptLimit;
       if (role !== "repair" && lyraConfigured() && !astraPromptTooLarge) {
@@ -566,7 +564,7 @@ export async function POST(request: Request) {
         }
       }
       try {
-        const result = await runOpenRouterStructured(input, instructions, role, structuredOptions);
+        const result = await runOpenRouterStructured(input, instructions, role, structuredOptions, schema);
         usage = addResearchUsage(usage, result.usage);
         return {
           text: result.text,
@@ -578,7 +576,7 @@ export async function POST(request: Request) {
           && openRouterModel(role, roleModels) !== openRouterModel("repair")
           && /could not be reached|HTTP (408|429|5\d\d)/.test(message);
         if (!canUseCheapFallback) throw error;
-        const fallback = await runOpenRouterStructured(input, instructions, "repair", structuredOptions);
+        const fallback = await runOpenRouterStructured(input, instructions, "repair", structuredOptions, schema);
         usage = addResearchUsage(usage, fallback.usage);
         return {
           text: fallback.text,
@@ -590,7 +588,7 @@ export async function POST(request: Request) {
     const extractorInstructions = extractorAgent.instructions
       + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
       + JSON.stringify(z.toJSONSchema(fullPaperExtractionSchema));
-    const primaryStage = await structuredStage(extractorTask, extractorInstructions, "extractor");
+    const primaryStage = await structuredStage(extractorTask, extractorInstructions, "extractor", fullPaperExtractionSchema);
     const primary = await parseStructuredWithRepair({
       text: normalizeInvestigationJson(primaryStage.text),
       schema: fullPaperExtractionSchema,
@@ -598,6 +596,7 @@ export async function POST(request: Request) {
         `${extractorTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
         extractorAgent.instructions + repairInstruction(fullPaperExtractionSchema, issues),
         "repair",
+        fullPaperExtractionSchema,
       )).text),
       maxRepairs: 2,
     });
@@ -611,7 +610,7 @@ export async function POST(request: Request) {
     const reviewerInstructions = reviewerAgent.instructions
       + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
       + JSON.stringify(z.toJSONSchema(adversarialReviewSchema));
-    const reviewStage = await structuredStage(reviewerTask, reviewerInstructions, "reviewer");
+    const reviewStage = await structuredStage(reviewerTask, reviewerInstructions, "reviewer", adversarialReviewSchema);
     const review = await parseStructuredWithRepair({
       text: normalizeInvestigationJson(reviewStage.text),
       schema: adversarialReviewSchema,
@@ -619,6 +618,7 @@ export async function POST(request: Request) {
         `${reviewerTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
         reviewerAgent.instructions + repairInstruction(adversarialReviewSchema, issues),
         "repair",
+        adversarialReviewSchema,
       )).text),
       maxRepairs: 2,
     });
