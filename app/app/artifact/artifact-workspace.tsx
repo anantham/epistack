@@ -525,6 +525,7 @@ export function ArtifactWorkspace() {
     detail: "Loading the accepted result graph…",
   });
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [exportState, setExportState] = useState<"idle" | "saved">("idle");
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSession(initialArtifactSession()), 0);
@@ -645,6 +646,28 @@ export function ArtifactWorkspace() {
   const researchHref = caseId ? `/research?caseId=${encodeURIComponent(caseId)}` : "/research";
   const synthesisHref = caseId ? `/synthesis?caseId=${encodeURIComponent(caseId)}` : "/synthesis";
 
+  function downloadArtifact() {
+    if (!artifact) return;
+    const payload = {
+      exportVersion: "epistack-artifact.v1",
+      exportedAt: new Date().toISOString(),
+      caseId,
+      artifact,
+      researchBrief: brief,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `epistack-${caseId}-artifact.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setExportState("saved");
+    window.setTimeout(() => setExportState("idle"), 2400);
+  }
+
   if (!session) {
     return (
       <section className="live-artifact-state" aria-live="polite">
@@ -712,6 +735,9 @@ export function ArtifactWorkspace() {
           </p>
         </div>
         <div className="live-artifact-actions">
+          <button type="button" className="artifact-export-button" onClick={downloadArtifact}>
+            {exportState === "saved" ? "Downloaded JSON ✓" : "Download JSON"}
+          </button>
           <Link href={researchHref}>Continue research</Link>
           <Link href={synthesisHref}>Open decision workbench <span aria-hidden="true">→</span></Link>
         </div>

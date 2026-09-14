@@ -64,6 +64,8 @@ Purchasing is a separate subdecision when requested: compare actual cost, access
 
 The underlying package preserves claims, exact source material, assessments, dependencies, and revisions. Reports and decision views are projections of that package. Repeated publications of one study should not count as independent votes, and changing a load-bearing source should make affected conclusions reviewable.
 
+Artifact links use the case ID as their stable address, for example `/artifact?caseId=<id>`. Reopening that link reads the current accepted graph for the case, so later accepted evidence can update the same address and mark prior decision views stale when their basis changes. The **Download JSON** control creates a versioned point-in-time export (`epistack-artifact.v1`) containing the case ID, research brief, accepted graph, provenance, and freshness metadata. It does not include provider credentials or browser-only keys. A case URL is durable only while its backing case and database remain available; the downloaded JSON is the portable snapshot.
+
 ## Live runtime boundary
 
 The production site runs the browser interface and same-origin API routes on the Sites worker. Provider credentials stay in hosted server secrets; the browser does not receive the Lyra, Astra, or OpenRouter keys and does not call a local companion. Astra/Lyra is the primary hosted path, with server-side OpenRouter recovery when the hosted gateway is unavailable. Local development can still run the Claude companion and the explicit OpenRouter routes for inspection and comparison.
@@ -77,11 +79,11 @@ This describes the tracked implementation in `main`. A commit being present here
 | Area | Present in this checkout | Still needed to meet the vision |
 |---|---|---|
 | Decompose | Three hosted specialists for dimensions, phrase traces, and interview/evidence requirements; editable review; server-side OpenRouter recovery and explicit deterministic trace fallback | Preserve inferred dimensions without an exact phrase trace; replace generic fallback interview options |
-| Contextualize | Persisted interview selections and text, hosted brief compilation, scoped claim review | Validate answer retention and unresolved fields; `compiledQuestion` is currently copied from the original prompt |
+| Contextualize | Persisted interview selections and text, hosted brief compilation, scoped claim review, and an impact ledger showing changed claims, constraints, action options, and gaps | Validate answer retention and unresolved fields; `compiledQuestion` is currently copied from the original prompt |
 | Recall | One broad agent per selected claim, plus shared applicability and context lanes; hosted fallback; best-effort source classification | Full scoped fields in agent prompts; per-task progress and failure reporting; claim/lane provenance preserved during deduplication; fair result limits |
 | Source examination | PMC acquisition, public URL acquisition, a ClinicalTrials.gov adapter, typed recommendation/statistic/registry/context payloads, study extraction and adversarial review | Source-class labels and a successful fetch are not validation of completeness or causal validity; generalized artifact identity still needs work |
 | Research display | Classified leads, typed source-review cards, backend health status, and hosted/local provenance fields | Persist and connect non-study findings to the Artifact and decision view under their own roles; expose live lane progress and final provider provenance consistently |
-| Artifact and synthesis | Accepted-result graph, provenance and dependence views, graph-grounded decision infrastructure | Demonstrate the complete flow on current code, including empty/failed runs and useful multi-source decisions |
+| Artifact and synthesis | Accepted-result graph, provenance and dependence views, graph-grounded decision infrastructure, stable case links, and versioned JSON export | Demonstrate the complete flow on current code, including empty/failed runs and useful multi-source decisions |
 
 The newer multi-source work is visible in `6c8983c`, `a80f84c`, `0fcd9c9`, and `357b0a2`; the Phase 1–3 hardening (structured-output repair, backend-unreachable handling, cron job driver, persistent telemetry, `tsc` gate) is in `1a7ca13`. It extends the previous PubMed-centered workflow; it does not establish end-to-end completion by itself.
 
