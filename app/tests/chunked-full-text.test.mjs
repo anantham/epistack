@@ -3,8 +3,10 @@ import test from "node:test";
 import {
   buildExtractionChunkTask,
   buildReviewChunkTask,
+  chunkRetryDelayMs,
   chunkExtractionSchema,
   chunkReviewSchema,
+  isRetryableChunkFailure,
   mergeChunkExtractions,
   mergeChunkReviews,
   planChunkedPrompts,
@@ -93,6 +95,13 @@ test("chunked prompt planning stays within the Lyra character budget and overlap
   assert.equal(plan.chunks.at(-1).end, fullText.length);
   assert.ok(plan.chunks[1].start < plan.chunks[0].end);
   for (const task of plan.tasks) assert.ok(instructions.length + task.length <= 12_000);
+});
+
+test("chunk retries recognize transient provider failures without retrying schema failures", () => {
+  assert.equal(isRetryableChunkFailure(Object.assign(new Error("ChatGPT prompt submission was not confirmed."), { code: "provider_transient" })), true);
+  assert.equal(isRetryableChunkFailure(new Error("The model output did not match the schema.")), false);
+  assert.equal(chunkRetryDelayMs(1), 1_000);
+  assert.equal(chunkRetryDelayMs(3), 4_000);
 });
 
 test("chunked review keeps the preserved hash while excluding a trailing bibliography from model context", () => {

@@ -13,12 +13,23 @@ type LyraResponse = {
   output?: Array<{ content?: Array<{ text?: string }> }>;
 };
 
+export class LyraStageError extends Error {
+  readonly code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "LyraStageError";
+    this.code = code;
+  }
+}
+
 export type LyraStageOptions = {
   model: string;
   input: string;
   instructions?: string;
   effort?: "instant" | "medium" | "high" | "xhigh" | "pro";
   timeoutMs?: number;
+  metadata?: Record<string, string | number | boolean>;
 };
 
 const pollIntervalMs = 4_000;
@@ -116,6 +127,7 @@ export async function runLyraStage(options: LyraStageOptions): Promise<string> {
       background: true,
       reasoning: { effort: options.effort ?? "instant" },
       ...(options.instructions ? { instructions: options.instructions } : {}),
+      ...(options.metadata ? { metadata: options.metadata } : {}),
       input: options.input,
     }),
   }, deadline);
@@ -132,10 +144,14 @@ export async function runLyraStage(options: LyraStageOptions): Promise<string> {
     const result = await response.json() as LyraResponse;
     if (result.status === "completed") return extractStageText(result);
     if (["failed", "cancelled", "incomplete"].includes(result.status || "")) {
-      const detail = result.error && typeof result.error === "object"
-        ? (result.error as { message?: string; code?: string }).message || (result.error as { code?: string }).code
-        : result.error;
-      throw new Error(`The hosted Astra stage did not complete${detail ? `: ${String(detail).slice(0, 300)}` : ""}.`);
+      const errorObject = result.error && typeof result.error === "object"
+        ? result.error as { message?: string; code?: string }
+        : null;
+      const detail = errorObject?.message || errorObject?.code || result.error;
+      throw new LyraStageError(
+        `The hosted Astra stage did not complete${detail ? `: ${String(detail).slice(0, 300)}` : ""}.`,
+        errorObject?.code,
+      );
     }
     if (Date.now() >= deadline) throw new Error("The hosted Astra stage timed out before it completed.");
     await new Promise<void>((resolve) => setTimeout(resolve, pollIntervalMs));

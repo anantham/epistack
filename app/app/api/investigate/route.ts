@@ -23,6 +23,8 @@ import {
   chunkReviewSchema,
   mergeChunkExtractions,
   mergeChunkReviews,
+  chunkRetryDelayMs,
+  isRetryableChunkFailure,
   planChunkedPrompts,
   reviewableArtifactText,
   type ChunkPromptContext,
@@ -437,15 +439,25 @@ function chunkPromptContext(input: {
 
 async function mapConcurrent<T, R>(values: T[], worker: (value: T, index: number) => Promise<R>, concurrency = astraChunkConcurrency) {
   const results = new Array<R>(values.length);
+  const failures: Array<{ index: number; error: unknown }> = [];
   let nextIndex = 0;
   async function consume() {
     while (true) {
       const index = nextIndex++;
       if (index >= values.length) return;
-      results[index] = await worker(values[index], index);
+      try {
+        results[index] = await worker(values[index], index);
+      } catch (error) {
+        failures.push({ index, error });
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => consume()));
+  if (failures.length > 0) {
+    failures.sort((a, b) => a.index - b.index);
+    const first = failures[0];
+    throw new Error(`Bounded Lyra chunk ${first.index + 1} failed after all chunk workers drained: ${first.error instanceof Error ? first.error.message : String(first.error)}`);
+  }
   return results;
 }
 
@@ -495,25 +507,41 @@ async function parseLyraChunk<T>(input: {
   chunkCount: number;
   kind: "extraction" | "review";
 }) {
-  const first = await runLyraStage({
-    model: "lyra-chatgpt-pro",
-    effort: "medium",
-    instructions: input.instructions,
-    input: input.task,
-  });
-  const parsed = await parseStructuredWithRepair({
-    text: normalizeLyraChunkResponse(first, input.kind, input.chunkIndex, input.chunkCount),
-    schema: input.schema,
-    repair: async ({ raw, issues }) => normalizeLyraChunkResponse(await runLyraStage({
+  const clientJob = `epistack-investigate-${input.kind}-chunk-${input.chunkIndex + 1}-of-${input.chunkCount}`;
+  const runAttempt = async () => {
+    const first = await runLyraStage({
       model: "lyra-chatgpt-pro",
-      effort: "instant",
-      instructions: "Repair the previous response into one valid JSON object matching the requested bounded chunk contract. Return JSON only.",
-      input: `PREVIOUS RESPONSE\n${raw}\n\nVALIDATION ISSUES\n${JSON.stringify(issues).slice(0, 2_000)}`,
-    }), input.kind, input.chunkIndex, input.chunkCount),
-    maxRepairs: 1,
-  });
-  if (!parsed || typeof parsed !== "object") return parsed;
-  return { ...parsed, chunkIndex: input.chunkIndex, chunkCount: input.chunkCount } as T;
+      effort: "medium",
+      instructions: input.instructions,
+      input: input.task,
+      metadata: { client_job: clientJob },
+    });
+    const parsed = await parseStructuredWithRepair({
+      text: normalizeLyraChunkResponse(first, input.kind, input.chunkIndex, input.chunkCount),
+      schema: input.schema,
+      repair: async ({ raw, issues, attempt }) => normalizeLyraChunkResponse(await runLyraStage({
+        model: "lyra-chatgpt-pro",
+        effort: "instant",
+        instructions: `${input.instructions}\nRepair the previous response into one valid JSON object matching the requested bounded chunk contract. Return JSON only.`,
+        input: `PREVIOUS RESPONSE\n${raw}\n\nVALIDATION ISSUES\n${JSON.stringify(issues).slice(0, 2_000)}`,
+        metadata: { client_job: `${clientJob}-repair-${attempt}` },
+      }), input.kind, input.chunkIndex, input.chunkCount),
+      maxRepairs: 1,
+    });
+    if (!parsed || typeof parsed !== "object") return parsed;
+    return { ...parsed, chunkIndex: input.chunkIndex, chunkCount: input.chunkCount } as T;
+  };
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await runAttempt();
+    } catch (error) {
+      if (!isRetryableChunkFailure(error) || attempt === 3) throw error;
+      console.warn(`[investigate] retrying ${clientJob} after transient Lyra failure (attempt ${attempt}/3): ${error instanceof Error ? error.message : String(error)}`);
+      await new Promise<void>((resolve) => setTimeout(resolve, chunkRetryDelayMs(attempt)));
+    }
+  }
+  throw new Error(`The bounded Lyra ${input.kind} chunk did not complete.`);
 }
 
 const chunkExtractionContract = `Return JSON only. Use this shape: {artifactHash,chunkIndex,chunkCount,chunkRead,sectionsRead:{methods,results,tables,interpretation,supplementaryMaterial},study?,evidenceFamily?,results:[],authorConclusion?,conclusionFit?,extractionCaveat?,inspectionNote}. Results must be complete typed records with applicability. Use the supplied artifact hash. Copy exactExcerpt literally from this segment; never paraphrase, add quotation marks, or use ellipses.`;

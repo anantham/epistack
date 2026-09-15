@@ -100,6 +100,19 @@ export type ChunkPromptContext = {
   applicabilityProfile: string;
 };
 
+export function isRetryableChunkFailure(error: unknown) {
+  const code = error && typeof error === "object" && "code" in error
+    ? String((error as { code?: unknown }).code || "")
+    : "";
+  const message = error instanceof Error ? error.message : String(error);
+  return ["provider_transient", "backend-unreachable"].includes(code)
+    || /prompt submission was not confirmed|provider transient|timed out|rate limited|HTTP (408|429|5\d\d)/i.test(message);
+}
+
+export function chunkRetryDelayMs(attempt: number) {
+  return Math.min(4_000, 1_000 * (2 ** Math.max(0, attempt - 1)));
+}
+
 /** References and machine-generated trailing metadata are preserved in the
  * artifact and covered by its hash, but do not need to consume the bounded
  * model context used to review substantive study text. */
