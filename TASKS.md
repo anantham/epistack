@@ -11,7 +11,7 @@ This is the durable queue for requests that span code, documentation, deployment
 - [ ] **Fresh browser E2E after release.** Submit the eggs question from a clean case and verify Decompose → Contextualize → brief → Research → Artifact, including Settings health and the hosted fallback path.
 - [x] **Integrate Claude's claim steering and human review overturns.** The merged branches are on `main`; claim cards steer the Investigate lanes, and `human-overturn` accepts only the exact rejected proposal after independent passage re-verification. The Artifact labels these relations as human-verified full-text stamps. The clean combined source passes 150 tests and is published in Sites version 93.
 - [x] **Run the first bounded hosted investigation smoke test.** On 2026-09-15, the eggs case completed all 6 PubMed claim sweeps and the recall layer: 68 discovery leads, 1 PMC acquisition, and 1 dual-model full-text review. The run produced 0 accepted records because all 4 proposed results failed the literal passage check; the failure class is now reproduced and covered by a boundary-ellipsis regression test.
-- [x] **Implement bounded Lyra full-text review.** Oversized full-paper prompts now use overlapping, character-budgeted Lyra extraction and adversarial-review segments, merge server-side, and keep the strict final schema, hash, coverage, and passage gates. The 2026-09-15 live run exercised the bounded path; Lyra provider-control failures (`Select model` did not appear) exhausted the bounded retries and triggered the explicitly labeled OpenRouter recovery, so the prompt-limit fix is verified while native-Lyra provider health remains open.
+- [x] **Implement bounded Lyra full-text review.** Oversized full-paper prompts now use overlapping, character-budgeted Lyra extraction and adversarial-review segments, merge server-side, and keep the strict final schema, hash, coverage, and passage gates. The 2026-09-15 live run exercised the bounded path; the reloaded Lyra gateway then completed a private `lyra-chatgpt-pro` smoke with verified `Latest` + `Instant` controls. Hosted native-Lyra E2E remains open because the Worker still receives HTTP 525 from the public Funnel.
 
 ## Accepted and integrated, awaiting release
 
@@ -29,7 +29,7 @@ This is the durable queue for requests that span code, documentation, deployment
 - [ ] Connect divergence results to the Artifact and preserve class-specific source roles in the decision view.
 - [x] Add a clear artifact export/download flow and document the permanence/versioning behavior of case links.
 - [ ] Complete a hosted research run through discovery, acquisition, extraction, review, promotion, synthesis, and a shareable artifact with useful accepted evidence.
-- [ ] Close the hosted evidence gate gap. The bounded live run completed with 0 accepted and 4 rejected results: exact passage checks remained strict, while native-Lyra provider-control failures forced labeled recovery. Resolve the provider-control failure, then determine whether the remaining results pass exact passage, scope, and model-independence checks; do not weaken the evidence gate to manufacture an accepted record.
+- [ ] Close the hosted evidence gate gap. The bounded live run completed with 0 accepted and 4 rejected results: exact passage checks remained strict, while native-Lyra provider-control failures forced labeled recovery. The private provider smoke now passes after reload; first restore hosted access, then determine whether the remaining results pass exact passage, scope, and model-independence checks; do not weaken the evidence gate to manufacture an accepted record.
 
 ## Reliability and engineering follow-ups
 
@@ -41,7 +41,7 @@ This is the durable queue for requests that span code, documentation, deployment
 - [ ] Document secret ownership and rotation for Lyra, OpenRouter, and job tick credentials.
 - [ ] Decide whether to adopt the full Cloudflare worker types package and keep the typecheck gate strict.
 - [ ] Add CI for typecheck, build, tests, and the release tree comparison.
-- [ ] Resolve the Astra/Tailscale Funnel HTTP 530/525 path or replace it with a durable Cloudflare Tunnel; keep OpenRouter as an explicitly labeled recovery path.
+- [ ] Resolve the Astra/Tailscale Funnel HTTP 530/525 path or replace it with a durable Cloudflare Tunnel; current tailnet-client access returns the expected 401, but the hosted Worker consistently receives 525 from the port-10000 Funnel. Keep OpenRouter as an explicitly labeled recovery path.
 - [ ] Reconcile deploys with reproducible clean-checkout packaging so `/private/tmp` contains no unique source state.
 
 ## Testing gaps
