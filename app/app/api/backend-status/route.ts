@@ -1,3 +1,4 @@
+/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */
 // @ts-ignore The Cloudflare runtime module is provided by the Workers build; its ambient types are absent from this tsc project.
 import { env } from "cloudflare:workers";
 

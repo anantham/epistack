@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 const baseURL = process.env.EPISTACK_E2E_BASE_URL || "http://localhost:4173";
 const useExternalServer = Boolean(process.env.EPISTACK_E2E_BASE_URL);
+const browserRuntime = process.env.CI ? { browserName: "chromium" } : { channel: "chrome" };
 
 export default defineConfig({
   testDir: "./e2e",
@@ -12,7 +13,7 @@ export default defineConfig({
   reporter: "line",
   use: {
     baseURL,
-    channel: "chrome",
+    ...browserRuntime,
     headless: true,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

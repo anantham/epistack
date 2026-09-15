@@ -163,6 +163,9 @@ export function BackendSettings({
   }, []);
 
   useEffect(() => {
+    // These calls hydrate external provider state on mount; the effect rule
+    // otherwise treats the async functions' internal setters as synchronous.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void checkStatus();
     void loadModelOptions();
   }, [checkStatus, loadModelOptions]);

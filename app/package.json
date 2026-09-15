@@ -12,8 +12,9 @@
     "test": "npm run typecheck && npm run build && node --experimental-strip-types --test tests/*.test.mjs",
     "test:coverage": "node --experimental-strip-types --test --experimental-test-coverage tests/*.test.mjs",
     "test:browser": "playwright test",
+    "test:integration": "node --experimental-strip-types --test tests/integration/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern '.deploy*' --ignore-pattern .vite --ignore-pattern .vinext",
     "db:generate": "drizzle-kit generate",
     "evidence:discover": "node scripts/discover-pubmed.mjs",
     "agents": "node --experimental-strip-types scripts/local-claude-agents.mjs"

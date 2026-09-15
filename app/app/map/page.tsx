@@ -88,6 +88,15 @@ type PendingBriefCompile = {
   brief?: ResearchBrief;
 };
 
+type CompileResponse = {
+  id?: string;
+  token?: string;
+  status?: string;
+  error?: string;
+  repairing?: boolean;
+  brief?: ResearchBrief;
+};
+
 export default function ContextualizeMap() {
   const router = useRouter();
   
@@ -134,7 +143,7 @@ export default function ContextualizeMap() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    let data: any;
+    let data: CompileResponse;
     try {
       data = await response.json();
     } catch {
@@ -283,6 +292,9 @@ export default function ContextualizeMap() {
 
   useEffect(() => {
     try {
+      // Hydrate from browser storage after mount; this is intentionally a
+      // one-time external-state read rather than a render-time default.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBriefTelemetry(parseBriefTelemetry(window.localStorage.getItem(briefTelemetryStorageKey)));
     } catch {
       setBriefTelemetry(emptyBriefTelemetry);
@@ -292,6 +304,8 @@ export default function ContextualizeMap() {
 
   useEffect(() => {
     if (!clusters.length) return;
+    // Keep a restored interview index inside the current case's bounds.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setElicitationIndex((index) => Math.min(Math.max(0, index), clusters.length - 1));
   }, [clusters.length]);
 

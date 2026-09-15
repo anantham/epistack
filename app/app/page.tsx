@@ -6,6 +6,7 @@ import { StageNav } from "./components/case-navigation";
 import { BackendSettings } from "./components/backend-settings";
 import type {
   DecompositionResponse,
+  DecompositionCluster,
   QuestionHighlight,
 } from "../lib/decomposition";
 import { decompositionSessionKey, interpretationMapStorageKey } from "../lib/decomposition";
@@ -176,7 +177,7 @@ export default function Home() {
   const [contextSelections, setContextSelections] = useState<Record<string, string[]>>({});
   const [error, setError] = useState("");
   const [editingClusterId, setEditingClusterId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<any>(null);
+  const [editDraft, setEditDraft] = useState<DecompositionCluster | null>(null);
   const [removedDimension, setRemovedDimension] = useState<{ cluster: DecompositionResponse["decomposition"]["clusters"][number]; index: number } | null>(null);
   const [hostedProgress, setHostedProgress] = useState<HostedProgress | null>(null);
   const [analysisElapsed, setAnalysisElapsed] = useState(0);
@@ -989,26 +990,26 @@ export default function Home() {
                         <div className="story-flow cluster-edit-flow" aria-label={`Edit ${cluster.label}`}>
                           <section className="story-step" data-step-index="0">
                             <span><b>01</b> Dimension label</span>
-                            <textarea className="inline-edit-title" aria-label="Dimension label" rows={2} value={editDraft.label} onChange={(e) => setEditDraft({ ...editDraft, label: e.target.value })} />
+                            <textarea className="inline-edit-title" aria-label="Dimension label" rows={2} value={editDraft!.label} onChange={(e) => setEditDraft({ ...editDraft!, label: e.target.value })} />
                           </section>
                           <div className="story-connector"><span>licensed by these literal cues</span><i>↓</i></div>
                           <section className="story-step" data-step-index="1">
                             <span><b>02</b> Exact language</span>
-                            <EditableStringList title="Cues (must be exact substrings of the question)" items={editDraft.highlightQuotes} onChange={(highlightQuotes) => setEditDraft({ ...editDraft, highlightQuotes })} />
+                            <EditableStringList title="Cues (must be exact substrings of the question)" items={editDraft!.highlightQuotes} onChange={(highlightQuotes) => setEditDraft({ ...editDraft!, highlightQuotes })} />
                           </section>
                           <div className="story-connector"><span>grouped because they imply</span><i>↓</i></div>
                           <section className="story-step" data-step-index="2">
                             <span><b>03</b> Hidden variable</span>
-                            <textarea className="inline-edit-h4" aria-label="Hidden variable" rows={2} value={editDraft.latentVariable} onChange={(e) => setEditDraft({ ...editDraft, latentVariable: e.target.value })} />
-                            <textarea className="inline-edit-p" aria-label="Why this variable matters" rows={4} value={editDraft.rationale} onChange={(e) => setEditDraft({ ...editDraft, rationale: e.target.value })} />
+                            <textarea className="inline-edit-h4" aria-label="Hidden variable" rows={2} value={editDraft!.latentVariable} onChange={(e) => setEditDraft({ ...editDraft!, latentVariable: e.target.value })} />
+                            <textarea className="inline-edit-p" aria-label="Why this variable matters" rows={4} value={editDraft!.rationale} onChange={(e) => setEditDraft({ ...editDraft!, rationale: e.target.value })} />
                           </section>
                           <div className="story-connector"><span>constrains what evidence may count</span><i>↓</i></div>
                           <section className="story-step evidence-story-step" data-step-index="3">
                             <span><b>04</b> Evidence contract</span>
                             <div className="ingestion-grid">
-                              <EditableStringList title="Required fields" items={editDraft.ingestionRequirements.requiredFields} onChange={(requiredFields) => setEditDraft({ ...editDraft, ingestionRequirements: { ...editDraft.ingestionRequirements, requiredFields } })} />
-                              <EditableStringList title="Search concepts" items={editDraft.ingestionRequirements.searchConcepts} onChange={(searchConcepts) => setEditDraft({ ...editDraft, ingestionRequirements: { ...editDraft.ingestionRequirements, searchConcepts } })} />
-                              <EditableStringList title="Mismatch risk" items={editDraft.ingestionRequirements.mismatchRisks} onChange={(mismatchRisks) => setEditDraft({ ...editDraft, ingestionRequirements: { ...editDraft.ingestionRequirements, mismatchRisks } })} />
+                              <EditableStringList title="Required fields" items={editDraft!.ingestionRequirements.requiredFields} onChange={(requiredFields) => setEditDraft({ ...editDraft!, ingestionRequirements: { ...editDraft!.ingestionRequirements, requiredFields } })} />
+                              <EditableStringList title="Search concepts" items={editDraft!.ingestionRequirements.searchConcepts} onChange={(searchConcepts) => setEditDraft({ ...editDraft!, ingestionRequirements: { ...editDraft!.ingestionRequirements, searchConcepts } })} />
+                              <EditableStringList title="Mismatch risk" items={editDraft!.ingestionRequirements.mismatchRisks} onChange={(mismatchRisks) => setEditDraft({ ...editDraft!, ingestionRequirements: { ...editDraft!.ingestionRequirements, mismatchRisks } })} />
                             </div>
                           </section>
                           <div className="cluster-edit-actions">

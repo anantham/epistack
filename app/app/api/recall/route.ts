@@ -1,4 +1,5 @@
 import { z } from "zod";
+/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */
 // @ts-ignore The Cloudflare runtime module is provided by the Workers build; its ambient types are absent from this tsc project (same pre-existing condition as every other API route).
 import { env } from "cloudflare:workers";
 import { lyraConfigured, runLyraStage, isBackendUnreachable, backendUnreachableResponse } from "../../../lib/lyra-stage";

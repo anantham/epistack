@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createOpenAI } from '@ai-sdk/openai';
 import { generateText, Output } from 'ai';
+/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */
 // @ts-ignore The Cloudflare runtime module is provided by the Workers build; its ambient types are absent from this tsc project (same pre-existing condition as every other API route).
 import { env } from 'cloudflare:workers';
 import { getD1, ensureHostedJobTables } from '../../../db';

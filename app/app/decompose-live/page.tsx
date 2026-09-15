@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import './hosted.css';
 import type { DecompositionArtifact, DecompositionProvenance } from '../../lib/decomposition';
 import { runHostedDecomposition } from '../../lib/hosted-decomposition-client';
@@ -40,6 +41,7 @@ export default function HostedDecomposition() {
     try {
       const saved = JSON.parse(localStorage.getItem(storage) || 'null') as { question?: string; active?: boolean } | null;
       if (saved?.active && typeof saved.question === 'string') {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setQuestion(saved.question);
         void drive(saved.question);
       }
@@ -57,7 +59,7 @@ export default function HostedDecomposition() {
     const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = 'epistack-decomposition.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <main className="hosted-decomposition" style={{ maxWidth: 980, margin: 'auto', padding: '32px 24px', fontSize: 16, lineHeight: 1.65 }}>
-    <a href="/">Epistack</a><h1>Decompose a question</h1><p>Inspect the possible meanings before deciding what to research. No API key or local companion is needed for this step.</p>
+    <Link href="/">Epistack</Link><h1>Decompose a question</h1><p>Inspect the possible meanings before deciding what to research. No API key or local companion is needed for this step.</p>
     <p><a href="/examples/eggs-decomposition.html">Explore the completed eggs example and its audit</a></p>
     {!progress && <><label htmlFor="question">Your question</label><textarea id="question" value={question} onChange={e => setQuestion(e.target.value)} rows={5} maxLength={5000} style={{ width: '100%', padding: 16, font: 'inherit', border: '1px solid #8291a5', borderRadius: 8 }} /><p>This question is processed through the hosted backend configured for this deployment. This preview allows 50 investigations per day across the site.</p><button onClick={start} disabled={starting || question.trim().length < 12}>{starting ? 'Starting…' : 'Decompose question'}</button></>}
     {error && <p role="alert">{error}</p>}
