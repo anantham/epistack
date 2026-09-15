@@ -11,6 +11,15 @@ type LyraResponse = {
   status?: string;
   error?: unknown;
   output?: Array<{ content?: Array<{ text?: string }> }>;
+  lyra?: {
+    failure?: {
+      classification?: string;
+      detail?: string;
+      phase?: string;
+      provider?: string;
+      prompt_submitted?: boolean;
+    };
+  };
 };
 
 export class LyraStageError extends Error {
@@ -147,10 +156,14 @@ export async function runLyraStage(options: LyraStageOptions): Promise<string> {
       const errorObject = result.error && typeof result.error === "object"
         ? result.error as { message?: string; code?: string }
         : null;
-      const detail = errorObject?.message || errorObject?.code || result.error;
+      const failure = result.lyra?.failure;
+      const detail = failure?.detail || errorObject?.message || errorObject?.code || result.error;
+      const transientProviderFailure = failure?.phase === "controls"
+        && failure?.provider === "chatgpt_tools"
+        && failure?.prompt_submitted === false;
       throw new LyraStageError(
         `The hosted Astra stage did not complete${detail ? `: ${String(detail).slice(0, 300)}` : ""}.`,
-        errorObject?.code,
+        transientProviderFailure ? "provider_transient" : errorObject?.code,
       );
     }
     if (Date.now() >= deadline) throw new Error("The hosted Astra stage timed out before it completed.");
