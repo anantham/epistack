@@ -52,6 +52,14 @@ test('an unconfigured Lyra backend falls back to the server-side OpenRouter spec
  assert.deepEqual(result,payload);
  assert.equal(progress.at(-1).stage,2);
 });
+test('a hosted Astra timeout falls back to the server-side OpenRouter specialists', async () => {
+ const calls=[];
+ const payload={caseId:'or-timeout',mode:'ai',model:'OpenRouter · openai/gpt-4o-mini · orchestrated specialists',warning:null,prompt:input.question,decisionContext:input.decisionContext,decomposition:artifact,cache:{status:'miss',layer:'d1',createdAt:null,expiresAt:null}};
+ const deps={storage:{getItem:()=>null,setItem:()=>{},removeItem:()=>{}},now:()=>0,sleep:async()=>{},fetch:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});const hosted=calls.length===1?{id:'run-timeout',token:'owned'}:{status:'failed',code:'backend-timeout',error:'Astra did not complete this stage within its time budget; falling back to the alternate provider.'};return url==='/api/decompose-live'?new Response(JSON.stringify(hosted),{status:200}):new Response(JSON.stringify(payload),{status:200});}};
+ const result=await runHostedDecomposition(input,'timeout-fallback',false,()=>{},deps);
+ assert.equal(calls[2].url,'/api/decompose');
+ assert.equal(result.model,payload.model);
+});
 test('the fallback never sends a browser-supplied key and explains a missing server key',async()=>{
  const deps={storage:{getItem:()=>null,setItem:()=>{},removeItem:()=>{}},now:()=>0,sleep:async()=>{},fetch:async(url)=>url==='/api/decompose-live'?new Response(JSON.stringify({code:'hosted-not-configured'}),{status:503}):new Response(JSON.stringify({error:'No reusable decomposition is cached for this question and model. Add an OpenRouter key in Settings to create one.'}),{status:401})};
  await assert.rejects(runHostedDecomposition(input,'no-key',false,()=>{},deps),/no decomposition backend configured/);
@@ -78,6 +86,12 @@ test('the hosted route relies on retry-after rather than a hardcoded cooldown',a
  const source=await readFile(new URL('../app/api/decompose-live/route.ts',import.meta.url),'utf8');
  assert.doesNotMatch(source,/61000/);
  assert.match(source,/retry-after/);
+});
+
+test('the hosted route bounds an in-flight Astra stage before falling back', async () => {
+ const source=await readFile(new URL('../app/api/decompose-live/route.ts',import.meta.url),'utf8');
+ assert.match(source,/HOSTED_STAGE_TIMEOUT_MS = 90_000/);
+ assert.match(source,/failureCode === 'backend-timeout'/);
 });
 
 test('the hosted client uses returned provider provenance instead of a hard-coded model label',async()=>{

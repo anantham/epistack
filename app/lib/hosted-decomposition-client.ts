@@ -1,5 +1,6 @@
 import type { DecompositionResponse, DecompositionArtifact } from './decomposition';
 import type { AgentPromptOverrides } from './agent-prompts';
+import { isHostedBackendUnavailableCode } from './provider-failure-policy.ts';
 export type HostedInput = { question: string; decisionContext: string; promptOverrides: AgentPromptOverrides; effort?: string };
 export type HostedProgress = { stage: number; status: string; attempts?: number[]; durationsMs?: number[]; rateLimits?: number };
 type Receipt = { id: string; token: string };
@@ -45,7 +46,7 @@ export async function runHostedDecomposition(input: HostedInput, identity: strin
     const result = await request(receipt);
     if (result.status !== 'busy') onProgress({ stage: result.stage, status: result.status, attempts: result.attempts, durationsMs: result.durationsMs, rateLimits: result.rateLimits });
     if (result.status === 'failed') {
-      if (result.code === 'backend-unreachable') {
+      if (isHostedBackendUnavailableCode(result.code)) {
         // Astra is unreachable and no durable Lyra job was accepted, so it is
         // safe to use the alternate provider. Drop the dead receipt.
         deps.storage.removeItem(storageKey);

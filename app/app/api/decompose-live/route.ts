@@ -8,6 +8,7 @@ import type { DecompositionProvenance } from '../../../lib/decomposition';
 
 type State = { question: string; decisionContext?: string; promptOverrides?: AgentPromptOverrides; effort?: string; stage: number; results: unknown[]; status: string; remoteId?: string; nextAt?: number; error?: string; code?: string; artifact?: unknown; stageStartedAt?: number; stageDurationsMs?: number[]; attempts?: number[]; rateLimits?: number; repairs?: number[]; repairIssues?: string; parseFailure?: { stage: number; raw: string; issues: string }; origin?: string; recorded?: boolean; stageModels?: string[]; stageModelSources?: Array<'reported' | 'requested'> };
 const DAILY_PREVIEW_LIMIT = 50;
+const HOSTED_STAGE_TIMEOUT_MS = 90_000;
 const requestedHostedModel = 'lyra-chatgpt-pro';
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 
@@ -101,6 +102,11 @@ export async function POST(request: Request) {
     return response.json();
   }
   try {
+    if (state.status === 'in_progress' && state.remoteId && state.stageStartedAt && Date.now() - state.stageStartedAt >= HOSTED_STAGE_TIMEOUT_MS) {
+      const timeout = new Error('The Astra stage exceeded its hosted time budget.') as Error & { code?: string };
+      timeout.code = 'backend-timeout';
+      throw timeout;
+    }
     if (state.status === 'submitting') throw new Error('Submission was interrupted before its receipt was saved. Stopped to avoid consuming another job; owner review is needed.');
     if (!['completed', 'failed'].includes(state.status) && Date.now() >= (state.nextAt || 0)) {
       if (!state.remoteId) {
@@ -158,12 +164,14 @@ export async function POST(request: Request) {
   } catch (error) {
     state.status = 'failed';
     const failureCode = (error as { code?: string })?.code;
-    if (failureCode === 'backend-unreachable' && !state.artifact) {
+    if ((failureCode === 'backend-unreachable' || failureCode === 'backend-timeout') && !state.artifact) {
       // No validated artifact has been accepted, so it is safe to let the
       // client continue through the alternate provider even when Astra had
       // already issued a receipt that later failed.
-      state.code = 'backend-unreachable';
-      state.error = 'Astra could not complete this run; falling back to the alternate provider.';
+      state.code = failureCode;
+      state.error = failureCode === 'backend-timeout'
+        ? 'Astra did not complete this stage within its time budget; falling back to the alternate provider.'
+        : 'Astra could not complete this run; falling back to the alternate provider.';
     } else if (error instanceof StructuredOutputError) {
       state.parseFailure = { stage: state.stage, raw: error.raw.slice(0, 4000), issues: error.issues.slice(0, 2000) };
       state.error = `${stageNames[state.stage]} output did not match its schema after a repair attempt.`;
