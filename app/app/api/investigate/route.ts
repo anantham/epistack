@@ -20,6 +20,7 @@ import { normalizeInvestigationJson } from "../../../lib/investigation-json";
 import {
   buildExtractionChunkTask,
   buildReviewChunkTask,
+  boundedReviewableArtifactText,
   chunkExtractionSchema,
   chunkReviewSchema,
   mergeChunkExtractions,
@@ -27,7 +28,6 @@ import {
   chunkRetryDelayMs,
   isRetryableChunkFailure,
   planChunkedPrompts,
-  reviewableArtifactText,
   type ChunkPromptContext,
 } from "../../../lib/chunked-full-text";
 import {
@@ -778,7 +778,7 @@ export async function POST(request: Request) {
     if (lyraConfigured() && extractorPromptTooLarge) {
       try {
         const chunked = await runChunkedExtraction({
-          fullText: reviewableArtifactText(plainText),
+          fullText: boundedReviewableArtifactText(plainText, hostedTextCap),
           context: chunkContext,
           artifactHash: artifact.contentHash,
           instructions: extractorAgent.instructions,
@@ -831,7 +831,7 @@ export async function POST(request: Request) {
     if (lyraConfigured() && reviewerPromptTooLarge) {
       try {
         const chunked = await runChunkedReview({
-          fullText: reviewableArtifactText(plainText),
+          fullText: boundedReviewableArtifactText(plainText, hostedTextCap),
           context: chunkContext,
           artifactHash: artifact.contentHash,
           primary,

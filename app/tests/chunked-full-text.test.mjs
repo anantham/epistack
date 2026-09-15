@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildExtractionChunkTask,
   buildReviewChunkTask,
+  boundedReviewableArtifactText,
   chunkRetryDelayMs,
   chunkExtractionSchema,
   chunkReviewSchema,
@@ -113,6 +114,14 @@ test("chunk retries recognize transient provider failures without retrying schem
 test("chunked review keeps the preserved hash while excluding a trailing bibliography from model context", () => {
   assert.equal(reviewableArtifactText("Results\nThe outcome changed.\n\nReferences\n1. Citation."), "Results\nThe outcome changed.");
   assert.equal(reviewableArtifactText("Results\nThe outcome changed."), "Results\nThe outcome changed.");
+});
+
+test("bounded review text matches the hosted artifact prefix boundary", () => {
+  assert.equal(
+    boundedReviewableArtifactText("Methods\nResults\nDiscussion\nReferences\n1. Citation.", 24),
+    "Methods\nResults\nDiscussi",
+  );
+  assert.equal(boundedReviewableArtifactText("Results\nThe outcome changed.", 10), "Results\nTh");
 });
 
 test("chunk extraction merge creates a complete candidate and derives full-text attestations", () => {

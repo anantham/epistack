@@ -124,6 +124,10 @@ export function reviewableArtifactText(fullText: string) {
   return match?.index && match.index > 0 ? fullText.slice(0, match.index).trim() : fullText;
 }
 
+export function boundedReviewableArtifactText(fullText: string, maxChars: number) {
+  return reviewableArtifactText(fullText.slice(0, Math.max(0, maxChars)));
+}
+
 export function splitArtifactText(
   fullText: string,
   fits: (text: string) => boolean,
@@ -174,7 +178,7 @@ export function splitArtifactText(
 export function buildExtractionChunkTask(context: ChunkPromptContext, chunk: ArtifactChunk) {
   return [
     "CHUNKED FULL-TEXT EXTRACTION",
-    `This is artifact segment ${chunk.index + 1} of ${chunk.count}, character offsets ${chunk.start}-${chunk.end}. Inspect this entire segment. The server will merge every segment before applying the final schema and promotion gates.`,
+    `This is artifact segment ${chunk.index + 1} of ${chunk.count}, character offsets ${chunk.start}-${chunk.end}. Inspect this entire segment. The server will merge every supplied segment before applying the final schema and promotion gates. If the artifact was bounded for the hosted run, do not claim that an unprovided suffix was inspected.`,
     `RESEARCH QUESTION\n${context.question}`,
     `DECISION CONTEXT\n${context.decisionContext}`,
     `CITATION\n${context.citation}`,
@@ -192,7 +196,7 @@ export function buildExtractionChunkTask(context: ChunkPromptContext, chunk: Art
 export function buildReviewChunkTask(context: ChunkPromptContext, chunk: ArtifactChunk, candidateJson: string) {
   return [
     "CHUNKED ADVERSARIAL FULL-TEXT REVIEW",
-    `This is artifact segment ${chunk.index + 1} of ${chunk.count}, character offsets ${chunk.start}-${chunk.end}. Inspect this entire segment independently. Return findings only for indexed candidates materially addressed by this segment; return an empty findings array when none are addressed. The server will merge all segment findings conservatively.`,
+    `This is artifact segment ${chunk.index + 1} of ${chunk.count}, character offsets ${chunk.start}-${chunk.end}. Inspect this entire segment independently. Return findings only for indexed candidates materially addressed by this segment; return an empty findings array when none are addressed. The server will merge all supplied segment findings conservatively. If the artifact was bounded for the hosted run, do not claim that an unprovided suffix was inspected.`,
     `RESEARCH QUESTION\n${context.question}`,
     `DECISION CONTEXT\n${context.decisionContext}`,
     `CITATION\n${context.citation}`,
