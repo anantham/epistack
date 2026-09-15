@@ -449,10 +449,51 @@ async function mapConcurrent<T, R>(values: T[], worker: (value: T, index: number
   return results;
 }
 
+function normalizeLyraChunkResponse(text: string, kind: "extraction" | "review", chunkIndex: number, chunkCount: number) {
+  const normalized = normalizeInvestigationJson(text);
+  const slice = extractJsonSlice(normalized);
+  if (!slice) return normalized;
+  try {
+    const value = JSON.parse(slice) as Record<string, unknown>;
+    const inspection = value.sourceInspection && typeof value.sourceInspection === "object"
+      ? value.sourceInspection as Record<string, unknown>
+      : null;
+    const existingSections = value.sectionsRead && typeof value.sectionsRead === "object"
+      ? value.sectionsRead as Record<string, unknown>
+      : {};
+    value.chunkIndex = chunkIndex;
+    value.chunkCount = chunkCount;
+    value.chunkRead = typeof value.chunkRead === "boolean"
+      ? value.chunkRead
+      : Boolean(inspection?.fullTextRead ?? inspection?.independentlyReadFullText);
+    value.sectionsRead = {
+      methods: Boolean(existingSections.methods ?? inspection?.methodsRead ?? inspection?.methodsAndResultsRead),
+      results: Boolean(existingSections.results ?? inspection?.resultsRead ?? inspection?.methodsAndResultsRead),
+      tables: Boolean(existingSections.tables ?? inspection?.tablesRead),
+      interpretation: Boolean(existingSections.interpretation ?? inspection?.fullTextRead),
+      supplementaryMaterial: Boolean(existingSections.supplementaryMaterial ?? inspection?.supplementaryMaterialChecked),
+    };
+    value.inspectionNote = typeof value.inspectionNote === "string" && value.inspectionNote.trim()
+      ? value.inspectionNote
+      : typeof inspection?.inspectionNote === "string" && inspection.inspectionNote.trim()
+        ? inspection.inspectionNote
+        : "The bounded artifact segment was inspected.";
+    if (kind === "review" && !Array.isArray(value.findings) && Array.isArray(value.reviews)) {
+      value.findings = value.reviews;
+    }
+    return JSON.stringify(value);
+  } catch {
+    return normalized;
+  }
+}
+
 async function parseLyraChunk<T>(input: {
   task: string;
   instructions: string;
   schema: z.ZodType<T>;
+  chunkIndex: number;
+  chunkCount: number;
+  kind: "extraction" | "review";
 }) {
   const first = await runLyraStage({
     model: "lyra-chatgpt-pro",
@@ -460,21 +501,23 @@ async function parseLyraChunk<T>(input: {
     instructions: input.instructions,
     input: input.task,
   });
-  return parseStructuredWithRepair({
-    text: normalizeInvestigationJson(first),
+  const parsed = await parseStructuredWithRepair({
+    text: normalizeLyraChunkResponse(first, input.kind, input.chunkIndex, input.chunkCount),
     schema: input.schema,
-    repair: async ({ raw, issues }) => normalizeInvestigationJson(await runLyraStage({
+    repair: async ({ raw, issues }) => normalizeLyraChunkResponse(await runLyraStage({
       model: "lyra-chatgpt-pro",
       effort: "instant",
       instructions: "Repair the previous response into one valid JSON object matching the requested bounded chunk contract. Return JSON only.",
       input: `PREVIOUS RESPONSE\n${raw}\n\nVALIDATION ISSUES\n${JSON.stringify(issues).slice(0, 2_000)}`,
-    })),
+    }), input.kind, input.chunkIndex, input.chunkCount),
     maxRepairs: 1,
   });
+  if (!parsed || typeof parsed !== "object") return parsed;
+  return { ...parsed, chunkIndex: input.chunkIndex, chunkCount: input.chunkCount } as T;
 }
 
-const chunkExtractionContract = `Return JSON only. The object must contain artifactHash, chunkIndex, chunkCount, chunkRead, sectionsRead, optional directly-stated study and evidenceFamily fields, results (0–6 complete records), optional authorConclusion, conclusionFit, extractionCaveat, and inspectionNote. Use the supplied artifact hash. Copy exactExcerpt literally from this segment; never paraphrase, add quotation marks, or use ellipses.`;
-const chunkReviewContract = `Return JSON only. The object must contain artifactHash, chunkIndex, chunkCount, chunkRead, sectionsRead, findings, and inspectionNote. findings may be empty when this segment does not address a candidate. Corrected exactExcerpt values must be copied literally from this segment; never paraphrase or use ellipses.`;
+const chunkExtractionContract = `Return JSON only. Use this shape: {artifactHash,chunkIndex,chunkCount,chunkRead,sectionsRead:{methods,results,tables,interpretation,supplementaryMaterial},study?,evidenceFamily?,results:[],authorConclusion?,conclusionFit?,extractionCaveat?,inspectionNote}. Results must be complete typed records with applicability. Use the supplied artifact hash. Copy exactExcerpt literally from this segment; never paraphrase, add quotation marks, or use ellipses.`;
+const chunkReviewContract = `Return JSON only. Use this shape: {artifactHash,chunkIndex,chunkCount,chunkRead,sectionsRead:{methods,results,tables,interpretation,supplementaryMaterial},findings:[],inspectionNote}. findings may be empty when this segment does not address a candidate. Each finding has resultIndex, verdict, quoteVerified, locatorVerified, scopeVerified, relationVerified, rationale, and correctedResult. Corrected exactExcerpt values must be copied literally from this segment; never paraphrase or use ellipses.`;
 
 async function runChunkedExtraction(input: {
   fullText: string;
@@ -490,10 +533,13 @@ async function runChunkedExtraction(input: {
     promptLimit: astraRenderedPromptLimit,
     safetyMargin: astraChunkPromptSafetyMargin,
   });
-  const chunks = await mapConcurrent(plan.tasks, async (task) => parseLyraChunk({
+  const chunks = await mapConcurrent(plan.tasks, async (task, index) => parseLyraChunk({
     task,
     instructions,
     schema: chunkExtractionSchema,
+    chunkIndex: index,
+    chunkCount: plan.tasks.length,
+    kind: "extraction",
   }));
   const primary = mergeChunkExtractions(chunks, input.artifactHash);
   return {
@@ -550,10 +596,13 @@ async function runChunkedReview(input: {
     promptLimit: astraRenderedPromptLimit,
     safetyMargin: astraChunkPromptSafetyMargin,
   });
-  const chunks = await mapConcurrent(plan.tasks, async (task) => parseLyraChunk({
+  const chunks = await mapConcurrent(plan.tasks, async (task, index) => parseLyraChunk({
     task,
     instructions,
     schema: chunkReviewSchema,
+    chunkIndex: index,
+    chunkCount: plan.tasks.length,
+    kind: "review",
   }));
   return {
     review: mergeChunkReviews(chunks, input.primary, input.artifactHash),

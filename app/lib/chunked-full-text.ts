@@ -41,8 +41,11 @@ const sectionsReadSchema = z.object({
  * deep-dive schema is applied after all bounded artifact segments are merged. */
 export const chunkExtractionSchema = z.object({
   artifactHash: z.string().min(32).max(128),
-  chunkIndex: z.number().int().min(0).max(63),
-  chunkCount: z.number().int().min(1).max(64),
+  // The server overwrites these with the actual request position. They are
+  // optional at parse time because a model cannot be trusted to count its
+  // own parallel request batch reliably.
+  chunkIndex: z.number().int().min(0).max(63).optional(),
+  chunkCount: z.number().int().min(1).max(64).optional(),
   chunkRead: z.boolean(),
   sectionsRead: sectionsReadSchema,
   study: partialStudySchema.optional(),
@@ -69,8 +72,8 @@ const chunkFindingSchema = z.object({
  * findings and creates an explicit reject for any uncovered candidate. */
 export const chunkReviewSchema = z.object({
   artifactHash: z.string().min(32).max(128),
-  chunkIndex: z.number().int().min(0).max(63),
-  chunkCount: z.number().int().min(1).max(64),
+  chunkIndex: z.number().int().min(0).max(63).optional(),
+  chunkCount: z.number().int().min(1).max(64).optional(),
   chunkRead: z.boolean(),
   sectionsRead: sectionsReadSchema,
   findings: z.array(chunkFindingSchema).max(6),
