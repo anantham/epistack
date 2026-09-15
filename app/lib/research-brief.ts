@@ -133,6 +133,10 @@ export function projectResearchBriefForArtifact(brief: ResearchBrief, shareConte
   const privateContext = "Personal context is kept private by the owner; inspect the local research brief for the answer-level details.";
   return researchBriefSchema.parse({
     ...brief,
+    // The compiled question contains the contextual answers concatenated into
+    // a provider/search prompt. Never persist that private prompt in a public
+    // artifact unless the owner explicitly chose to share the context.
+    compiledQuestion: shareContextInArtifact ? brief.compiledQuestion : brief.originalQuestion,
     decisionContext: shareContextInArtifact ? brief.decisionContext : privateContext,
     stakeholderProfile: {
       ...brief.stakeholderProfile,

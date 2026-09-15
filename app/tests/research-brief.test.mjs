@@ -196,9 +196,11 @@ test("the shareable artifact projection keeps research consequences while honori
   });
   const projected = projectResearchBriefForArtifact(brief);
   assert.equal(projected.privacy.shareContextInArtifact, false);
+  assert.equal(projected.compiledQuestion, projected.originalQuestion);
   assert.equal(projected.contextualization[0].typedAnswer, "");
   assert.match(projected.contextualization[0].researchConsequence, /satiety/);
   assert.deepEqual(projected.stakeholderProfile.localOnlyFacts, []);
   const shared = projectResearchBriefForArtifact(brief, true);
+  assert.equal(shared.compiledQuestion, brief.compiledQuestion);
   assert.equal(shared.contextualization[0].typedAnswer, "I train often");
 });

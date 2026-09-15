@@ -524,7 +524,7 @@ export default function ContextualizeMap() {
         window.localStorage.removeItem(briefCompileStorageKey);
         window.localStorage.removeItem("epistack:research-ui-cache:v1");
         window.localStorage.removeItem("epistack:research-ui-cache:v2");
-        router.push("/research");
+        router.push(`/research?caseId=${encodeURIComponent(brief.caseId)}`);
       } catch (error) {
         setCompileError(error instanceof Error ? error.message : "The shareable research contract could not be saved.");
       } finally {

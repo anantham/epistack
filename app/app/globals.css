@@ -7849,6 +7849,256 @@ button.primary-link:disabled {
   color: var(--green);
 }
 
+.artifact-raw-contract {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 28px;
+  padding: 14px 18px;
+}
+
+.artifact-raw-contract summary {
+  color: var(--green);
+  cursor: pointer;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: var(--type-meta);
+  font-weight: 650;
+}
+
+.artifact-raw-contract p,
+.artifact-raw-contract pre {
+  color: var(--ink-soft);
+  font-size: var(--type-label);
+  line-height: 1.55;
+  margin: 14px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.artifact-raw-contract pre {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--font-geist-mono), monospace;
+  padding: 14px;
+}
+
+.artifact-context-flow {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  margin-bottom: 28px;
+  overflow: hidden;
+}
+
+.artifact-context-flow-header {
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  padding: 22px 26px;
+}
+
+.artifact-context-flow-header span,
+.artifact-flow-node > span,
+.artifact-flow-stage > header span,
+.artifact-flow-evidence-heading span {
+  color: var(--green);
+  display: block;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: var(--type-meta);
+  font-weight: 650;
+}
+
+.artifact-context-flow-header h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(23px, 2.5vw, 32px);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 7px 0 0;
+}
+
+.artifact-context-flow-header > p {
+  color: var(--ink-soft);
+  font-size: var(--type-label);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 480px;
+}
+
+.artifact-flow-track {
+  padding: 24px 26px 28px;
+}
+
+.artifact-flow-node {
+  background: color-mix(in srgb, var(--green) 7%, var(--surface-raised));
+  border: 1px solid color-mix(in srgb, var(--green) 22%, var(--line));
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.artifact-flow-node strong {
+  display: block;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(21px, 2.4vw, 31px);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin-top: 8px;
+  max-width: 1050px;
+}
+
+.artifact-flow-node p,
+.artifact-flow-dimension p,
+.artifact-flow-evidence-list p {
+  color: var(--ink-soft);
+  font-size: var(--type-label);
+  line-height: 1.5;
+  margin: 9px 0 0;
+}
+
+.artifact-flow-arrow {
+  color: var(--green);
+  font-size: 24px;
+  line-height: 1;
+  padding: 13px 0;
+  text-align: center;
+}
+
+.artifact-flow-stage {
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+
+.artifact-flow-stage > header {
+  align-items: end;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.artifact-flow-stage > header strong {
+  display: block;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 23px;
+  font-weight: 400;
+  margin-top: 6px;
+}
+
+.artifact-flow-stage > header small,
+.artifact-flow-dimension-heading small,
+.artifact-flow-dimension > small,
+.artifact-flow-evidence-list article > small {
+  color: var(--ink-soft);
+  font-size: var(--type-meta);
+  line-height: 1.45;
+}
+
+.artifact-flow-dimensions {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.artifact-flow-dimension {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.artifact-flow-dimension-heading,
+.artifact-flow-evidence-heading {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.artifact-flow-dimension-heading > div {
+  min-width: 0;
+}
+
+.artifact-flow-dimension-heading > div > span {
+  color: var(--ink);
+  display: block;
+  font-size: var(--type-label);
+  font-weight: 650;
+}
+
+.artifact-flow-dimension-heading small {
+  display: block;
+  margin-top: 3px;
+  text-transform: capitalize;
+}
+
+.artifact-flow-dimension-heading b,
+.artifact-flow-evidence-heading b {
+  color: var(--green);
+  flex: none;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: var(--type-meta);
+  font-weight: 650;
+}
+
+.artifact-flow-dimension p b {
+  color: var(--ink);
+}
+
+.artifact-flow-dimension > small {
+  display: block;
+  margin-top: 10px;
+}
+
+.artifact-flow-rest {
+  background: color-mix(in srgb, var(--yellow) 7%, var(--paper));
+}
+
+.artifact-flow-evidence {
+  margin-top: 4px;
+}
+
+.artifact-flow-evidence-list {
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.artifact-flow-evidence-list article {
+  min-width: 0;
+  padding: 15px 14px 8px;
+}
+
+.artifact-flow-evidence-list article:nth-child(2n) {
+  border-left: 1px solid var(--line);
+}
+
+.artifact-flow-evidence-list article:nth-child(n + 3) {
+  border-top: 1px solid var(--line);
+}
+
+.artifact-flow-evidence-list p {
+  color: var(--ink);
+  margin-top: 7px;
+}
+
+.artifact-flow-evidence-list article > small {
+  display: block;
+  margin-top: 7px;
+}
+
+.artifact-flow-evidence-list a {
+  color: var(--green);
+  display: inline-block;
+  font-size: var(--type-meta);
+  margin-top: 8px;
+  text-decoration: none;
+}
+
 .live-artifact-meta {
   background: var(--surface-raised);
   border: 1px solid var(--line);
@@ -8595,6 +8845,12 @@ button.primary-link:disabled {
 }
 
 @media (max-width: 760px) {
+  .artifact-context-flow-header,
+  .artifact-flow-stage > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .live-artifact-hero {
     align-items: stretch;
     grid-template-columns: 1fr;
@@ -8681,9 +8937,24 @@ button.primary-link:disabled {
     align-items: flex-start;
     flex-direction: column;
   }
+
+  .artifact-flow-dimensions,
+  .artifact-flow-evidence-list {
+    grid-template-columns: 1fr;
+  }
+
+  .artifact-flow-evidence-list article:nth-child(2n) {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
 }
 
 @media (max-width: 520px) {
+  .artifact-flow-track {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
   .live-artifact-meta {
     grid-template-columns: 1fr;
   }

@@ -24,9 +24,16 @@ test("stage four renders the live accepted evidence contract", async () => {
   assert.match(workspace, /human-verified full-text/);
   assert.match(workspace, /separate from AI review/);
   assert.match(workspace, /Human-verified full text/);
-  assert.match(workspace, /No evidence has crossed the promotion boundary/);
+  assert.match(workspace, /compiled claims below are a research contract, not conclusions/);
   assert.match(workspace, /Resolving the active investigation/);
   assert.match(workspace, /No promoted result currently bears on this claim/);
+  assert.match(workspace, /Question → scope → evidence/);
+  assert.match(workspace, /A · Open question/);
+  assert.match(workspace, /Rest \/ unresolved/);
+  assert.match(workspace, /C · Evidence lanes/);
+  assert.match(workspace, /Raw compiled research contract/);
+  assert.match(workspace, /brief\?\.originalQuestion/);
+  assert.match(workspace, /Answer details kept private in this artifact/);
   assert.match(workspace, /Exact locus/);
   assert.match(workspace, /source snapshot hashed/);
   assert.match(workspace, /Raw record counts describe this artifact/);

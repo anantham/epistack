@@ -638,7 +638,7 @@ export function ResearchDashboard() {
         body: JSON.stringify({
           caseId: brief.caseId,
           originalPrompt: brief.originalQuestion,
-          compiledClaim: { statement: brief.compiledQuestion },
+          compiledClaim: { statement: brief.originalQuestion },
           claims: brief.claims,
           researchBrief: brief,
           shareContextInArtifact: brief.privacy.shareContextInArtifact,

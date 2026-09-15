@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sourceClassLabels, type SourceClass } from "../../lib/source-class";
 import type { Divergence, DivergenceItem } from "../../lib/source-divergence";
-import { buildContextualizationImpact } from "../../lib/contextualization-impact";
 import {
   researchBriefSchema,
   researchBriefStorageKey,
@@ -299,6 +298,137 @@ function formatDate(value: string | null | undefined) {
 
 function unique<T>(items: T[]) {
   return Array.from(new Set(items));
+}
+
+function compactFlowText(value: string, maximum = 180) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > maximum ? `${normalized.slice(0, maximum - 1)}…` : normalized;
+}
+
+function ArtifactContextFlow({
+  question,
+  brief,
+  visibleClaims,
+  researchHref,
+}: {
+  question: string;
+  brief: ResearchBrief;
+  visibleClaims: ArtifactClaim[];
+  researchHref: string;
+}) {
+  const answersShared = brief.privacy.shareContextInArtifact;
+  const contextualizedAxisIds = new Set(brief.contextualization.map((entry) => entry.axisId));
+  const claimForBriefId = (claimId: string) => visibleClaims.find((candidate) => (
+    candidate.id === claimId || candidate.id.endsWith(`-${claimId}`)
+  ));
+  const relationsForClaim = (claim: ResearchBrief["claims"][number]) => claimForBriefId(claim.id)?.relations ?? [];
+  const restItems = [
+    ...brief.dimensionAssignments
+      .filter((assignment) => !contextualizedAxisIds.has(assignment.axisId))
+      .map((assignment) => `${assignment.label}: ${assignment.role.replaceAll("-", " ")}`),
+    ...brief.parkedDimensions.map((dimension) => `${dimension.axisId}: ${dimension.reason}`),
+    ...brief.gapTriggers.map((gap) => `${gap.question} (${gap.expectedDecisionValue} decision value)`),
+  ];
+  const restClaims = brief.claims.filter((claim) => claim.axisIds.every((axisId) => !contextualizedAxisIds.has(axisId)));
+
+  return (
+    <section className="artifact-context-flow" aria-labelledby="artifact-context-flow-title">
+      <header className="artifact-context-flow-header">
+        <div>
+          <span>Question → scope → evidence</span>
+          <h2 id="artifact-context-flow-title">What this person-specific context changed</h2>
+        </div>
+        <p>Follow the handoff from the open question to dimension-specific context and then to accepted evidence lanes.</p>
+      </header>
+
+      <div className="artifact-flow-track">
+        <article className="artifact-flow-node artifact-flow-question">
+          <span>A · Open question</span>
+          <strong>{question}</strong>
+          <p>The question is kept readable here; the provider-facing contract is available separately below.</p>
+        </article>
+
+        <div className="artifact-flow-arrow" aria-hidden="true">↓</div>
+
+        <section className="artifact-flow-stage" aria-labelledby="artifact-flow-dimensions-title">
+          <header>
+            <div>
+              <span>B · Dimensions and context</span>
+              <strong id="artifact-flow-dimensions-title">What the question became</strong>
+            </div>
+            <small>{brief.contextualization.length} contextual dimension{brief.contextualization.length === 1 ? "" : "s"}</small>
+          </header>
+          <div className="artifact-flow-dimensions" role="list">
+            {brief.contextualization.map((entry) => {
+              const scopedClaims = brief.claims.filter((claim) => claim.axisIds.includes(entry.axisId));
+              const relationCount = scopedClaims.reduce((sum, claim) => sum + relationsForClaim(claim).length, 0);
+              const answer = answersShared
+                ? [...entry.selectedValues, entry.typedAnswer].filter(Boolean).join("; ") || "No answer supplied"
+                : "Answer details kept private in this artifact";
+              return (
+                <article className="artifact-flow-dimension" key={entry.axisId} role="listitem">
+                  <div className="artifact-flow-dimension-heading">
+                    <div>
+                      <span>{entry.label}</span>
+                      <small>{entry.effect}</small>
+                    </div>
+                    <b>{relationCount} accepted</b>
+                  </div>
+                  <p><b>Context:</b> {answer}</p>
+                  <p><b>Research consequence:</b> {entry.researchConsequence}</p>
+                  <small>{scopedClaims.length} linked claim{scopedClaims.length === 1 ? "" : "s"}</small>
+                </article>
+              );
+            })}
+            <article className="artifact-flow-dimension artifact-flow-rest" role="listitem">
+              <div className="artifact-flow-dimension-heading">
+                <div>
+                  <span>Rest / unresolved</span>
+                  <small>keep visible</small>
+                </div>
+                <b>{restClaims.length} claim{restClaims.length === 1 ? "" : "s"}</b>
+              </div>
+              <p>{restItems.length > 0 ? restItems.slice(0, 4).map(compactFlowText).join(" · ") : "No unassigned dimensions or reactivation triggers were recorded."}</p>
+              {restItems.length > 4 && <small>+ {restItems.length - 4} more unresolved item{restItems.length - 4 === 1 ? "" : "s"}</small>}
+            </article>
+          </div>
+        </section>
+
+        <div className="artifact-flow-arrow" aria-hidden="true">↓</div>
+
+        <section className="artifact-flow-stage artifact-flow-evidence" aria-labelledby="artifact-flow-evidence-title">
+          <header>
+            <div>
+              <span>C · Evidence lanes</span>
+              <strong id="artifact-flow-evidence-title">What has crossed the gate</strong>
+            </div>
+            <small>{visibleClaims.length} scoped claim{visibleClaims.length === 1 ? "" : "s"}</small>
+          </header>
+          <div className="artifact-flow-evidence-list" role="list">
+            {brief.claims.map((claim, index) => {
+              const relations = relationsForClaim(claim);
+              const sources = unique(relations.map((relation) => relation.source.title));
+              return (
+                <article key={claim.id} role="listitem">
+                  <div className="artifact-flow-evidence-heading">
+                    <span>C{index + 1} · {claim.shortLabel}</span>
+                    <b>{relations.length} accepted</b>
+                  </div>
+                  <p>{claim.statement}</p>
+                  <small>
+                    {relations.length > 0
+                      ? `Source${sources.length === 1 ? "" : "s"}: ${sources.slice(0, 2).join(" · ")}${sources.length > 2 ? " · …" : ""}`
+                      : "No promoted result currently bears on this claim."}
+                  </small>
+                  {relations.length === 0 && <Link href={researchHref}>Search this gap <span aria-hidden="true">→</span></Link>}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    </section>
+  );
 }
 
 function relationCounts(relations: ArtifactRelation[]) {
@@ -652,10 +782,11 @@ export function ArtifactWorkspace() {
     dependenceFamilies: allFamilies.length,
     fullTextVerified: fullTextCount,
   };
-  const question = brief?.compiledQuestion
-    || artifact?.case?.activeQuestion
+  const question = brief?.originalQuestion
     || artifact?.case?.originalPrompt
+    || artifact?.case?.activeQuestion
     || "This investigation";
+  const compiledQuestion = brief?.compiledQuestion?.trim() || "";
   const researchHref = caseId ? `/research?caseId=${encodeURIComponent(caseId)}` : "/research";
   const synthesisHref = caseId ? `/synthesis?caseId=${encodeURIComponent(caseId)}` : "/synthesis";
 
@@ -740,8 +871,6 @@ export function ArtifactWorkspace() {
       ? "Research has not started for this case; no evidence has crossed the promotion boundary."
       : "Research has run, but no evidence has crossed the promotion boundary."
     : `${acceptedRelations.length} accepted result${acceptedRelations.length === 1 ? "" : "s"} currently cover${uncoveredClaims.length === 0 ? "" : " only"} ${visibleClaims.length - uncoveredClaims.length} of ${visibleClaims.length} claims.`;
-  const contextualizationImpact = brief ? buildContextualizationImpact(brief) : null;
-
   return (
     <>
       <header className="live-artifact-hero">
@@ -761,6 +890,17 @@ export function ArtifactWorkspace() {
           <Link href={synthesisHref}>Open decision workbench <span aria-hidden="true">→</span></Link>
         </div>
       </header>
+
+      {brief && (
+        <details className="artifact-raw-contract">
+          <summary>Raw compiled research contract</summary>
+          {brief.privacy.shareContextInArtifact && compiledQuestion !== question ? (
+            <pre>{compiledQuestion}</pre>
+          ) : (
+            <p>The provider-facing contract is private because answer-level context was not shared into this artifact.</p>
+          )}
+        </details>
+      )}
 
       <section className="live-artifact-meta" aria-label="Artifact evidence status">
         <div>
@@ -806,7 +946,6 @@ export function ArtifactWorkspace() {
             <div>
               <h2>{evidenceState}</h2>
               <p>
-                No evidence has crossed the promotion boundary. {evidenceState}
                 The compiled claims below are a research contract, not conclusions. Discovery records,
                 abstracts, and agent proposals remain outside this artifact until they are reviewed and promoted.
               </p>
@@ -816,29 +955,13 @@ export function ArtifactWorkspace() {
         </section>
       )}
 
-      {brief && contextualizationImpact && (
-        <section className="contextualization-bridge artifact-context-bridge" aria-labelledby="artifact-context-title">
-          <header className="bridge-heading">
-            <span>Context → research contract · {brief.privacy.shareContextInArtifact ? "answers shared" : "answers private"}</span>
-            <strong id="artifact-context-title">What this person-specific context changed</strong>
-          </header>
-          <div className="contextualization-impact-summary">
-            <article><span>Answers carried in</span><strong>{contextualizationImpact.answeredQuestions} / {contextualizationImpact.totalQuestions}</strong><p>{brief.privacy.shareContextInArtifact ? "Answer details are visible in this share link." : "Answer details remain private; consequences stay visible."}</p></article>
-            <article><span>Claims scoped</span><strong>{contextualizationImpact.scopedClaimLabels.length}</strong><p>Claim frames linked to contextual answers.</p></article>
-            <article><span>Open gaps</span><strong>{contextualizationImpact.unresolved.length}</strong><p>Questions that still need evidence or a later decision.</p></article>
-          </div>
-          <div className="contextualization-impact-ledger">
-            {contextualizationImpact.entries.map((entry) => (
-              <article key={entry.axisId}>
-                <div className="impact-entry-heading"><strong>{entry.label}</strong><span>{entry.effect}</span></div>
-                <p><b>Your answer:</b> {entry.answer}</p>
-                <p><b>Changes:</b> {entry.changedFields.join(" · ") || "Applicability check retained"}</p>
-                {entry.claimLabels.length > 0 && <p><b>Claim/lane:</b> {entry.claimLabels.join(" · ")}</p>}
-                <p><b>Why:</b> {entry.consequence}</p>
-              </article>
-            ))}
-          </div>
-        </section>
+      {brief && (
+        <ArtifactContextFlow
+          question={question}
+          brief={brief}
+          visibleClaims={visibleClaims}
+          researchHref={researchHref}
+        />
       )}
 
       {actionOptions.length > 0 && (
