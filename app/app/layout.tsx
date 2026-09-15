@@ -15,6 +15,9 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: origin,
     title: { default: "Decompose · Epistack", template: "%s · Epistack" },
     description,
+    icons: {
+      icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    },
     openGraph: {
       title: siteTitle,
       description,

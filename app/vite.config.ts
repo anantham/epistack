@@ -53,6 +53,9 @@ export default defineConfig(async () => {
       sites(),
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
+        // Browser tests do not need the Miniflare inspector. Disabling it in
+        // that mode avoids reserving a second listening port in CI sandboxes.
+        inspectorPort: process.env.EPISTACK_BROWSER_TEST === "1" ? false : undefined,
         config: localBindingConfig,
       }),
     ],

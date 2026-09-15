@@ -20,10 +20,9 @@ import {
   type SourceClass,
 } from "./source-class.ts";
 import type { ResearchClaimFrame } from "./research-brief.ts";
-import { parseStructuredWithRepair, repairInstruction, schemaInstruction } from "./structured-output.ts";
+import { runSchemaExtractionWithFallback } from "./schema-extraction-runner.ts";
 import { fetchPmcFullText, resolvePmcNumeric } from "./pmc-full-text.ts";
 import { isBackendUnreachable, runLyraStage } from "./lyra-stage.ts";
-// @ts-expect-error The Cloudflare runtime module is provided by the Workers build.
 import { env } from "cloudflare:workers";
 
 const primaryModel = "Astra · GPT 6";
@@ -314,32 +313,21 @@ async function runSchemaExtraction<T>(input: {
   instructions: string;
   task: string;
 }): Promise<T> {
-  const instructions = input.instructions + schemaInstruction(input.schema);
-  let usedOpenRouter = false;
-  const runStage = async (task: string, stageInstructions: string) => {
-    if (!usedOpenRouter) {
-      try {
-        return await runLyraStage({
-          model: stageModel,
-          effort: stageEffort,
-          instructions: stageInstructions,
-          input: task,
-        });
-      } catch (error) {
-        if (!isBackendUnreachable(error) || !openRouterSourceEnvironment().OPENROUTER_API_KEY) throw error;
-        usedOpenRouter = true;
-      }
-    }
-    return runOpenRouterSourceStage({ task, instructions: stageInstructions });
-  };
-  const first = await runStage(input.task, instructions);
-  return parseStructuredWithRepair({
-    text: first,
+  const current = openRouterSourceEnvironment();
+  return runSchemaExtractionWithFallback({
     schema: input.schema,
-    repair: async ({ raw, issues }) => runStage(
-      `${input.task}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
-      input.instructions + repairInstruction(input.schema, issues),
-    ),
+    instructions: input.instructions,
+    task: input.task,
+    primary: (task, instructions) => runLyraStage({
+      model: stageModel,
+      effort: stageEffort,
+      instructions,
+      input: task,
+    }),
+    fallback: current.OPENROUTER_API_KEY
+      ? (task, instructions) => runOpenRouterSourceStage({ task, instructions })
+      : undefined,
+    isBackendUnreachable,
   });
 }
 

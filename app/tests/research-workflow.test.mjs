@@ -92,7 +92,7 @@ test("research route keeps discovery separate from evidence promotion", async ()
   assert.match(investigateApi, /Astra prompt limit/);
   assert.match(sourceAdapters, /isBackendUnreachable/);
   assert.match(sourceAdapters, /runOpenRouterSourceStage/);
-  assert.match(sourceAdapters, /usedOpenRouter/);
+  assert.match(sourceAdapters, /runSchemaExtractionWithFallback/);
   assert.match(sourceAdapters, /response_format: \{ type: "json_object" \}/);
   assert.match(promoteApi, /JOIN result_records/);
   assert.match(database, /ensureEvidenceGraphTables/);
