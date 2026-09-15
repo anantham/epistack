@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { adjudicateDualReview, dualReviewPolicyId, passageExists, populationMismatchSignals } from "../lib/dual-review.ts";
+import { adjudicateDualReview, canonicalizeExactExcerpt, dualReviewPolicyId, passageExists, populationMismatchSignals } from "../lib/dual-review.ts";
 import { jatsToPlainText, parseClaudeStructuredOutput } from "../scripts/local-claude-agents.mjs";
 
 const artifact = {
@@ -123,6 +123,37 @@ test("dual-model policy promotes only a passage-backed result reviewed by a diff
   assert.equal(outcome.acceptedCount, 1);
   assert.equal(outcome.decisions[0].passageFound, true);
   assert.equal(outcome.decisions[0].finalDecision, "promote");
+});
+
+/*
+Test intent:
+- Accept a model-added boundary ellipsis only when the remaining excerpt is literal.
+- Persist the canonical excerpt without the model's wrapper.
+- Keep the strict substring gate intact for non-matching text.
+*/
+test("boundary ellipses are canonicalized before the strict passage gate", () => {
+  const ellipsized = result({ exactExcerpt: "...weight loss of 2.63 kg compared with 1.59 kg..." });
+  const outcome = adjudicateDualReview({
+    primary: primary([ellipsized]),
+    review: review([{
+      resultIndex: 0,
+      verdict: "accept",
+      quoteVerified: true,
+      locatorVerified: true,
+      scopeVerified: true,
+      relationVerified: true,
+      rationale: "The quoted result is supported by the preserved source.",
+      correctedResult: null,
+    }]),
+    fullText: "Observed weight loss of 2.63 kg compared with 1.59 kg in the diet arms.",
+    artifact,
+    primaryModel: "opus",
+    adversaryModel: "sonnet",
+  });
+  assert.equal(canonicalizeExactExcerpt("…weight loss of 2.63 kg compared with 1.59 kg…"), "weight loss of 2.63 kg compared with 1.59 kg");
+  assert.equal(outcome.eligible, true);
+  assert.equal(outcome.decisions[0].passageFound, true);
+  assert.equal(outcome.candidate.results[0].exactExcerpt, "weight loss of 2.63 kg compared with 1.59 kg");
 });
 
 test("reviewer approval cannot override a missing quotation or same-model review", () => {

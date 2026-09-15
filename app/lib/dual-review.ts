@@ -155,6 +155,20 @@ function normalizePassageBoundary(value: string) {
   return normalizePassage(value).replace(/[.,;:!?]+$/g, "").trim();
 }
 
+/**
+ * Models sometimes wrap an otherwise literal excerpt in an ellipsis to signal
+ * that it was shortened. That wrapper is not part of the source passage, so
+ * remove only boundary ellipses before the strict substring check. Internal
+ * ellipses and every other character remain untouched.
+ */
+export function canonicalizeExactExcerpt(value: string) {
+  return value
+    .trim()
+    .replace(/^(?:\.\.\.|…)[\s]*/u, "")
+    .replace(/[\s]*(?:\.\.\.|…)$/u, "")
+    .trim();
+}
+
 export function passageExists(fullText: string, excerpt: string) {
   const normalizedExcerpt = normalizePassage(excerpt);
   if (normalizedExcerpt.length < 12) return false;
@@ -206,7 +220,9 @@ export function adjudicateDualReview(input: {
     const item = reviewsByIndex.get(resultIndex);
     const proposed = item?.verdict === "revise" ? item.correctedResult ?? null : original;
     const parsedProposed = proposed ? deepDiveResultSchema.safeParse(proposed) : null;
-    const promotedResult = parsedProposed?.success ? parsedProposed.data : null;
+    const promotedResult = parsedProposed?.success
+      ? { ...parsedProposed.data, exactExcerpt: canonicalizeExactExcerpt(parsedProposed.data.exactExcerpt) }
+      : null;
     const passageFound = promotedResult ? passageExists(input.fullText, promotedResult.exactExcerpt) : false;
     const scopeReasons = promotedResult
       ? automaticScopeGateReasons({ result: promotedResult, studyPopulation: primary.study.population, claimFrames: input.claimFrames ?? [] })
@@ -231,6 +247,8 @@ export function adjudicateDualReview(input: {
       passageFound,
       rationale: scopeReasons.length > 0
         ? `${scopeReasons.join(" ")} It remains outside automatic promotion until the claim is narrowed or a better-matched source is reviewed.`
+        : !passageFound
+          ? `The exact excerpt was not found as a contiguous substring of the preserved full-text artifact. ${item?.rationale ?? "The adversarial agent returned no review for this result."}`
         : item?.rationale ?? "The adversarial agent returned no review for this result.",
       promotedResult: finalDecision === "promote" ? promotedResult : null,
     };

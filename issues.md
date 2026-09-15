@@ -165,7 +165,7 @@ is to document an owner/rotation policy and consider per-user key isolation.
 ## 12. Deploy source reconciliation **[partial]**
 
 The Sites source now fast-forwards from the prior deployment history to a clean
-mirror commit (`737a0fe`) derived from canonical `main` (`82e91c7`). The artifact is
+mirror commit (`7ec6f00`) derived from canonical `main` (`0f29744`). The artifact is
 built from the ignored `app/.deploy/` tree created from the pushed repository
 commit, and the Sites remote is registered in the main repo. The remaining
 imperfection is that the Sites repository has an unrelated historical root, so its
@@ -194,3 +194,44 @@ lanes; those returns remain lead-only and the context lane cannot promote eviden
 Remaining work: Phase-4 lane display in the artifact, wiring `computeDivergence`
 into the artifact (the helpers exist but are not connected there), and live
 lane-progress reporting.
+
+## 13. Hosted full-text review needs deterministic failure telemetry [partial]
+
+Observed on 2026-09-15 in case `74fcbb3f-bbf9-40c6-a62d-42bc6d8c0d05`: the
+recall and six claim searches completed, PMC acquisition succeeded with a
+verified SHA-256 artifact, and both review stages returned structured output.
+All four proposed results were rejected only at the final literal passage gate.
+
+The extractor returned exact excerpts wrapped in `...`, despite the prompt
+forbidding ellipses. The adversarial reviewer marked its quote checks true, but
+the deterministic verifier correctly found the wrapped strings absent from the
+preserved plain text. This is an extractor-output failure, not evidence that the
+paper lacked relevant content or that the worker crashed.
+
+The first correction is deliberately narrow: strip only boundary ellipses before
+the unchanged contiguous-substring check, and persist the canonical excerpt. A
+non-contiguous or fabricated excerpt still rejects. The remaining gap is
+production telemetry that records bounded deterministic rejection classes and
+whether the two stages used distinct underlying model IDs.
+
+## 14. Stored claim frames can outlive the compiled brief [open]
+
+The same live case rendered 12 `claim_frames` in the Artifact while the saved
+compiled research contract contained 6 claims. The current case-save path
+upserts current frames but does not reconcile stale frame IDs, and the Artifact
+currently appends uncovered extra frames. Impact is misleading empty claim lanes
+and inflated claim counts. Recommended next step: reproduce on a disposable case,
+then make the display contract prefer the compiled claim set while preserving
+accepted historical relations; do not delete production rows as a cleanup shortcut.
+
+## 15. Dual-review labels can mask identical underlying models [open]
+
+The live fallback displayed `openai/gpt-4o-mini` for both extractor and
+adversarial reviewer, with different role suffixes. `adjudicateDualReview`
+currently compares the full display strings, so role labels satisfy the
+`modelsDiffer` check even when the underlying provider/model ID is identical.
+This did not cause the observed rejection, but it can weaken the intended
+independence gate once a passage passes. Next step: define whether the policy
+requires distinct model IDs or only isolated processes, then enforce and display
+that decision consistently in `dual-review.ts`, `investigate/route.ts`, and
+`promote/route.ts`.
