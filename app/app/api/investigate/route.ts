@@ -17,6 +17,17 @@ import { fetchPmcFullText, resolvePmcNumeric } from "../../../lib/pmc-full-text"
 import { isPreliminarySourceClass, sourceClassSchema } from "../../../lib/source-class";
 import { extractJsonSlice, parseStructuredWithRepair, repairInstruction } from "../../../lib/structured-output";
 import {
+  buildExtractionChunkTask,
+  buildReviewChunkTask,
+  chunkExtractionSchema,
+  chunkReviewSchema,
+  mergeChunkExtractions,
+  mergeChunkReviews,
+  planChunkedPrompts,
+  reviewableArtifactText,
+  type ChunkPromptContext,
+} from "../../../lib/chunked-full-text";
+import {
   addResearchUsage,
   emptyResearchUsage,
   normalizeModelId,
@@ -41,6 +52,8 @@ const hostedTextCap = 32_000;
 // so route oversized evidence requests to the server-side OpenRouter path
 // instead of sending a request Astra must reject with HTTP 400.
 const astraRenderedPromptLimit = 12_000;
+const astraChunkPromptSafetyMargin = 450;
+const astraChunkConcurrency = 3;
 
 type InvestigateEnvironment = {
   OPENROUTER_API_KEY?: string;
@@ -392,6 +405,163 @@ function claimFramesText(claimFrames: ResearchClaimFrame[]) {
   ].join("\n")).join("\n\n");
 }
 
+function boundedPromptValue(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 45))}\n[truncated for bounded Lyra review]`;
+}
+
+function compactPromptInstructions(value: string, maxLength = 1_400) {
+  if (value.length <= maxLength) return value;
+  const tailLength = Math.floor(maxLength * 0.3);
+  const headLength = maxLength - tailLength - 45;
+  return `${value.slice(0, headLength)}\n[additional instructions compacted for bounded Lyra review]\n${value.slice(-tailLength)}`;
+}
+
+function chunkPromptContext(input: {
+  question: string;
+  decisionContext: string;
+  citation: string;
+  artifactHash: string;
+  claimFrames: ResearchClaimFrame[];
+  applicabilityProfile: string;
+}): ChunkPromptContext {
+  return {
+    question: boundedPromptValue(input.question, 800),
+    decisionContext: boundedPromptValue(input.decisionContext, 800),
+    citation: boundedPromptValue(input.citation, 350),
+    artifactHash: input.artifactHash,
+    claimFrames: boundedPromptValue(claimFramesText(input.claimFrames), 1_200),
+    applicabilityProfile: boundedPromptValue(input.applicabilityProfile, 600),
+  };
+}
+
+async function mapConcurrent<T, R>(values: T[], worker: (value: T, index: number) => Promise<R>, concurrency = astraChunkConcurrency) {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  async function consume() {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= values.length) return;
+      results[index] = await worker(values[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => consume()));
+  return results;
+}
+
+async function parseLyraChunk<T>(input: {
+  task: string;
+  instructions: string;
+  schema: z.ZodType<T>;
+}) {
+  const first = await runLyraStage({
+    model: "lyra-chatgpt-pro",
+    effort: "medium",
+    instructions: input.instructions,
+    input: input.task,
+  });
+  return parseStructuredWithRepair({
+    text: normalizeInvestigationJson(first),
+    schema: input.schema,
+    repair: async ({ raw, issues }) => normalizeInvestigationJson(await runLyraStage({
+      model: "lyra-chatgpt-pro",
+      effort: "instant",
+      instructions: "Repair the previous response into one valid JSON object matching the requested bounded chunk contract. Return JSON only.",
+      input: `PREVIOUS RESPONSE\n${raw}\n\nVALIDATION ISSUES\n${JSON.stringify(issues).slice(0, 2_000)}`,
+    })),
+    maxRepairs: 1,
+  });
+}
+
+const chunkExtractionContract = `Return JSON only. The object must contain artifactHash, chunkIndex, chunkCount, chunkRead, sectionsRead, optional directly-stated study and evidenceFamily fields, results (0–6 complete records), optional authorConclusion, conclusionFit, extractionCaveat, and inspectionNote. Use the supplied artifact hash. Copy exactExcerpt literally from this segment; never paraphrase, add quotation marks, or use ellipses.`;
+const chunkReviewContract = `Return JSON only. The object must contain artifactHash, chunkIndex, chunkCount, chunkRead, sectionsRead, findings, and inspectionNote. findings may be empty when this segment does not address a candidate. Corrected exactExcerpt values must be copied literally from this segment; never paraphrase or use ellipses.`;
+
+async function runChunkedExtraction(input: {
+  fullText: string;
+  context: ChunkPromptContext;
+  artifactHash: string;
+  instructions: string;
+}) {
+  const instructions = `${compactPromptInstructions(input.instructions)}\n${chunkExtractionContract}`;
+  const plan = planChunkedPrompts({
+    fullText: input.fullText,
+    instructions,
+    taskFor: (chunk) => buildExtractionChunkTask(input.context, chunk),
+    promptLimit: astraRenderedPromptLimit,
+    safetyMargin: astraChunkPromptSafetyMargin,
+  });
+  const chunks = await mapConcurrent(plan.tasks, async (task) => parseLyraChunk({
+    task,
+    instructions,
+    schema: chunkExtractionSchema,
+  }));
+  const primary = mergeChunkExtractions(chunks, input.artifactHash);
+  return {
+    primary,
+    model: `${primaryModel} · chunked full-text`,
+    chunkCount: plan.chunks.length,
+  };
+}
+
+function compactCandidateJson(primary: z.infer<typeof fullPaperExtractionSchema>) {
+  return JSON.stringify({
+    study: {
+      design: primary.study.design.slice(0, 180),
+      population: primary.study.population.slice(0, 180),
+      exposure: primary.study.exposure.slice(0, 180),
+      comparator: primary.study.comparator.slice(0, 180),
+    },
+    results: primary.results.map((result, resultIndex) => ({
+      resultIndex,
+      analysisLabel: result.analysisLabel.slice(0, 100),
+      analysisType: result.analysisType.slice(0, 80),
+      outcome: result.outcome.slice(0, 160),
+      timeHorizon: result.timeHorizon.slice(0, 80),
+      resultRole: result.resultRole,
+      resultText: result.resultText.slice(0, 300),
+      estimate: result.estimate.slice(0, 140),
+      exactExcerpt: result.exactExcerpt,
+      locator: result.locator.slice(0, 120),
+      claimFrameId: result.claimFrameId,
+      relation: result.relation,
+      scopeMatch: result.scopeMatch,
+      applicability: {
+        mismatched: result.applicability.mismatched.map((value) => value.slice(0, 120)).slice(0, 4),
+        unknown: result.applicability.unknown.map((value) => value.slice(0, 120)).slice(0, 4),
+        distance: result.applicability.distance,
+      },
+    })),
+  });
+}
+
+async function runChunkedReview(input: {
+  fullText: string;
+  context: ChunkPromptContext;
+  artifactHash: string;
+  primary: z.infer<typeof fullPaperExtractionSchema>;
+  instructions: string;
+}) {
+  const candidateJson = compactCandidateJson(input.primary);
+  const instructions = `${compactPromptInstructions(input.instructions, 900)}\n${chunkReviewContract}`;
+  const plan = planChunkedPrompts({
+    fullText: input.fullText,
+    instructions,
+    taskFor: (chunk) => buildReviewChunkTask(input.context, chunk, candidateJson),
+    promptLimit: astraRenderedPromptLimit,
+    safetyMargin: astraChunkPromptSafetyMargin,
+  });
+  const chunks = await mapConcurrent(plan.tasks, async (task) => parseLyraChunk({
+    task,
+    instructions,
+    schema: chunkReviewSchema,
+  }));
+  return {
+    review: mergeChunkReviews(chunks, input.primary, input.artifactHash),
+    model: `${adversaryModel} · chunked full-text`,
+    chunkCount: plan.chunks.length,
+  };
+}
+
 // The typed non-PubMed path: acquire an arbitrary source, then run the adapter
 // that matches its declared class. Only causal + fetched-verified reaches the
 // adversarial dual review; the rest stays extracted and non-promotable.
@@ -606,18 +776,57 @@ export async function POST(request: Request) {
     const extractorInstructions = extractorAgent.instructions
       + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
       + JSON.stringify(z.toJSONSchema(fullPaperExtractionSchema));
-    const primaryStage = await structuredStage(extractorTask, extractorInstructions, "extractor", fullPaperExtractionSchema);
-    const primary = await parseStructuredWithRepair({
-      text: normalizeInvestigationJson(primaryStage.text),
-      schema: fullPaperExtractionSchema,
-      repair: async ({ raw, issues }) => normalizeInvestigationJson((await structuredStage(
-        `${extractorTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
-        extractorAgent.instructions + repairInstruction(fullPaperExtractionSchema, issues),
-        "repair",
-        fullPaperExtractionSchema,
-      )).text),
-      maxRepairs: 2,
+    const chunkContext = chunkPromptContext({
+      question,
+      decisionContext,
+      citation: citationFor(normalizedRecord),
+      artifactHash: artifact.contentHash,
+      claimFrames,
+      applicabilityProfile,
     });
+    const extractorPromptTooLarge = extractorTask.length + extractorInstructions.length > astraRenderedPromptLimit;
+    let primaryStage: { text: string; model: string };
+    let primary: z.infer<typeof fullPaperExtractionSchema>;
+    if (lyraConfigured() && extractorPromptTooLarge) {
+      try {
+        const chunked = await runChunkedExtraction({
+          fullText: reviewableArtifactText(plainText),
+          context: chunkContext,
+          artifactHash: artifact.contentHash,
+          instructions: extractorAgent.instructions,
+        });
+        primary = chunked.primary;
+        primaryStage = { text: JSON.stringify(primary), model: chunked.model };
+        console.info(`[investigate] chunked Lyra extraction inspected ${chunked.chunkCount} artifact segments.`);
+      } catch (error) {
+        console.warn(`[investigate] chunked Lyra extraction failed; using OpenRouter recovery: ${error instanceof Error ? error.message : String(error)}`);
+        primaryStage = await structuredStage(extractorTask, extractorInstructions, "extractor", fullPaperExtractionSchema);
+        primary = await parseStructuredWithRepair({
+          text: normalizeInvestigationJson(primaryStage.text),
+          schema: fullPaperExtractionSchema,
+          repair: async ({ raw, issues }) => normalizeInvestigationJson((await structuredStage(
+            `${extractorTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
+            extractorAgent.instructions + repairInstruction(fullPaperExtractionSchema, issues),
+            "repair",
+            fullPaperExtractionSchema,
+          )).text),
+          maxRepairs: 2,
+        });
+      }
+    } else {
+      primaryStage = await structuredStage(extractorTask, extractorInstructions, "extractor", fullPaperExtractionSchema);
+      primary = await parseStructuredWithRepair({
+        text: normalizeInvestigationJson(primaryStage.text),
+        schema: fullPaperExtractionSchema,
+        repair: async ({ raw, issues }) => normalizeInvestigationJson((await structuredStage(
+          `${extractorTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
+          extractorAgent.instructions + repairInstruction(fullPaperExtractionSchema, issues),
+          "repair",
+          fullPaperExtractionSchema,
+        )).text),
+        maxRepairs: 2,
+      });
+    }
 
     const indexedCandidate = primary.results.map((result, resultIndex) => ({ resultIndex, ...result }));
     const reviewerAgent = resolveAgentPrompt("adversarial-reviewer", promptOverrides);
@@ -628,18 +837,50 @@ export async function POST(request: Request) {
     const reviewerInstructions = reviewerAgent.instructions
       + "\nReturn only one JSON object matching this schema. No markdown fences.\n"
       + JSON.stringify(z.toJSONSchema(adversarialReviewSchema));
-    const reviewStage = await structuredStage(reviewerTask, reviewerInstructions, "reviewer", adversarialReviewSchema);
-    const review = await parseStructuredWithRepair({
-      text: normalizeInvestigationJson(reviewStage.text),
-      schema: adversarialReviewSchema,
-      repair: async ({ raw, issues }) => normalizeInvestigationJson((await structuredStage(
-        `${reviewerTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
-        reviewerAgent.instructions + repairInstruction(adversarialReviewSchema, issues),
-        "repair",
-        adversarialReviewSchema,
-      )).text),
-      maxRepairs: 2,
-    });
+    const reviewerPromptTooLarge = reviewerTask.length + reviewerInstructions.length > astraRenderedPromptLimit;
+    let reviewStage: { text: string; model: string };
+    let review: z.infer<typeof adversarialReviewSchema>;
+    if (lyraConfigured() && reviewerPromptTooLarge) {
+      try {
+        const chunked = await runChunkedReview({
+          fullText: reviewableArtifactText(plainText),
+          context: chunkContext,
+          artifactHash: artifact.contentHash,
+          primary,
+          instructions: reviewerAgent.instructions,
+        });
+        review = chunked.review;
+        reviewStage = { text: JSON.stringify(review), model: chunked.model };
+        console.info(`[investigate] chunked Lyra review inspected ${chunked.chunkCount} artifact segments.`);
+      } catch (error) {
+        console.warn(`[investigate] chunked Lyra review failed; using OpenRouter recovery: ${error instanceof Error ? error.message : String(error)}`);
+        reviewStage = await structuredStage(reviewerTask, reviewerInstructions, "reviewer", adversarialReviewSchema);
+        review = await parseStructuredWithRepair({
+          text: normalizeInvestigationJson(reviewStage.text),
+          schema: adversarialReviewSchema,
+          repair: async ({ raw, issues }) => normalizeInvestigationJson((await structuredStage(
+            `${reviewerTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
+            reviewerAgent.instructions + repairInstruction(adversarialReviewSchema, issues),
+            "repair",
+            adversarialReviewSchema,
+          )).text),
+          maxRepairs: 2,
+        });
+      }
+    } else {
+      reviewStage = await structuredStage(reviewerTask, reviewerInstructions, "reviewer", adversarialReviewSchema);
+      review = await parseStructuredWithRepair({
+        text: normalizeInvestigationJson(reviewStage.text),
+        schema: adversarialReviewSchema,
+        repair: async ({ raw, issues }) => normalizeInvestigationJson((await structuredStage(
+          `${reviewerTask}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
+          reviewerAgent.instructions + repairInstruction(adversarialReviewSchema, issues),
+          "repair",
+          adversarialReviewSchema,
+        )).text),
+        maxRepairs: 2,
+      });
+    }
 
     const adjudicated = adjudicateDualReview({
       primary,
