@@ -384,8 +384,108 @@ function isPreparationDimension(dimension: { id: string; label: string }) {
   return /prepar|cook|form|accompani/i.test(`${dimension.id} ${dimension.label}`);
 }
 
+function isGoalsActivityDimension(dimension: { id: string; label: string }) {
+  return /\b(goal|goals|body|composition|activity|active|training|train|athlete|athletic|fitness|performance)\b/i.test(`${dimension.id} ${dimension.label}`);
+}
+
+function isPracticalDimension(dimension: { id: string; label: string }) {
+  return /practical|access|constraint|afford|budget|location|cost|price|convenien|safety|source|market/i.test(`${dimension.id} ${dimension.label}`);
+}
+
+function foodHealthAxisCategory(dimension: { id: string; label: string }) {
+  if (isPreparationDimension(dimension)) return "preparation";
+  if (isGoalsActivityDimension(dimension)) return "goals";
+  if (isPracticalDimension(dimension)) return "practical";
+  const text = `${dimension.id} ${dimension.label}`;
+  if (/outcome|health|benefit|harm|good|bad|satiety|nutrition/i.test(text)) return "outcome";
+  if (/dose|intake|frequency|amount|exposure|moderation/i.test(text)) return "dose";
+  if (/comparator|alternative|counterfactual|replace|instead|baseline/i.test(text)) return "replacement";
+  if (/population|people|person|setting|who|where|generaliz|transport/i.test(text)) return "population";
+  return "other";
+}
+
+const foodHealthCoverageDimensions = [
+  { category: "preparation", id: "preparation-accompaniments", label: "Preparation and Accompaniments" },
+  { category: "goals", id: "goals-activity", label: "Goals, Body Composition, and Activity" },
+  { category: "practical", id: "practical-constraints", label: "Practical Constraints, Location, Budget, and Safety" },
+] as const;
+
+function ensureFoodHealthCoverage(dimensions: Array<{ id: string; label: string }>) {
+  const next = dimensions.slice(0, 7);
+  for (const required of foodHealthCoverageDimensions) {
+    if (next.some((dimension) => foodHealthAxisCategory(dimension) === required.category)) continue;
+    if (next.length < 7) {
+      next.push(required);
+      continue;
+    }
+    // If the model filled all seven slots but duplicated a core category,
+    // replace the duplicate. Leave an entirely opaque fixture alone: there is
+    // no defensible way to decide which of those labels can be discarded.
+    const categories = next.map(foodHealthAxisCategory);
+    if (categories.every((category) => category === "other")) continue;
+    const counts = new Map<string, number>();
+    for (const category of categories) counts.set(category, (counts.get(category) ?? 0) + 1);
+    const replaceIndex = categories.findIndex((category) => category === "other" || (counts.get(category) ?? 0) > 1);
+    if (replaceIndex >= 0) next.splice(replaceIndex, 1, required);
+  }
+  return next;
+}
+
 function foodHealthFallback(dimension: { id: string; label: string }, prompt: string) {
-  if (!isFoodHealthQuestion(prompt) || !isPreparationDimension(dimension)) return null;
+  if (!isFoodHealthQuestion(prompt)) return null;
+  if (isGoalsActivityDimension(dimension)) {
+    return {
+      requiredFields: [
+        "decision goal",
+        "body composition or weight goal",
+        "activity or training status",
+        "relevant routine or co-exposures",
+      ],
+      searchConcepts: [
+        "egg protein satiety activity",
+        "egg intake body composition",
+        "dietary protein exercise outcomes",
+      ],
+      mismatchRisks: [
+        "Evidence from sedentary adults may not transport to a person with a materially different training routine or body-composition goal.",
+      ],
+      contextQuestion: {
+        id: "context-goals-activity",
+        label: "Goals, body composition, and activity",
+        question: "What are you trying to change or maintain in your body, and how active or athletic are you now?",
+        whyItMatters: "Protein needs and useful outcomes depend on the person's goal and activity rather than on eggs alone.",
+        effect: "match" as const,
+        options: ["maintain weight and health", "lose fat", "build muscle or strength", "train regularly", "something else"],
+      },
+    };
+  }
+  if (isPracticalDimension(dimension)) {
+    return {
+      requiredFields: [
+        "where the person lives or shops",
+        "food budget or price ceiling",
+        "availability and convenience",
+        "food safety, refrigeration, and source verification",
+      ],
+      searchConcepts: [
+        "local egg price and availability",
+        "free-range egg sourcing and food safety",
+        "egg storage and handling guidance",
+      ],
+      mismatchRisks: [
+        "A nutrition result may be actionable in one market but not in another when price, sourcing, or handling differs.",
+      ],
+      contextQuestion: {
+        id: "context-practical-constraints",
+        label: "Practical constraints, location, budget, and safety",
+        question: "Where do you live or shop, what budget matters, and what do you need to know about access, free-range sourcing, convenience, and food safety?",
+        whyItMatters: "A useful recommendation must be affordable, obtainable, convenient, and safe in the person's real setting.",
+        effect: "match" as const,
+        options: ["price is the priority", "local availability is the priority", "free-range sourcing matters", "convenience matters", "safety or storage is the concern"],
+      },
+    };
+  }
+  if (!isPreparationDimension(dimension)) return null;
   return {
     requiredFields: [
       "cooking method",
@@ -490,13 +590,11 @@ export function normalizeDimensionScout(scout: DimensionScout, prompt = ""): Dim
       label: compact(dimension.label, 90),
     };
   });
-  if (isFoodHealthQuestion(prompt) && dimensions.length < 7 && !dimensions.some(isPreparationDimension)) {
-    dimensions.push({ id: "preparation-and-accompaniments", label: "Preparation and Accompaniments" });
-  }
+  const coveredDimensions = isFoodHealthQuestion(prompt) ? ensureFoodHealthCoverage(dimensions) : dimensions;
   return {
     caseTitle: compact(scout.caseTitle, 90),
     summary: compact(scout.summary, 320),
-    dimensions,
+    dimensions: coveredDimensions,
   };
 }
 
@@ -542,11 +640,11 @@ export function assembleDecomposition(
       let question = compact(q.question, 220);
       const foodHealthQuestion = /\b(egg|eat|food|meal|diet|nutrition)\b/i.test(prompt);
       const dimensionText = `${dimension.label} ${q.label}`.toLowerCase();
-      if (foodHealthQuestion && /goal|body|activ|train|athlet|fitness/.test(dimensionText)
+      if (foodHealthQuestion && isGoalsActivityDimension({ id: dimension.id, label: `${dimension.label} ${q.label}` })
         && !/activ|train|athlet|exercise|sport|workout|sedent/.test(question.toLowerCase())) {
         question = compact(`${question} How active or athletic are you now?`, 220);
       }
-      if (foodHealthQuestion && /practical|access|constraint|afford|budget|location/.test(dimensionText)) {
+      if (foodHealthQuestion && isPracticalDimension({ id: dimension.id, label: dimensionText })) {
         const additions: string[] = [];
         if (!/budget|price|cost/.test(question.toLowerCase())) additions.push("How much do budget or price matter?");
         if (!/live|shop|location|nearby|availab/.test(question.toLowerCase())) additions.push("Where do you live or shop?");
@@ -577,7 +675,7 @@ export function assembleDecomposition(
   // A trace failure should not erase a successful context plan. The
   // deterministic trace keeps the scout dimensions and lets questionFor()
   // retain the model's evidence requirements and interview questions.
-  const traceCandidates = traceResult?.traces ?? genericTraceForDimensions(prompt, dimensions);
+  const traceCandidates = traceResult?.traces ?? [];
   const validTraces = traceCandidates
     .map((trace) => ({
       ...trace,
@@ -590,17 +688,25 @@ export function assembleDecomposition(
       return true;
     })
     .slice(0, 7);
+  const missingTraces = genericTraceForDimensions(
+    prompt,
+    dimensions.filter((dimension) => !seenTraceDimensions.has(dimension.id)),
+  );
+  const completeTraces = [...validTraces, ...missingTraces].slice(0, 7);
     
   let highlightBudget = 8;
-  let clusters: DecompositionCluster[] = validTraces
+  let clusters: DecompositionCluster[] = completeTraces
     .map((trace, index) => {
       const dimension = dimensions.find((candidate) => candidate.id === trace.dimensionId)!;
-      const reserved = validTraces.length - index - 1;
+      const reserved = completeTraces.length - index - 1;
       const quotes = trace.quotes.slice(0, Math.min(4, highlightBudget - reserved));
       highlightBudget -= quotes.length;
       return {
         id: `${trace.dimensionId}-cues`,
-        label: compact(trace.label, 90),
+        // The scout's dimension label is the stable contract shown to the
+        // person. A trace specialist may use a shorter synonym, but that
+        // synonym must not hide a required axis such as preparation or safety.
+        label: compact(dimension.label, 90),
         highlightQuotes: quotes,
         latentVariable: compact(trace.latentVariable, 140),
         rationale: compact(trace.rationale, 280),

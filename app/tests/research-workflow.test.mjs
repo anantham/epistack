@@ -48,12 +48,13 @@ test("the capability rail explains placeholder capabilities as planned", async (
 });
 
 test("research route keeps discovery separate from evidence promotion", async () => {
-  const [dashboard, api, deepDiveApi, promoteApi, investigateApi, database, decision, recallApi] = await Promise.all([
+  const [dashboard, api, deepDiveApi, promoteApi, investigateApi, sourceAdapters, database, decision, recallApi] = await Promise.all([
     readFile(new URL("../app/research/research-dashboard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/research/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/deep-dive/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/promote/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/investigate/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/source-adapters.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/synthesis/decision-workbench.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/recall/route.ts", import.meta.url), "utf8"),
@@ -70,6 +71,7 @@ test("research route keeps discovery separate from evidence promotion", async ()
   assert.match(dashboard, /accepted records/);
   assert.match(dashboard, /papers acquired/);
   assert.match(dashboard, /full-text reviews/);
+  assert.match(dashboard, /rejected results/);
   assert.match(dashboard, /researchBriefStorageKey/);
   assert.match(dashboard, /researchLanesFromBrief/);
   assert.match(dashboard, /claimFrames: compiledClaimFrames\(\)/);
@@ -88,6 +90,10 @@ test("research route keeps discovery separate from evidence promotion", async ()
   assert.match(investigateApi, /astraRenderedPromptLimit/);
   assert.match(investigateApi, /input\.length \+ instructions\.length/);
   assert.match(investigateApi, /Astra prompt limit/);
+  assert.match(sourceAdapters, /isBackendUnreachable/);
+  assert.match(sourceAdapters, /runOpenRouterSourceStage/);
+  assert.match(sourceAdapters, /usedOpenRouter/);
+  assert.match(sourceAdapters, /response_format: \{ type: "json_object" \}/);
   assert.match(promoteApi, /JOIN result_records/);
   assert.match(database, /ensureEvidenceGraphTables/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS assessments/);

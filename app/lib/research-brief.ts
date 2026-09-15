@@ -67,6 +67,16 @@ export const contextualizationEntrySchema = z.object({
 
 export type ContextualizationEntry = z.infer<typeof contextualizationEntrySchema>;
 
+export const claimCoverageSchema = z.object({
+  axisId: boundedText(1, 80),
+  label: boundedText(2, 120),
+  status: z.enum(["covered", "merged", "parked"]),
+  claimIds: z.array(boundedText(2, 80)).max(12),
+  reason: boundedText(8, 360),
+});
+
+export type ClaimCoverage = z.infer<typeof claimCoverageSchema>;
+
 export const researchBriefDraftSchema = z.object({
   stakeholderProfile: z.object({
     summary: boundedText(12, 720),
@@ -110,6 +120,7 @@ export const researchBriefSchema = researchBriefDraftSchema.extend({
   decisionContext: z.string().max(8_000),
   dimensionAssignments: z.array(dimensionAssignmentSchema).min(1).max(12),
   contextualization: z.array(contextualizationEntrySchema).max(12).default([]),
+  claimCoverage: z.array(claimCoverageSchema).max(12).default([]),
   privacy: z.object({
     localContextPolicy: boundedText(8, 420),
     outboundQueryPolicy: boundedText(8, 420),
@@ -264,6 +275,37 @@ export function normalizeResearchBriefDraft(draft: ResearchBriefDraft, validAxis
   return researchBriefDraftSchema.parse({ ...draft, claims });
 }
 
+export function buildClaimCoverage(input: {
+  dimensionAssignments: Array<Pick<z.infer<typeof dimensionAssignmentSchema>, "axisId" | "label" | "role">>;
+  claims: Array<Pick<ResearchClaimFrame, "id" | "axisIds" | "shortLabel">>;
+  parkedDimensions: Array<{ axisId: string; reason: string }>;
+}): ClaimCoverage[] {
+  const parkedReasons = new Map(input.parkedDimensions.map((dimension) => [dimension.axisId, dimension.reason]));
+  return input.dimensionAssignments.map((assignment) => {
+    const claims = input.claims.filter((claim) => claim.axisIds.includes(assignment.axisId));
+    if (assignment.role === "parked" || claims.length === 0) {
+      return {
+        axisId: assignment.axisId,
+        label: assignment.label,
+        status: "parked" as const,
+        claimIds: [],
+        reason: parkedReasons.get(assignment.axisId)
+          || "No compiled claim references this dimension; it remains visible for human review.",
+      };
+    }
+    const merged = claims.some((claim) => claim.axisIds.length > 1);
+    return {
+      axisId: assignment.axisId,
+      label: assignment.label,
+      status: merged ? "merged" as const : "covered" as const,
+      claimIds: claims.map((claim) => claim.id),
+      reason: merged
+        ? `Covered jointly by ${claims.map((claim) => claim.shortLabel).join(" and ")}.`
+        : `Dedicated claim: ${claims.map((claim) => claim.shortLabel).join(" and ")}.`,
+    };
+  });
+}
+
 export function researchLanesFromBrief(brief: ResearchBrief) {
   const contextualization = brief.contextualization ?? [];
   return brief.claims
@@ -283,7 +325,15 @@ export function researchLanesFromBrief(brief: ResearchBrief) {
       relaxationOrder: claim.retrieval.relaxationOrder,
       applicabilityFields: claim.applicabilityFields,
       contextualization: contextualization
-        .filter((entry) => claim.axisIds.includes(entry.axisId))
+        .filter((entry) => {
+          if (claim.axisIds.includes(entry.axisId) || claim.applicabilityUsesAxisIds.includes(entry.axisId)) return true;
+          // An applicability-only answer is a fit check for every claim unless
+          // the compiler explicitly parked the dimension. Keeping it visible
+          // here prevents a real answer from disappearing between the review
+          // screen and the research lane.
+          const assignment = brief.dimensionAssignments.find((item) => item.axisId === entry.axisId);
+          return assignment?.role === "applicability-only";
+        })
         .map((entry) => ({
           axisId: entry.axisId,
           label: entry.label,

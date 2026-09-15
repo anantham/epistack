@@ -49,6 +49,7 @@ export function buildContextualizationImpact(brief: Pick<ResearchBrief, "claims"
 
   const entries = brief.contextualization.map((entry) => {
     const answer = [...entry.selectedValues, entry.typedAnswer].filter(Boolean).join("; ") || "No answer supplied";
+    const answered = answer !== "No answer supplied";
     const linkedClaims = brief.claims.filter((claim) => claim.axisIds.includes(entry.axisId));
     return {
       axisId: entry.axisId,
@@ -56,8 +57,8 @@ export function buildContextualizationImpact(brief: Pick<ResearchBrief, "claims"
       effect: entry.effect,
       answer,
       consequence: entry.researchConsequence,
-      changedFields: changedFieldsFor(entry.effect, linkedClaims, entry.axisId),
-      claimLabels: Array.from(new Set(claimsByAxis.get(entry.axisId) ?? [])),
+      changedFields: answered ? changedFieldsFor(entry.effect, linkedClaims, entry.axisId) : [],
+      claimLabels: answered ? Array.from(new Set(claimsByAxis.get(entry.axisId) ?? [])) : [],
     };
   });
 

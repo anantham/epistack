@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildDimensionAssignments,
+  buildClaimCoverage,
   completeDimensionRoles,
   normalizeResearchBriefDraft,
   projectResearchBriefForArtifact,
@@ -113,6 +114,26 @@ test("human role assignments deterministically route dimensions into the researc
   assert.deepEqual(assignments.find((item) => item.axisId === "population").requiredEvidenceFields, ["population field"]);
 });
 
+test("claim coverage records dedicated, merged, and omitted dimensions", () => {
+  const assignments = [
+    { axisId: "outcome", label: "Outcome", role: "decision-active" },
+    { axisId: "population", label: "Population", role: "applicability-only" },
+    { axisId: "production", label: "Production", role: "decision-active" },
+  ];
+  const coverage = buildClaimCoverage({
+    dimensionAssignments: assignments,
+    claims: [
+      { id: "outcome-claim", shortLabel: "Outcome", axisIds: ["outcome", "population"] },
+    ],
+    parkedDimensions: [],
+  });
+
+  assert.deepEqual(coverage.map((item) => item.status), ["merged", "merged", "parked"]);
+  assert.match(coverage[0].reason, /Covered jointly/);
+  assert.deepEqual(coverage[2].claimIds, []);
+  assert.match(coverage[2].reason, /No compiled claim references/);
+});
+
 test("the compiler contract normalizes a small claim portfolio to a 100-point budget", () => {
   const raw = researchBriefDraftSchema.parse({
     stakeholderProfile: {
@@ -149,6 +170,16 @@ test("the compiler contract normalizes a small claim portfolio to a 100-point bu
     compiledQuestion: "Do two eggs improve body composition versus the available breakfast?",
     decisionContext: "Local context stays on device.",
     dimensionAssignments: buildDimensionAssignments({ axes, clusters, dimensionRoles: completeDimensionRoles(clusters, { production: "parked" }) }),
+    contextualization: [{
+      axisId: "population",
+      label: "For whom?",
+      question: "Who are you?",
+      whyItMatters: "Applicability changes transportability.",
+      effect: "match",
+      selectedValues: ["a resistance-trained adult"],
+      typedAnswer: "I train four days per week.",
+      researchConsequence: "Use the answer as a fit check, not as a query term.",
+    }],
     privacy: { localContextPolicy: "Keep personal context local to the companion.", outboundQueryPolicy: "Send only compact scientific search concepts to PubMed." },
     generatedAt: "2026-07-20T00:00:00.000Z",
     compiledBy: "local Claude · opus",
@@ -156,6 +187,8 @@ test("the compiler contract normalizes a small claim portfolio to a 100-point bu
   assert.equal(lanes.length, 3);
   assert.equal(lanes[0].defaultQuery, "egg breakfast body composition randomized trial");
   assert.equal(lanes[0].applicabilityFields[0], "training status");
+  assert.equal(lanes[0].contextualization[0].axisId, "population");
+  assert.match(lanes[0].contextualization[0].answer, /resistance-trained adult/);
 });
 
 test("the shareable artifact projection keeps research consequences while honoring the privacy choice", () => {

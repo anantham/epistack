@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assembleDecomposition, decompositionSchema } from '../lib/decomposition-server.ts';
+import { assembleDecomposition, decompositionSchema, normalizeDimensionScout } from '../lib/decomposition-server.ts';
 import { dimensionScoutReasoningEfforts, normalizeOpenRouterReasoningEffort, structuredOutputReasoningEfforts } from '../lib/openrouter-reasoning.ts';
 
 const prompt = 'Are eggs good to eat? Bad to eat? Great in moderation? How can we tell? Does it vary across people, and what predicts this? What else should we be paying attention to here?';
@@ -137,4 +137,45 @@ test('food-health coverage restores a missing preparation axis with actionable c
   assert.ok(preparation);
   assert.ok(preparation.ingestionRequirements.requiredFields.some((field) => /cook|preparation|accompani/i.test(field)));
   assert.match(preparation.contextQuestion.question, /prepare|boiled|fried|scrambled/i);
+});
+
+test('food-health normalization restores every required personal-decision axis', () => {
+  const incompleteScout = {
+    ...scout,
+    dimensions: [
+      { id: 'health-outcome', label: 'Health Outcome of Interest' },
+      { id: 'dose-and-frequency', label: 'Dose and Frequency' },
+      { id: 'feasible-counterfactual', label: 'Feasible Counterfactual' },
+      { id: 'target-population', label: 'Target Population' },
+    ],
+  };
+  const normalized = normalizeDimensionScout(incompleteScout, prompt);
+  assert.equal(normalized.dimensions.length, 7);
+  assert.ok(normalized.dimensions.some((dimension) => /preparation|accompaniments/i.test(dimension.label)));
+  assert.ok(normalized.dimensions.some((dimension) => /goal|body|activity/i.test(dimension.label)));
+  assert.ok(normalized.dimensions.some((dimension) => /practical|location|budget|safety/i.test(dimension.label)));
+
+  const crowded = normalizeDimensionScout({
+    ...incompleteScout,
+    dimensions: [
+      { id: 'health-1', label: 'Health Outcome' },
+      { id: 'health-2', label: 'Important Health Harm' },
+      { id: 'dose', label: 'Dose and Frequency' },
+      { id: 'replacement', label: 'Feasible Replacement' },
+      { id: 'population', label: 'Target Population' },
+      { id: 'health-3', label: 'Nutrition Outcome' },
+      { id: 'health-4', label: 'Cardiovascular Outcome' },
+    ],
+  }, prompt);
+  assert.ok(crowded.dimensions.some((dimension) => /preparation|accompaniments/i.test(dimension.label)));
+  assert.ok(crowded.dimensions.some((dimension) => /goal|body|activity/i.test(dimension.label)));
+  assert.ok(crowded.dimensions.some((dimension) => /practical|location|budget|safety/i.test(dimension.label)));
+
+  const artifact = assembleDecomposition(incompleteScout, null, null, prompt);
+  const preparation = artifact.clusters.find((cluster) => /preparation|accompaniments/i.test(cluster.label));
+  const goals = artifact.clusters.find((cluster) => /goal|body|activity/i.test(cluster.label));
+  const practical = artifact.clusters.find((cluster) => /practical|location|budget|safety/i.test(cluster.label));
+  assert.ok(preparation && /prepare|boiled|fried|scrambled/i.test(preparation.contextQuestion.question));
+  assert.ok(goals && /goal|active|athletic/i.test(goals.contextQuestion.question));
+  assert.ok(practical && /budget|price|live|shop|safety/i.test(practical.contextQuestion.question));
 });

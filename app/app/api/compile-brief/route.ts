@@ -5,7 +5,7 @@ import { generateText, Output } from 'ai';
 import { env } from 'cloudflare:workers';
 import { getD1, ensureHostedJobTables } from '../../../db';
 import { resolveAgentPrompt, renderAgentPrompt, sanitizeAgentPromptOverrides, type AgentPromptOverrides } from '../../../lib/agent-prompts';
-import { contextualizationEntrySchema, dimensionRoleSchema, researchBriefDraftSchema, researchBriefSchema, normalizeResearchBriefDraft, buildDimensionAssignments, type ContextualizationEntry, type DimensionRole } from '../../../lib/research-brief';
+import { contextualizationEntrySchema, dimensionRoleSchema, researchBriefDraftSchema, researchBriefSchema, normalizeResearchBriefDraft, buildDimensionAssignments, buildClaimCoverage, type ContextualizationEntry, type DimensionRole } from '../../../lib/research-brief';
 import type { DecompositionCluster } from '../../../lib/decomposition';
 import { parseStructured, repairInstruction, StructuredOutputError } from '../../../lib/structured-output';
 import { openRouterFailureFromThrown } from '../../../lib/openrouter-errors';
@@ -304,6 +304,12 @@ export async function POST(request: Request) {
   }
   function acceptDraft(draft: z.infer<typeof researchBriefDraftSchema>, compiledBy: string) {
     const normalized = normalizeResearchBriefDraft(draft, state.clusters.map((cluster) => cluster.id));
+    const dimensionAssignments = buildDimensionAssignments({ clusters: state.clusters, dimensionRoles: state.dimensionRoles });
+    const claimCoverage = buildClaimCoverage({
+      dimensionAssignments,
+      claims: normalized.claims,
+      parkedDimensions: normalized.parkedDimensions,
+    });
     state.brief = researchBriefSchema.parse({
       ...normalized,
       schemaVersion: '0.2.0',
@@ -312,7 +318,8 @@ export async function POST(request: Request) {
       originalQuestion: state.originalQuestion,
       compiledQuestion: state.compiledQuestion,
       decisionContext: state.decisionContext,
-      dimensionAssignments: buildDimensionAssignments({ clusters: state.clusters, dimensionRoles: state.dimensionRoles }),
+      dimensionAssignments,
+      claimCoverage,
       contextualization: state.contextualization,
       privacy: {
         localContextPolicy: 'The full decision context stays in this device-local brief and is used only to compile the research contract; it is not sent to PubMed.',

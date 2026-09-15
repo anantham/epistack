@@ -87,7 +87,10 @@ test("specialist outputs merge into a valid artifact for the exact eggs question
   const artifact = assembleDecomposition(scout, trace, context, prompt);
   assert.equal(decompositionSchema.safeParse(artifact).success, true);
   assert.ok(artifact.highlights.every((highlight) => prompt.includes(highlight.quote)));
-  assert.equal(artifact.clusters.length, 4);
+  assert.equal(artifact.clusters.length, 7);
+  assert.ok(artifact.clusters.some((cluster) => /preparation|accompaniments/i.test(cluster.label)));
+  assert.ok(artifact.clusters.some((cluster) => /goal|body|activity/i.test(cluster.label)));
+  assert.ok(artifact.clusters.some((cluster) => /practical|location|budget|safety/i.test(cluster.label)));
   
 });
 

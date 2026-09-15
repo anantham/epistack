@@ -399,7 +399,9 @@ export function ResearchDashboard() {
     const leadCount = (recall.response?.leads.length ?? 0) + activeLanes.reduce((sum, lane) => sum + (runs[lane.id]?.response?.records.length ?? 0), 0);
     const acquired = Object.values(deepDives).filter((dive) => dive.payload !== null).length;
     const reviewed = Object.values(deepDives).filter((dive) => dive.payload && isDualReviewPayload(dive.payload)).length;
-    return { investigatedClaims, leadCount, acquired, reviewed, accepted: promotionRecords.length, totalClaims: activeLanes.length };
+    const rejected = Object.values(deepDives).reduce((sum, dive) =>
+      sum + (dive.payload && isDualReviewPayload(dive.payload) ? dive.payload.promotion.rejectedCount : 0), 0);
+    return { investigatedClaims, leadCount, acquired, reviewed, rejected, accepted: promotionRecords.length, totalClaims: activeLanes.length };
   }, [activeLanes, deepDives, promotionRecords.length, recall.response?.leads.length, runs]);
 
   useEffect(() => {
@@ -1422,6 +1424,7 @@ export function ResearchDashboard() {
             <article><strong>{researchProgress.leadCount}</strong><span>discovery leads</span><small>Leads are candidates; they do not count as evidence.</small></article>
             <article><strong>{researchProgress.acquired}</strong><span>papers acquired</span><small>Full text or an explicit abstract fallback was read.</small></article>
             <article><strong>{researchProgress.reviewed}</strong><span>full-text reviews</span><small>Two-model review completed; rejected results stay inspectable.</small></article>
+            <article><strong>{researchProgress.rejected}</strong><span>rejected results</span><small>Reviewer exclusions remain inspectable and cannot enter the artifact.</small></article>
             <article><strong>{researchProgress.accepted}</strong><span>accepted records</span><small>Only promoted, provenance-bearing relations enter the artifact.</small></article>
           </div>
         </section>

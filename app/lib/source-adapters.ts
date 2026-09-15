@@ -22,6 +22,9 @@ import {
 import type { ResearchClaimFrame } from "./research-brief.ts";
 import { parseStructuredWithRepair, repairInstruction, schemaInstruction } from "./structured-output.ts";
 import { fetchPmcFullText, resolvePmcNumeric } from "./pmc-full-text.ts";
+import { isBackendUnreachable, runLyraStage } from "./lyra-stage.ts";
+// @ts-expect-error The Cloudflare runtime module is provided by the Workers build.
+import { env } from "cloudflare:workers";
 
 const primaryModel = "Astra · GPT 6";
 const adversaryModel = "Astra · adversarial full-paper reviewer";
@@ -32,6 +35,58 @@ const minimumVerifiedChars = 800;
 const hostedTextCap = 12_000;
 const userAgent = "Epistack Evidence Lab/0.1 (hosted source adapter)";
 const minimumExtractableChars = 40;
+
+type OpenRouterSourceEnvironment = {
+  OPENROUTER_API_KEY?: string;
+  EPISTACK_OPENROUTER_MODEL?: string;
+  EPISTACK_OPENROUTER_REPAIR_MODEL?: string;
+};
+
+type OpenRouterMessage = {
+  content?: string | Array<{ text?: string }>;
+};
+
+function openRouterSourceEnvironment() {
+  return env as unknown as OpenRouterSourceEnvironment;
+}
+
+function openRouterSourceModel() {
+  const current = openRouterSourceEnvironment();
+  return current.EPISTACK_OPENROUTER_MODEL || "deepseek/deepseek-v4.1-flash";
+}
+
+async function runOpenRouterSourceStage(input: { task: string; instructions: string }) {
+  const current = openRouterSourceEnvironment();
+  if (!current.OPENROUTER_API_KEY) throw new Error("The hosted OpenRouter source-extraction fallback is not configured.");
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${current.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://epistack.adityaarpitha.com",
+      "X-OpenRouter-Title": "Epistack Evidence Lab",
+    },
+    body: JSON.stringify({
+      model: openRouterSourceModel(),
+      messages: [
+        { role: "system", content: `${input.instructions}\nReturn JSON only. No markdown fences.` },
+        { role: "user", content: input.task },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0,
+      max_tokens: 6_000,
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!response.ok) throw new Error(`The hosted OpenRouter source-extraction fallback returned HTTP ${response.status}.`);
+  const payload = await response.json() as { choices?: Array<{ message?: OpenRouterMessage }> };
+  const message = payload.choices?.[0]?.message;
+  const text = typeof message?.content === "string"
+    ? message.content
+    : (message?.content || []).map((part) => part.text || "").join("\n");
+  if (!text.trim()) throw new Error("The hosted OpenRouter source-extraction fallback returned no JSON.");
+  return text;
+}
 
 export class InsufficientSourceTextError extends Error {
   readonly code = "INSUFFICIENT_SOURCE_TEXT";
@@ -259,22 +314,32 @@ async function runSchemaExtraction<T>(input: {
   instructions: string;
   task: string;
 }): Promise<T> {
-  const { runLyraStage } = await import("./lyra-stage.ts");
-  const first = await runLyraStage({
-    model: stageModel,
-    effort: stageEffort,
-    instructions: input.instructions + schemaInstruction(input.schema),
-    input: input.task,
-  });
+  const instructions = input.instructions + schemaInstruction(input.schema);
+  let usedOpenRouter = false;
+  const runStage = async (task: string, stageInstructions: string) => {
+    if (!usedOpenRouter) {
+      try {
+        return await runLyraStage({
+          model: stageModel,
+          effort: stageEffort,
+          instructions: stageInstructions,
+          input: task,
+        });
+      } catch (error) {
+        if (!isBackendUnreachable(error) || !openRouterSourceEnvironment().OPENROUTER_API_KEY) throw error;
+        usedOpenRouter = true;
+      }
+    }
+    return runOpenRouterSourceStage({ task, instructions: stageInstructions });
+  };
+  const first = await runStage(input.task, instructions);
   return parseStructuredWithRepair({
     text: first,
     schema: input.schema,
-    repair: async ({ raw, issues }) => runLyraStage({
-      model: stageModel,
-      effort: stageEffort,
-      instructions: input.instructions + repairInstruction(input.schema, issues),
-      input: `${input.task}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
-    }),
+    repair: async ({ raw, issues }) => runStage(
+      `${input.task}\n\nPREVIOUS ATTEMPT (failed schema validation):\n${raw}`,
+      input.instructions + repairInstruction(input.schema, issues),
+    ),
   });
 }
 

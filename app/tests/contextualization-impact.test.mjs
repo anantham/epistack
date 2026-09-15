@@ -44,3 +44,28 @@ test("contextualization impact links answers to claims, options, constraints, an
   assert.deepEqual(impact.unresolved, ["production: No decision leverage yet", "What is baseline LDL? (high decision value)"]);
   assert.deepEqual(impact.entries[0].changedFields, ["claim scope", "retrieval and screening"]);
 });
+
+test("unanswered dimensions do not count as claims affected by answers", () => {
+  const impact = buildContextualizationImpact({
+    contextualization: [{
+      axisId: "dose",
+      label: "Egg intake",
+      question: "How often?",
+      whyItMatters: "Dose changes the comparison.",
+      effect: "prune",
+      selectedValues: [],
+      typedAnswer: "",
+      researchConsequence: "Use No answer supplied to test transfer.",
+    }],
+    claims: [{ axisIds: ["dose"], shortLabel: "Daily intake claim" }],
+    stakeholderProfile: { hardConstraints: [] },
+    actionSpace: { options: [] },
+    parkedDimensions: [],
+    gapTriggers: [],
+  });
+
+  assert.equal(impact.answeredQuestions, 0);
+  assert.deepEqual(impact.scopedClaimLabels, []);
+  assert.deepEqual(impact.entries[0].claimLabels, []);
+  assert.deepEqual(impact.entries[0].changedFields, []);
+});

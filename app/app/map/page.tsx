@@ -32,6 +32,7 @@ import {
 } from "../../lib/brief-telemetry";
 import { formatDuration } from "../../lib/decomposition-telemetry";
 import { buildContextualizationImpact } from "../../lib/contextualization-impact";
+import { restoreContextualizeSession, serializeContextualizeSession } from "../../lib/contextualize-session";
 import { CaseHeader, RefreshControl } from "../components/case-navigation";
 import { BackendSettings, normalizeThinkingEffort, preferencesStorageKey, readPreferredEffort, type ThinkingEffort } from "../components/backend-settings";
 
@@ -204,6 +205,16 @@ export default function ContextualizeMap() {
       setCaseSummary(response.decomposition.summary);
       setKnownUnknowns(response.decomposition.knownUnknowns);
       setClaimTemplate(response.decomposition.claimTemplate);
+      const restoredSession = workflow
+        ? { elicitationIndex: 0, contextAnswers: {}, contextSelections: {} }
+        : restoreContextualizeSession(
+          window.sessionStorage.getItem("epistack:contextualize:v1"),
+          response.caseId,
+          response.decomposition.clusters.length,
+        );
+      setElicitationIndex(restoredSession.elicitationIndex);
+      setContextAnswers(restoredSession.contextAnswers);
+      setContextSelections(restoredSession.contextSelections);
       if (workflow) {
         setContextAnswers(Object.fromEntries(workflow.researchBrief.contextualization.map((entry) => [entry.axisId, entry.typedAnswer])));
         setContextSelections(Object.fromEntries(workflow.researchBrief.contextualization.map((entry) => [entry.axisId, entry.selectedValues])));
@@ -277,21 +288,6 @@ export default function ContextualizeMap() {
       setBriefTelemetry(emptyBriefTelemetry);
     }
     setPreferredEffort(readPreferredEffort());
-    if (new URLSearchParams(window.location.search).get("caseId")) return;
-    try {
-      const saved = JSON.parse(window.sessionStorage.getItem("epistack:contextualize:v1") || "null") as {
-        contextAnswers?: Record<string, string>;
-        contextSelections?: Record<string, string[]>;
-        elicitationIndex?: number;
-      } | null;
-      if (saved) {
-        if (saved.contextAnswers) setContextAnswers(saved.contextAnswers);
-        if (saved.contextSelections) setContextSelections(saved.contextSelections);
-        if (typeof saved.elicitationIndex === "number") setElicitationIndex(Math.max(0, saved.elicitationIndex));
-      }
-    } catch {
-      // Ignore malformed saved interview state.
-    }
   }, []);
 
   useEffect(() => {
@@ -300,18 +296,19 @@ export default function ContextualizeMap() {
   }, [clusters.length]);
 
   useEffect(() => {
+    if (!caseId) return;
     const timer = window.setTimeout(() => {
       try {
         window.sessionStorage.setItem(
           "epistack:contextualize:v1",
-          JSON.stringify({ contextAnswers, contextSelections, elicitationIndex }),
+          serializeContextualizeSession(caseId, { contextAnswers, contextSelections, elicitationIndex }),
         );
       } catch {
         // Session persistence is best-effort.
       }
     }, 200);
     return () => window.clearTimeout(timer);
-  }, [contextAnswers, contextSelections, elicitationIndex]);
+  }, [caseId, contextAnswers, contextSelections, elicitationIndex]);
 
   useEffect(() => {
     if (compileState !== "compiling") return;
@@ -715,9 +712,9 @@ export default function ContextualizeMap() {
                           <p>Answered dimensions carried into the compiled contract.</p>
                         </article>
                         <article>
-                          <span>Claims scoped</span>
+                          <span>Claims affected by answers</span>
                           <strong>{contextualizationImpact.scopedClaimLabels.length}</strong>
-                          <p>Claim frames linked to your contextual answers.</p>
+                          <p>Claim frames whose scope or applicability changed.</p>
                         </article>
                         <article>
                           <span>Action options</span>
@@ -738,7 +735,7 @@ export default function ContextualizeMap() {
                               <span>{entry.effect}</span>
                             </div>
                             <p><b>Answer:</b> {entry.answer}</p>
-                            <p><b>Changes:</b> {entry.changedFields.join(" · ")}</p>
+                            <p><b>Changes:</b> {entry.changedFields.length > 0 ? entry.changedFields.join(" · ") : "No answer supplied; no claim scope change recorded."}</p>
                             {entry.claimLabels.length > 0 && <p><b>Scoped claims:</b> {entry.claimLabels.join(" · ")}</p>}
                             <p><b>Why:</b> {entry.consequence}</p>
                           </article>
@@ -752,6 +749,19 @@ export default function ContextualizeMap() {
                           <p>No unresolved gaps were recorded in this brief.</p>
                         )}
                       </details>
+                      {compiledBrief.claimCoverage.length > 0 && (
+                        <div className="contextualization-impact-ledger" aria-label="Claim coverage ledger">
+                          {compiledBrief.claimCoverage.map((coverage) => (
+                            <article key={coverage.axisId}>
+                              <div className="impact-entry-heading">
+                                <strong>{coverage.label}</strong>
+                                <span>{coverage.status}</span>
+                              </div>
+                              <p><b>Claim disposition:</b> {coverage.reason}</p>
+                            </article>
+                          ))}
+                        </div>
+                      )}
                     </>
                   )}
                   <div className="contextualization-entries">
