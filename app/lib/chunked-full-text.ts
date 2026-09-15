@@ -106,7 +106,7 @@ export function isRetryableChunkFailure(error: unknown) {
     : "";
   const message = error instanceof Error ? error.message : String(error);
   return ["provider_transient", "backend-unreachable"].includes(code)
-    || /prompt submission was not confirmed|provider transient|timed out|rate limited|HTTP (408|429|5\d\d)/i.test(message);
+    || /prompt submission was not confirmed|provider transient|timed out|rate limited|HTTP (408|429|5\d\d)|ERR_(?:NETWORK_CHANGED|NAME_NOT_RESOLVED)|Target page, context or browser has been closed|ChatGPT (?:interactive control|model selection).*?(?:did not appear|did not persist)|Locator\.press: Timeout.*prompt-textarea/i.test(message);
 }
 
 export function chunkRetryDelayMs(attempt: number) {

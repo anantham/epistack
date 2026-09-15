@@ -16,6 +16,7 @@ import { acquireSource, extractSource, InsufficientSourceTextError, type SourceR
 import { fetchPmcFullText, resolvePmcNumeric } from "../../../lib/pmc-full-text";
 import { isPreliminarySourceClass, sourceClassSchema } from "../../../lib/source-class";
 import { extractJsonSlice, parseStructuredWithRepair, repairInstruction } from "../../../lib/structured-output";
+import { normalizeInvestigationJson } from "../../../lib/investigation-json";
 import {
   buildExtractionChunkTask,
   buildReviewChunkTask,
@@ -55,7 +56,7 @@ const hostedTextCap = 32_000;
 // instead of sending a request Astra must reject with HTTP 400.
 const astraRenderedPromptLimit = 12_000;
 const astraChunkPromptSafetyMargin = 450;
-const astraChunkConcurrency = 3;
+const astraChunkConcurrency = 2;
 
 type InvestigateEnvironment = {
   OPENROUTER_API_KEY?: string;
@@ -91,96 +92,6 @@ function openRouterMessageText(message: OpenRouterMessage) {
   const content = (message.content || []).map((part) => part.text || "").join("\n").trim();
   if (content) return content;
   return typeof message.reasoning === "string" ? message.reasoning : "";
-}
-
-function canonicalEnum(value: unknown, aliases: Record<string, string>) {
-  if (typeof value !== "string") return value;
-  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
-  return aliases[normalized] || value;
-}
-
-function canonicalReviewVerdict(value: unknown) {
-  if (typeof value !== "string") return value;
-  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
-  if (/\b(reject|den(?:y|ied)|fail|unsupported|not acceptable)\b/.test(normalized)) return "reject";
-  if (/\b(revis|conditional|caveat|partial|mixed|qualif)\b/.test(normalized)) return "revise";
-  if (/\b(accept|approv|pass|support)\b/.test(normalized)) return "accept";
-  return value;
-}
-
-function coerceAuditText(value: unknown): unknown {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) {
-    const parts = value.map((item) => coerceAuditText(item)).filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
-    return parts.length ? parts.join(" ") : value;
-  }
-  if (value && typeof value === "object") {
-    const parts = Object.values(value).map((item) => coerceAuditText(item)).filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
-    return parts.length ? parts.join(" ") : value;
-  }
-  return value;
-}
-
-function normalizeInvestigationJson(text: string) {
-  const slice = extractJsonSlice(text);
-  if (!slice) return text;
-  try {
-    const value = JSON.parse(slice) as Record<string, unknown>;
-    const results = Array.isArray(value.results) ? value.results : [];
-    for (const result of results) {
-      if (!result || typeof result !== "object") continue;
-      const record = result as Record<string, unknown>;
-      record.rationale = coerceAuditText(record.rationale);
-      record.resultRole = canonicalEnum(record.resultRole, {
-        "primary result": "primary",
-        "secondary result": "secondary",
-        "exploratory result": "exploratory",
-        "methodological result": "methodological",
-        "author interpretation": "author-interpretation",
-      });
-      record.relation = canonicalEnum(record.relation, {
-        "not informative": "not-informative",
-      });
-      record.scopeMatch = canonicalEnum(record.scopeMatch, {
-        "exact match": "direct",
-        "partial match": "partial",
-        "indirect match": "indirect",
-      });
-      const applicability = record.applicability;
-      if (applicability && typeof applicability === "object") {
-        const vector = applicability as Record<string, unknown>;
-        vector.rationale = coerceAuditText(vector.rationale);
-        vector.distance = canonicalEnum(vector.distance, {
-          "exact match": "exact",
-          close: "near",
-          similar: "near",
-          "near exact": "near",
-          distant: "far",
-          mismatch: "far",
-          unknown: "indeterminate",
-          uncertain: "indeterminate",
-          unclear: "indeterminate",
-          "not known": "indeterminate",
-        });
-      }
-    }
-    const reviews = Array.isArray(value.reviews) ? value.reviews : [];
-    for (const review of reviews) {
-      if (!review || typeof review !== "object") continue;
-      const record = review as Record<string, unknown>;
-      record.rationale = coerceAuditText(record.rationale);
-      record.verdict = canonicalReviewVerdict(record.verdict);
-    }
-    value.conclusionFit = canonicalEnum(value.conclusionFit, {
-      "matches result": "matches-results",
-      "broader than result": "broader-than-results",
-      "narrower than result": "narrower-than-results",
-      "not stated": "not-stated",
-    });
-    return JSON.stringify(value);
-  } catch {
-    return text;
-  }
 }
 
 type StructuredCallOptions = {

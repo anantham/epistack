@@ -99,6 +99,11 @@ test("chunked prompt planning stays within the Lyra character budget and overlap
 
 test("chunk retries recognize transient provider failures without retrying schema failures", () => {
   assert.equal(isRetryableChunkFailure(Object.assign(new Error("ChatGPT prompt submission was not confirmed."), { code: "provider_transient" })), true);
+  assert.equal(isRetryableChunkFailure(new Error("Page.goto: net::ERR_NETWORK_CHANGED at https://chatgpt.com/")), true);
+  assert.equal(isRetryableChunkFailure(new Error("ChatGPT interactive control 'Latest' did not appear")), true);
+  assert.equal(isRetryableChunkFailure(new Error("ChatGPT model selection did not persist after effort change")), true);
+  assert.equal(isRetryableChunkFailure(new Error("BrowserType.launch_persistent_context: Target page, context or browser has been closed")), true);
+  assert.equal(isRetryableChunkFailure(new Error("Locator.press: Timeout 30000ms exceeded waiting for #prompt-textarea")), true);
   assert.equal(isRetryableChunkFailure(new Error("The model output did not match the schema.")), false);
   assert.equal(chunkRetryDelayMs(1), 1_000);
   assert.equal(chunkRetryDelayMs(3), 4_000);
