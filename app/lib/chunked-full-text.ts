@@ -104,6 +104,9 @@ export function isRetryableChunkFailure(error: unknown) {
   const code = error && typeof error === "object" && "code" in error
     ? String((error as { code?: unknown }).code || "")
     : "";
+  // A bounded hosted timeout already exhausted the provider wait budget. A
+  // second and third identical wait only delays the OpenRouter recovery path.
+  if (code === "backend-timeout") return false;
   const message = error instanceof Error ? error.message : String(error);
   return ["provider_transient", "backend-unreachable"].includes(code)
     || /prompt submission was not confirmed|provider transient|timed out|rate limited|HTTP (408|429|5\d\d)|ERR_(?:NETWORK_CHANGED|NAME_NOT_RESOLVED)|Target page, context or browser has been closed|ChatGPT (?:interactive control|model selection).*?(?:did not appear|did not persist)|Locator\.press: Timeout.*prompt-textarea/i.test(message);

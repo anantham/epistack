@@ -1,5 +1,6 @@
 // @ts-ignore The Cloudflare runtime module is provided by the Workers build; its ambient types are absent from this tsc project (same pre-existing condition as every other API route).
 import { env } from "cloudflare:workers";
+import { isAbortTimeout, isHostedBackendUnavailableCode } from "./provider-failure-policy.ts";
 
 type LyraEnvironment = {
   LYRA_PUBLIC_GATEWAY_URL?: string;
@@ -42,7 +43,11 @@ export type LyraStageOptions = {
 };
 
 const pollIntervalMs = 4_000;
-const defaultTimeoutMs = 10 * 60 * 1000;
+// A hosted request must yield to the alternate provider before a browser or
+// Worker request becomes an apparently hung investigation. Background Astra
+// receipts still continue on the gateway; this deadline only bounds this
+// caller's wait before it falls back or reports the outage.
+export const defaultTimeoutMs = 90_000;
 
 function lyraEnvironment(): LyraEnvironment {
   return env as unknown as LyraEnvironment;
@@ -54,7 +59,7 @@ export function lyraConfigured(): boolean {
 }
 
 export function isBackendUnreachable(error: unknown): boolean {
-  return Boolean(error && typeof error === "object" && (error as { code?: string }).code === "backend-unreachable");
+  return Boolean(error && typeof error === "object" && isHostedBackendUnavailableCode((error as { code?: string }).code));
 }
 
 export function backendUnreachableResponse(): Response {
@@ -67,6 +72,12 @@ export function backendUnreachableResponse(): Response {
 function annotateBackendUnreachable(error: unknown): Error {
   const failure = error instanceof Error ? error : new Error(String(error));
   (failure as Error & { code?: string }).code = "backend-unreachable";
+  return failure;
+}
+
+function annotateBackendTimeout(error: unknown): Error {
+  const failure = error instanceof Error ? error : new Error(String(error));
+  (failure as Error & { code?: string }).code = "backend-timeout";
   return failure;
 }
 
@@ -92,7 +103,7 @@ async function gatewayRequest(
 ) {
   while (true) {
     const remaining = deadline - Date.now();
-    if (remaining <= 0) throw new Error("The hosted Astra stage timed out before it completed.");
+    if (remaining <= 0) throw annotateBackendTimeout(new Error("The hosted Astra stage timed out before it completed."));
     let response: Response;
     try {
       response = await fetch(`${baseUrl}${path}`, {
@@ -105,11 +116,14 @@ async function gatewayRequest(
         signal: AbortSignal.timeout(Math.min(remaining, 30_000)),
       });
     } catch (error) {
+      if (isAbortTimeout(error)) throw annotateBackendTimeout(error);
       throw annotateBackendUnreachable(error);
     }
     if (response.status === 429 || response.status === 503) {
       const delay = retryDelayMs(response);
-      if (Date.now() + delay > deadline) throw new Error("The hosted Astra stage timed out while rate limited.");
+      if (Date.now() + delay > deadline) {
+        throw annotateBackendTimeout(new Error("The hosted Astra stage timed out while rate limited."));
+      }
       await new Promise<void>((resolve) => setTimeout(resolve, delay));
       continue;
     }
@@ -166,7 +180,9 @@ export async function runLyraStage(options: LyraStageOptions): Promise<string> {
         transientProviderFailure ? "provider_transient" : errorObject?.code,
       );
     }
-    if (Date.now() >= deadline) throw new Error("The hosted Astra stage timed out before it completed.");
+    if (Date.now() >= deadline) {
+      throw annotateBackendTimeout(new Error("The hosted Astra stage timed out before it completed."));
+    }
     await new Promise<void>((resolve) => setTimeout(resolve, pollIntervalMs));
   }
 }

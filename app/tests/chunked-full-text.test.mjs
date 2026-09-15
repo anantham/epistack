@@ -105,6 +105,7 @@ test("chunk retries recognize transient provider failures without retrying schem
   assert.equal(isRetryableChunkFailure(new Error("BrowserType.launch_persistent_context: Target page, context or browser has been closed")), true);
   assert.equal(isRetryableChunkFailure(new Error("Locator.press: Timeout 30000ms exceeded waiting for #prompt-textarea")), true);
   assert.equal(isRetryableChunkFailure(new Error("The model output did not match the schema.")), false);
+  assert.equal(isRetryableChunkFailure(Object.assign(new Error("The hosted Astra stage timed out before it completed."), { code: "backend-timeout" })), false);
   assert.equal(chunkRetryDelayMs(1), 1_000);
   assert.equal(chunkRetryDelayMs(3), 4_000);
 });
