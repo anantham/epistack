@@ -11,12 +11,12 @@ This is the durable queue for requests that span code, documentation, deployment
 - [ ] **Fresh browser E2E after release.** Submit the eggs question from a clean case and verify Decompose → Contextualize → brief → Research → Artifact, including Settings health and the hosted fallback path.
 - [x] **Integrate Claude's claim steering and human review overturns.** The merged branches are on `main`; claim cards steer the Investigate lanes, and `human-overturn` accepts only the exact rejected proposal after independent passage re-verification. The Artifact labels these relations as human-verified full-text stamps. The clean combined source passes 150 tests and is published in Sites version 93.
 - [x] **Run the first bounded hosted investigation smoke test.** On 2026-09-15, the eggs case completed all 6 PubMed claim sweeps and the recall layer: 68 discovery leads, 1 PMC acquisition, and 1 dual-model full-text review. The run produced 0 accepted records because all 4 proposed results failed the literal passage check; the failure class is now reproduced and covered by a boundary-ellipsis regression test.
-- [x] **Implement bounded Lyra full-text review.** Oversized full-paper prompts now use overlapping, character-budgeted Lyra extraction and adversarial-review segments, merge server-side, and keep the strict final schema, hash, coverage, and passage gates. The change is locally validated; a fresh live run is still required.
+- [x] **Implement bounded Lyra full-text review.** Oversized full-paper prompts now use overlapping, character-budgeted Lyra extraction and adversarial-review segments, merge server-side, and keep the strict final schema, hash, coverage, and passage gates. The 2026-09-15 live run exercised the bounded path; Lyra provider-control failures (`Select model` did not appear) exhausted the bounded retries and triggered the explicitly labeled OpenRouter recovery, so the prompt-limit fix is verified while native-Lyra provider health remains open.
 
 ## Accepted and integrated, awaiting release
 
 - [x] Review `design/audit-fixes` (`5f86ccc`) for current-main compatibility. Its readability, mobile, first-paint, accessibility, route-title, empty-state, and undo changes are accepted. The two conflicts were resolved against current refresh and fallback code.
-- [x] Current integration passes the local gate: typecheck, build, and 153 tests.
+- [x] Current integration passes the local gate: typecheck, build, and 157 tests.
 - [x] README and app README now document the production URL, hosted/local boundary, server-side secrets, jobs, fallback behavior, and current limitations.
 - [x] Hosted decomposition jobs, server-side recovery, guarded job ticking, scheduled sweep configuration, and persistent run telemetry are present in source.
 - [x] Backend settings expose Astra/Lyra and OpenRouter health checks; provider credentials remain server-side in production.
@@ -29,7 +29,7 @@ This is the durable queue for requests that span code, documentation, deployment
 - [ ] Connect divergence results to the Artifact and preserve class-specific source roles in the decision view.
 - [x] Add a clear artifact export/download flow and document the permanence/versioning behavior of case links.
 - [ ] Complete a hosted research run through discovery, acquisition, extraction, review, promotion, synthesis, and a shareable artifact with useful accepted evidence.
-- [ ] Close the hosted evidence gate gap. Re-run the live full-text review through the bounded Lyra path and determine whether the remaining results pass exact passage, scope, and model-independence checks; do not weaken the evidence gate to manufacture an accepted record.
+- [ ] Close the hosted evidence gate gap. The bounded live run completed with 0 accepted and 4 rejected results: exact passage checks remained strict, while native-Lyra provider-control failures forced labeled recovery. Resolve the provider-control failure, then determine whether the remaining results pass exact passage, scope, and model-independence checks; do not weaken the evidence gate to manufacture an accepted record.
 
 ## Reliability and engineering follow-ups
 
@@ -46,7 +46,7 @@ This is the durable queue for requests that span code, documentation, deployment
 
 ## Testing gaps
 
-The current 153-test gate is strong for pure contracts and build safety, but it does not yet provide complete product or production confidence.
+The current 157-test gate is strong for pure contracts and build safety, but it does not yet provide complete product or production confidence.
 
 - [ ] Add a real browser E2E suite for a fresh case: submit → Decompose → edit → Contextualize → brief → Research → Artifact, with desktop/mobile, reduced motion, keyboard, refresh, and Settings health checks.
 - [ ] Add worker integration tests with an isolated D1: apply migrations, exercise API routes, verify indexes, enforce tick/stats authorization, and test job locks, stale locks, retries, and failure persistence.
